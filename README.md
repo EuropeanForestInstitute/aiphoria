@@ -1,4 +1,4 @@
-![aiphoria logo](docs/images/aiphoria-logo-old.png)
+![aiphoria logo](docs/images/aiphoria-logo.png)
 
 ## Python package for assessing and visualizing dynamic wood material flows
 
