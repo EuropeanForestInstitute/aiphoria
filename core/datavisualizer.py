@@ -719,7 +719,14 @@ class DataVisualizer(object):
 
                     const nodeId = nodeData.customdata.node_id
                     const nodeLabel = nodeData.label
-                    const nodePos = nodeData.nodePos
+                    let nodePos = nodeData.nodePos
+                    
+                    // NOTE: If processes do not have any inflows and outflows (= isolated processes) for
+                    //the current year then the nodePos is also undefined.
+                    if(nodePos == undefined) {
+                        nodePos = { x: -1, y: -1 }
+                    }
+                    
                     tdName.appendChild(document.createTextNode(nodeLabel + " (" + nodeId + ")"))
                     tdPosX.appendChild(document.createTextNode(nodePos.x.toFixed(3)))
                     tdPosY.appendChild(document.createTextNode(nodePos.y.toFixed(3)))
