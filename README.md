@@ -1,10 +1,10 @@
 ![aiphoria logo](docs/images/aiphoria-logo.png)
 
-## Software library for assessing and visualizing dynamic wood material flows
+## Python library for assessing and visualizing dynamic wood material flows
 
-> ℹ️ _This software library is under continuous development_
+> ℹ️ _This library is under continuous development_
 
-This is a software library for dynamic wood material flows that helps you assess and visualize the wood material flows over time. `aiphoria` builds on top of [ODYM - Open Dynamic Material Systems Model](https://github.com/IndEcol/ODYM).
+This is a Python library for dynamic wood material flows that helps you assess and visualize the wood material flows over time. `aiphoria` builds on top of [ODYM - Open Dynamic Material Systems Model](https://github.com/IndEcol/ODYM).
 
 ## Features:
 `aiphoria` allows you to:
