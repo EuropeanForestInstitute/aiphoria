@@ -9,8 +9,8 @@ MAX_ITERATION_COUNT = 100000
 VIRTUAL_PROCESS_TRANSFORMATION_STAGE = "Virtual"
 
 
-# Create graph from data
-class FlowGraph(object):
+# Solves flows to absolute values
+class FlowSolver(object):
     def __init__(self, graph_data={}, use_virtual_flows=True):
         self._use_virtual_flows = use_virtual_flows
         self.df_process_to_flows = graph_data["df_process_to_flows"]
@@ -33,6 +33,7 @@ class FlowGraph(object):
                 inflow_ids = [flow.id for flow in cell["flows"]["in"]]
                 outflow_ids = [flow.id for flow in cell["flows"]["out"]]
                 self.year_to_process_id_to_flow_ids[year][process_id] = {"in": inflow_ids, "out": outflow_ids}
+
 
         # Create year -> flow ID -> flow
         self.year_to_flow_id_to_flow = {}
@@ -65,7 +66,7 @@ class FlowGraph(object):
         self.current_flow_id_to_flow = self.year_to_flow_id_to_flow[self.year_current]
 
         # NOTE: Should check for errors here?
-        # Initialization of FlowGraph data
+        # Initialization of FlowSolver data
         self.year_current = self.year_start
         self.year_prev = self.year_current
 
