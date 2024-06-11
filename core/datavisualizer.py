@@ -1,4 +1,4 @@
-from core.flowgraph import FlowGraph
+from core.flowsolver import FlowSolver
 import plotly.graph_objects as go
 from PIL import Image
 
@@ -12,7 +12,7 @@ class DataVisualizer(object):
     def show(self):
         self._fig.show(renderer="browser", post_script=[self._script], config={'displayModeBar': False})
 
-    def build(self, flowgraph: FlowGraph, params: dict):
+    def build(self, flowgraph: FlowSolver, params: dict):
         small_node_threshold = params["small_node_threshold"]
         process_transformation_stage_colors = params["process_transformation_stage_colors"]
         virtual_process_graph_labels = params["virtual_process_graph_labels"]
@@ -276,7 +276,7 @@ class DataVisualizer(object):
         fig.add_layout_image(
             dict(source=logo,
                 xref="paper", yref="paper",
-                x=1.03, y=1.15,
+                x=1.03, y=1.12,
                 sizex=0.10, sizey=0.10,
                 xanchor="right", yanchor="top"
             )
@@ -724,7 +724,7 @@ class DataVisualizer(object):
                     // NOTE: If processes do not have any inflows and outflows (= isolated processes) for
                     //the current year then the nodePos is also undefined.
                     if(nodePos == undefined) {
-                        nodePos = { x: -1, y: -1 }
+                        nodePos = { x: "", y: "" }
                     }
                     
                     tdName.appendChild(document.createTextNode(nodeLabel + " (" + nodeId + ")"))
