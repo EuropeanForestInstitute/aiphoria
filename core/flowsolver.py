@@ -11,8 +11,9 @@ VIRTUAL_PROCESS_TRANSFORMATION_STAGE = "Virtual"
 
 # Solves flows to absolute values
 class FlowSolver(object):
-    def __init__(self, graph_data={}, use_virtual_flows=True):
+    def __init__(self, graph_data={}, use_virtual_flows=True, virtual_flow_epsilon=0.1):
         self._use_virtual_flows = use_virtual_flows
+        self._virtual_flow_epsilon = virtual_flow_epsilon
         self.df_process_to_flows = graph_data["df_process_to_flows"]
         self.df_flows = graph_data["df_flows"]
 
@@ -351,39 +352,38 @@ class FlowSolver(object):
         # and create virtual flows to balance out those processes
         if self._use_virtual_flows:
             # epsilon is max allowed difference of input and outputs, otherwise create virtual processes and flows
-            epsilon = 0.1
-            self._create_virtual_flows(epsilon)
+            self._create_virtual_flows(self._virtual_flow_epsilon)
 
         # Skip carrying values over to next year if next year is not valid anymore
         next_year = self.year_current + 1
         if next_year > self.year_end:
             return
 
-        # TODO: If target process contains loop then no carryover happens?
-        # Check for processes that carryover values to next timestep
-        for process_id in self.current_process_id_to_flow_ids:
-            process = self.get_process(process_id, self.year_current)
-            if process.is_virtual:
-                continue
-
-            outflows = self.get_process_outflows(process_id, self.year_current)
-            num_populated_outflows = 0
-            for flow in outflows:
-                if flow.value != 0:
-                    num_populated_outflows += 1
-
-            # Carry over values from processes that have no outflows and have no stocks
-            has_no_stock = process_id not in self.process_id_to_stock
-            if not num_populated_outflows and has_no_stock:
-                total_inflows = self.get_process_inflows_total(process_id, self.year_current)
-                outflows_next = self.get_process_outflows(process_id, next_year)
-
-                # Distribute total absolute inflows among all outflows next year
-                # TODO: Now distribute all only to first outflow!
-                if outflows_next:
-                    flow_id = outflows_next[0].id
-                    self.year_to_flow_id_to_flow[next_year][flow_id].value += total_inflows
-                    self.year_to_flow_id_to_flow[next_year][flow_id].evaluated_value += total_inflows
+        # # TODO: If target process contains loop then no carryover happens?
+        # # Check for processes that carryover values to next timestep
+        # for process_id in self.current_process_id_to_flow_ids:
+        #     process = self.get_process(process_id, self.year_current)
+        #     if process.is_virtual:
+        #         continue
+        #
+        #     outflows = self.get_process_outflows(process_id, self.year_current)
+        #     num_populated_outflows = 0
+        #     for flow in outflows:
+        #         if flow.value != 0:
+        #             num_populated_outflows += 1
+        #
+        #     # Carry over values from processes that have no outflows and have no stocks
+        #     has_no_stock = process_id not in self.process_id_to_stock
+        #     if not num_populated_outflows and has_no_stock:
+        #         total_inflows = self.get_process_inflows_total(process_id, self.year_current)
+        #         outflows_next = self.get_process_outflows(process_id, next_year)
+        #
+        #         # Distribute total absolute inflows among all outflows next year
+        #         # TODO: Now distribute all only to first outflow!
+        #         if outflows_next:
+        #             flow_id = outflows_next[0].id
+        #             self.year_to_flow_id_to_flow[next_year][flow_id].value += total_inflows
+        #             self.year_to_flow_id_to_flow[next_year][flow_id].evaluated_value += total_inflows
 
     def _advance_timestep(self):
         self.year_prev = self.year_current
@@ -443,7 +443,6 @@ class FlowSolver(object):
                 continue
 
             if need_virtual_inflow:
-                # Create virtual source process and virtual inflow to this process to balance out missing mass
                 # Create new virtual Process
                 v_id = VIRTUAL_PROCESS_ID_PREFIX + process.id
                 v_name = VIRTUAL_PROCESS_ID_PREFIX + process.name
@@ -451,7 +450,7 @@ class FlowSolver(object):
                 v_process = self._create_virtual_process(v_id, v_name, v_ts)
                 created_virtual_processes[v_process.id] = v_process
 
-                # Create new virtual inflow to current Process
+                # Create new virtual inflow
                 source_process_id = v_id
                 target_process_id = process_id
                 value = process_mass_balance * -1.0
@@ -460,7 +459,6 @@ class FlowSolver(object):
                 created_virtual_flows[new_virtual_flow.id] = new_virtual_flow
 
             if need_virtual_outflow:
-                # Create virtual source process and virtual inflow to this process to balance out missing mass
                 # Create new virtual Process
                 v_id = VIRTUAL_PROCESS_ID_PREFIX + process.id
                 v_name = VIRTUAL_PROCESS_ID_PREFIX + process.name
@@ -468,7 +466,7 @@ class FlowSolver(object):
                 v_process = self._create_virtual_process(v_id, v_name, v_ts)
                 created_virtual_processes[v_process.id] = v_process
 
-                # Create new virtual inflow to current Process
+                # Create new virtual outflow
                 source_process_id = process_id
                 target_process_id = v_id
                 value = process_mass_balance
