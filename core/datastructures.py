@@ -290,6 +290,10 @@ class Flow(ObjectBase):
         self._data_source = params[11].value
         self._data_type = params[12].value
         self._comment = params[13].value
+        self._conversion_factor_used = params[14].value
+        self._carbon_content_factor = params[15].value
+        self._carbon_content_source = params[16].value
+
         self._row_number = params[-1]  # Track Excel file row number, last element in list
 
         # # Export is indicated by negative value
@@ -417,6 +421,22 @@ class Flow(ObjectBase):
         return self._comment
 
     @property
+    def carbon_content_factor(self) -> float:
+        return self._carbon_content_factor
+
+    @carbon_content_factor.setter
+    def carbon_content_factor(self, value: float):
+        self._carbon_content_factor = value
+
+    @property
+    def carbon_content_source(self) -> str:
+        return self._carbon_content_source
+
+    @carbon_content_source.setter
+    def carbon_content_source(self, value: str):
+        self._carbon_content_source = value
+
+    @property
     def is_evaluated(self) -> bool:
         return self._is_evaluated
 
@@ -488,6 +508,5 @@ class Stock(ObjectBase):
     @property
     def distribution_params(self):
         return self._process.stock_distribution_params
-
 
 
