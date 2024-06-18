@@ -14,66 +14,64 @@ class FlowSolver(object):
     def __init__(self, graph_data={}, use_virtual_flows=True, virtual_flow_epsilon=0.1):
         self._use_virtual_flows = use_virtual_flows
         self._virtual_flow_epsilon = virtual_flow_epsilon
-        self.df_process_to_flows = graph_data["df_process_to_flows"]
-        self.df_flows = graph_data["df_flows"]
+        self._df_process_to_flows = graph_data["df_process_to_flows"]
+        self._df_flows = graph_data["df_flows"]
 
         # Create year -> process ID -> process
-        self.year_to_process_id_to_process = {}
-        for year in self.df_process_to_flows.index:
-            self.year_to_process_id_to_process[year] = {}
-            for process_id in self.df_process_to_flows.columns:
-                cell = self.df_process_to_flows.at[year, process_id]
-                self.year_to_process_id_to_process[year][process_id] = cell["process"]
+        self._year_to_process_id_to_process = {}
+        for year in self._df_process_to_flows.index:
+            self._year_to_process_id_to_process[year] = {}
+            for process_id in self._df_process_to_flows.columns:
+                cell = self._df_process_to_flows.at[year, process_id]
+                self._year_to_process_id_to_process[year][process_id] = cell["process"]
 
         # Create year -> process ID -> flow IDs
-        self.year_to_process_id_to_flow_ids = {}
-        for year in self.df_process_to_flows.index:
-            self.year_to_process_id_to_flow_ids[year] = {}
-            for process_id in self.df_process_to_flows.columns:
-                cell = self.df_process_to_flows.at[year, process_id]
+        self._year_to_process_id_to_flow_ids = {}
+        for year in self._df_process_to_flows.index:
+            self._year_to_process_id_to_flow_ids[year] = {}
+            for process_id in self._df_process_to_flows.columns:
+                cell = self._df_process_to_flows.at[year, process_id]
                 inflow_ids = [flow.id for flow in cell["flows"]["in"]]
                 outflow_ids = [flow.id for flow in cell["flows"]["out"]]
-                self.year_to_process_id_to_flow_ids[year][process_id] = {"in": inflow_ids, "out": outflow_ids}
-
+                self._year_to_process_id_to_flow_ids[year][process_id] = {"in": inflow_ids, "out": outflow_ids}
 
         # Create year -> flow ID -> flow
-        self.year_to_flow_id_to_flow = {}
-        for year in self.df_flows.index:
-            self.year_to_flow_id_to_flow[year] = {}
-            for flow_id in self.df_flows.columns:
-                cell = self.df_flows.at[year, flow_id]
+        self._year_to_flow_id_to_flow = {}
+        for year in self._df_flows.index:
+            self._year_to_flow_id_to_flow[year] = {}
+            for flow_id in self._df_flows.columns:
+                cell = self._df_flows.at[year, flow_id]
                 if pd.isnull(cell):
                     continue
 
-                self.year_to_flow_id_to_flow[year][flow_id] = cell
+                self._year_to_flow_id_to_flow[year][flow_id] = cell
 
-        self.process_id_to_stock = graph_data["process_id_to_stock"]
-        self.all_processes = graph_data["all_processes"]
-        self.all_flows = graph_data["all_flows"]
-        self.all_stocks = graph_data["all_stocks"]
-        self.unique_processes_id_to_process = graph_data["unique_process_id_to_process"]
-        self.unique_flow_id_to_flow = graph_data["unique_flow_id_to_flow"]
+        self._process_id_to_stock = graph_data["process_id_to_stock"]
+        self._all_processes = graph_data["all_processes"]
+        self._all_flows = graph_data["all_flows"]
+        self._all_stocks = graph_data["all_stocks"]
+        self._unique_processes_id_to_process = graph_data["unique_process_id_to_process"]
+        self._unique_flow_id_to_flow = graph_data["unique_flow_id_to_flow"]
 
         # Time range
-        self.year_start = graph_data["year_start"]
-        self.year_end = graph_data["year_end"]
-        self.years = graph_data["years"]
-        self.year_current = self.year_start
-        self.year_prev = 0
+        self._year_start = graph_data["year_start"]
+        self._year_end = graph_data["year_end"]
+        self._years = graph_data["years"]
+        self._year_current = self._year_start
+        self._year_prev = 0
 
         # Current timestep data
-        self.current_process_id_to_process = self.year_to_process_id_to_process[self.year_current]
-        self.current_process_id_to_flow_ids = self.year_to_process_id_to_flow_ids[self.year_current]
-        self.current_flow_id_to_flow = self.year_to_flow_id_to_flow[self.year_current]
+        self._current_process_id_to_process = self._year_to_process_id_to_process[self._year_current]
+        self._current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[self._year_current]
+        self._current_flow_id_to_flow = self._year_to_flow_id_to_flow[self._year_current]
 
-        # NOTE: Should check for errors here?
         # Initialization of FlowSolver data
-        self.year_current = self.year_start
-        self.year_prev = self.year_current
+        self._year_current = self._year_start
+        self._year_prev = self._year_current
 
         # Convert all relative flow values to [0, 1] range
         # and convert all absolute values to solid wood equivalent values
-        for year, flow_id_to_flow in self.year_to_flow_id_to_flow.items():
+        for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             for flow_id, flow in flow_id_to_flow.items():
                 if flow.is_unit_absolute_value:
                     flow.is_evaluated = True
@@ -85,28 +83,25 @@ class FlowSolver(object):
                     flow.evaluated_share = flow.value / 100.0
                     flow.evaluated_value = 0.0
 
-    def get_current_year(self) -> int:
-        return self.year_current
-
     def get_all_processes(self):
-        return self.all_processes
+        return self._all_processes
 
     def get_all_flows(self):
-        return self.all_flows
+        return self._all_flows
 
     def get_all_stocks(self):
-        return self.all_stocks
+        return self._all_stocks
 
     def get_unique_processes(self) -> Dict[str, Process]:
-        return self.unique_processes_id_to_process
+        return self._unique_processes_id_to_process
 
     def get_unique_flows(self) -> Dict[str, Flow]:
-        return self.unique_flow_id_to_flow
+        return self._unique_flow_id_to_flow
 
     # Utility methods
     def get_processes_as_dataframe(self):
         df = pd.DataFrame({"Year": [], "Process ID": [], "Total inflows": [], "Total outflows": []})
-        for year, process_id_to_process in self.year_to_process_id_to_process.items():
+        for year, process_id_to_process in self._year_to_process_id_to_process.items():
             for process_id, process in process_id_to_process.items():
                 inflows_total = self.get_process_inflows_total(process_id)
                 outflows_total = self.get_process_outflows_total(process_id)
@@ -116,7 +111,7 @@ class FlowSolver(object):
 
     def get_flows_as_dataframe(self) -> DataFrame:
         df = pd.DataFrame({"Year": [], "Flow ID": [], "Source process ID": [], "Target process ID": [], "Value": []})
-        for year, flow_id_to_flow in self.year_to_flow_id_to_flow.items():
+        for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             for flow_id, flow in flow_id_to_flow.items():
                 new_row = [year, flow_id, flow.source_process_id, flow.target_process_id, flow.evaluated_value]
                 df.loc[len(df.index)] = new_row
@@ -125,9 +120,9 @@ class FlowSolver(object):
     def get_evaluated_flow_values_as_dataframe(self) -> DataFrame:
         # Populate flow values per year, initialize flow values to 0.0
         unique_flows = self.get_unique_flows()
-        df_flow_values = pd.DataFrame(index=self.years)
+        df_flow_values = pd.DataFrame(index=self._years)
         for flow_id in unique_flows:
-            df_flow_values[flow_id] = [0.0 for year in self.years]
+            df_flow_values[flow_id] = [0.0 for year in self._years]
 
         year_to_process_to_flows = self.get_year_to_process_to_flows()
 
@@ -143,22 +138,54 @@ class FlowSolver(object):
 
         return df_flow_values
 
-    def get_year_to_process_id_to_process(self) -> Dict[str, Dict[str, Process]]:
-        return self.year_to_process_id_to_process
+    def get_process(self, process_id, year=-1) -> Process:
+        if year >= 0:
+            return self._year_to_process_id_to_process[year][process_id]
 
-    def get_year_to_process_id_to_flows(self):
-        return self.year_to_process_id_to_flows
+        return self._current_process_id_to_flow_ids[process_id]
 
-    def get_year_to_flow_id_to_flow(self) -> Dict[int, Dict[str, Flow]]:
-        return self.year_to_flow_id_to_flow
+    def get_flow(self, flow_id, year=-1) -> Flow:
+        if year >= 0:
+            return self._year_to_flow_id_to_flow[year][flow_id]
+
+        return self._current_flow_id_to_flow[flow_id]
+
+    def get_stock(self, process_id) -> Stock:
+        return self._process_id_to_stock[process_id]
+
+    def get_process_inflows_total(self, process_id, year=-1):
+        total = 0.0
+        inflows = self._get_process_inflows(process_id, year)
+        for flow in inflows:
+            total += flow.evaluated_value
+        return total
+
+    def get_process_outflows_total(self, process_id, year=-1):
+        total = 0.0
+        outflows = self._get_process_outflows(process_id, year)
+        for flow in outflows:
+            total += flow.evaluated_value
+        return total
+
+
+    def solve_timesteps(self):
+        """
+        Solves all timesteps.
+        :return: True if successful, False otherwise
+        """
+        for year in self._years:
+            self._solve_timestep()
+            self._advance_timestep()
+
+        return True
 
     def get_year_to_process_to_flows(self):
         year_to_process_to_flows = {}
-        for year, current_process_id_to_process in self.year_to_process_id_to_process.items():
+        for year, current_process_id_to_process in self._year_to_process_id_to_process.items():
             year_to_process_to_flows[year] = {}
-            current_process_id_to_flow_ids = self.year_to_process_id_to_flow_ids[year]
-            current_flow_id_to_flow = self.year_to_flow_id_to_flow[year]
-            for process_id, process in self.current_process_id_to_process.items():
+            current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[year]
+            current_flow_id_to_flow = self._year_to_flow_id_to_flow[year]
+            for process_id, process in self._current_process_id_to_process.items():
                 flow_ids = current_process_id_to_flow_ids[process_id]
                 inflow_ids = flow_ids["in"]
                 outflow_ids = flow_ids["out"]
@@ -174,27 +201,21 @@ class FlowSolver(object):
 
         return year_to_process_to_flows
 
-    def get_process(self, process_id, year=-1) -> Process:
-        if year >= 0:
-            return self.year_to_process_id_to_process[year][process_id]
+    def _get_year_to_process_id_to_process(self) -> Dict[str, Dict[str, Process]]:
+        return self._year_to_process_id_to_process
 
-        return self.current_process_id_to_flow_ids[process_id]
+    def _get_year_to_process_id_to_flows(self):
+        return self.year_to_process_id_to_flows
 
-    def get_flow(self, flow_id, year=-1) -> Flow:
-        if year >= 0:
-            return self.year_to_flow_id_to_flow[year][flow_id]
+    def _get_year_to_flow_id_to_flow(self) -> Dict[int, Dict[str, Flow]]:
+        return self._year_to_flow_id_to_flow
 
-        return self.current_flow_id_to_flow[flow_id]
-
-    def get_stock(self, process_id) -> Stock:
-        return self.process_id_to_stock[process_id]
-
-    def get_process_inflow_ids(self, process_id, year=-1) -> List[str]:
+    def _get_process_inflow_ids(self, process_id, year=-1) -> List[str]:
         result = []
         if year >= 0:
-            result = self.year_to_process_id_to_flow_ids[year][process_id]["in"]
+            result = self._year_to_process_id_to_flow_ids[year][process_id]["in"]
         else:
-            result = self.current_process_id_to_flow_ids[process_id]["in"]
+            result = self._current_process_id_to_flow_ids[process_id]["in"]
 
         # If year -> process ID does not exists, return empty array
         if not result:
@@ -202,52 +223,38 @@ class FlowSolver(object):
 
         return result
 
-    def get_process_outflow_ids(self, process_id, year=-1) -> List[str]:
+    def _get_process_outflow_ids(self, process_id, year=-1) -> List[str]:
         result = []
         if year >= 0:
-            result = self.year_to_process_id_to_flow_ids[year][process_id]["out"]
+            result = self._year_to_process_id_to_flow_ids[year][process_id]["out"]
         else:
-            result = self.current_process_id_to_flow_ids[process_id]["out"]
+            result = self._current_process_id_to_flow_ids[process_id]["out"]
 
         if not result:
             result = []
         return result
 
-    def get_process_inflows(self, process_id, year=-1) -> List[Flow]:
+    def _get_process_inflows(self, process_id, year=-1) -> List[Flow]:
         # Get list of process inflows for current year
         flows = []
-        inflow_ids = self.get_process_inflow_ids(process_id, year)
+        inflow_ids = self._get_process_inflow_ids(process_id, year)
         for flow_id in inflow_ids:
             flows.append(self.get_flow(flow_id, year))
         return flows
 
     # Get list of outflows (DataFlows)
-    def get_process_outflows(self, process_id, year=-1) -> List[Flow]:
+    def _get_process_outflows(self, process_id, year=-1) -> List[Flow]:
         # Get list of outflows for current year
         flows = []
-        outflow_ids = self.get_process_outflow_ids(process_id, year)
+        outflow_ids = self._get_process_outflow_ids(process_id, year)
         for flow_id in outflow_ids:
             flows.append(self.get_flow(flow_id, year))
         return flows
 
-    def get_process_inflows_total(self, process_id, year=-1):
-        total = 0.0
-        inflows = self.get_process_inflows(process_id, year)
-        for flow in inflows:
-            total += flow.evaluated_value
-        return total
-
-    def get_process_outflows_total(self, process_id, year=-1):
-        total = 0.0
-        outflows = self.get_process_outflows(process_id, year)
-        for flow in outflows:
-            total += flow.evaluated_value
-        return total
-
-    def evaluate_process(self, process_id, year):
+    def _evaluate_process(self, process_id, year):
         is_evaluated = False
-        inflows = self.get_process_inflows(process_id, year)
-        outflows = self.get_process_outflows(process_id, year)
+        inflows = self._get_process_inflows(process_id, year)
+        outflows = self._get_process_outflows(process_id, year)
 
         # Root process, all outflows are absolute
         total_inflows = 0.0
@@ -286,26 +293,15 @@ class FlowSolver(object):
 
         return is_evaluated, outflows
 
-    def solve_timesteps(self):
-        """
-        Solves all timesteps.
-        :return: True if successful, False otherwise
-        """
-        for year in self.years:
-            self._solve_timestep()
-            self._advance_timestep()
-
-        return True
-
     def _solve_timestep(self):
-        self.current_flow_id_to_flow = self.year_to_flow_id_to_flow[self.year_current]
-        self.current_process_id_to_flow_ids = self.year_to_process_id_to_flow_ids[self.year_current]
+        self._current_flow_id_to_flow = self._year_to_flow_id_to_flow[self._year_current]
+        self._current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[self._year_current]
 
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
         evaluated_process_ids = []
-        for process in self.all_processes:
-            inflows = self.get_process_inflows(process.id)
+        for process in self._all_processes:
+            inflows = self._get_process_inflows(process.id)
             if not inflows:
                 unevaluated_process_ids.append(process.id)
 
@@ -318,7 +314,7 @@ class FlowSolver(object):
 
             # NOTE: Break out of loop if running over big amount of iterations
             # This will happen if graph has loops that contain only relative flows between them
-            is_evaluated, outflows = self.evaluate_process(process_id, self.year_current)
+            is_evaluated, outflows = self._evaluate_process(process_id, self._year_current)
             if is_evaluated:
                 evaluated_process_ids.append(process_id)
                 for flow in outflows:
@@ -355,8 +351,8 @@ class FlowSolver(object):
             self._create_virtual_flows(self._virtual_flow_epsilon)
 
         # Skip carrying values over to next year if next year is not valid anymore
-        next_year = self.year_current + 1
-        if next_year > self.year_end:
+        next_year = self._year_current + 1
+        if next_year > self._year_end:
             return
 
         # # TODO: If target process contains loop then no carryover happens?
@@ -386,8 +382,8 @@ class FlowSolver(object):
         #             self.year_to_flow_id_to_flow[next_year][flow_id].evaluated_value += total_inflows
 
     def _advance_timestep(self):
-        self.year_prev = self.year_current
-        self.year_current += 1
+        self._year_prev = self._year_current
+        self._year_current += 1
 
     def _create_virtual_process(self, process_id: str, process_name: str, transformation_stage: str) -> Process:
         new_virtual_process = Process()
@@ -415,14 +411,14 @@ class FlowSolver(object):
         created_virtual_processes = {}
         created_virtual_flows = {}
 
-        for process_id, process in self.current_process_id_to_process.items():
+        for process_id, process in self._current_process_id_to_process.items():
             # Skip virtual processes that were included during previous timesteps
             # to prevent cascading effect of creating infinite number of virtual processes and flows
             if process.is_virtual:
                 continue
 
-            inflows = self.get_process_inflows(process_id)
-            outflows = self.get_process_outflows(process_id)
+            inflows = self._get_process_inflows(process_id)
+            outflows = self._get_process_outflows(process_id)
             inflows_total = self.get_process_inflows_total(process_id)
             outflows_total = self.get_process_outflows_total(process_id)
 
@@ -476,21 +472,21 @@ class FlowSolver(object):
 
         # Add create virtual Flows and Processes to current year data
         for v_id, virtual_process in created_virtual_processes.items():
-            self.year_to_process_id_to_process[self.year_current][v_id] = virtual_process
-            self.year_to_process_id_to_flow_ids[self.year_current][v_id] = {"in": [], "out": []}
-            self.unique_processes_id_to_process[v_id] = virtual_process
+            self._year_to_process_id_to_process[self._year_current][v_id] = virtual_process
+            self._year_to_process_id_to_flow_ids[self._year_current][v_id] = {"in": [], "out": []}
+            self._unique_processes_id_to_process[v_id] = virtual_process
 
         for v_flow_id, virtual_flow in created_virtual_flows.items():
-            self.year_to_flow_id_to_flow[self.year_current][v_flow_id] = virtual_flow
-            self.year_to_process_id_to_flow_ids[self.year_current][virtual_flow.target_process_id]["in"].append(v_flow_id)
-            self.year_to_process_id_to_flow_ids[self.year_current][virtual_flow.source_process_id]["out"].append(v_flow_id)
-            self.unique_flow_id_to_flow[v_flow_id] = virtual_flow
+            self._year_to_flow_id_to_flow[self._year_current][v_flow_id] = virtual_flow
+            self._year_to_process_id_to_flow_ids[self._year_current][virtual_flow.target_process_id]["in"].append(v_flow_id)
+            self._year_to_process_id_to_flow_ids[self._year_current][virtual_flow.source_process_id]["out"].append(v_flow_id)
+            self._unique_flow_id_to_flow[v_flow_id] = virtual_flow
 
         num_virtual_processes = len(created_virtual_processes)
         num_virtual_flows = len(created_virtual_flows)
         if num_virtual_processes or num_virtual_flows:
             print("Created {} virtual processes and {} virtual flows for year {}".format(
-                num_virtual_processes, num_virtual_flows, self.year_current))
+                num_virtual_processes, num_virtual_flows, self._year_current))
 
             for v_id, virtual_process in created_virtual_processes.items():
                 print("\t- Virtual process ID '{}'".format(v_id))

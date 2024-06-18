@@ -1,8 +1,6 @@
 import copy
 from typing import List, Dict
-
 import numpy as np
-
 from core.dataprovider import DataProvider
 from core.datastructures import Process, Flow, Stock
 import pandas as pd
@@ -133,7 +131,7 @@ class DataChecker(object):
 
         return True, []
 
-    def build_flowgraph_data(self, start_year=0, end_year=0, detect_year_range=False):
+    def build_flowsolver_data(self, start_year=0, end_year=0, detect_year_range=False):
         # NOTE: All flows must have data for the starting year
         processes = self.dataprovider.get_processes()
         flows = self.dataprovider.get_flows()

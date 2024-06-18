@@ -12,7 +12,7 @@ class DataVisualizer(object):
     def show(self):
         self._fig.show(renderer="browser", post_script=[self._script], config={'displayModeBar': False})
 
-    def build(self, flowgraph: FlowSolver, params: dict):
+    def build(self, flowsolver: FlowSolver, params: dict):
         small_node_threshold = params["small_node_threshold"]
         process_transformation_stage_colors = params["process_transformation_stage_colors"]
         virtual_process_graph_labels = params["virtual_process_graph_labels"]
@@ -21,7 +21,7 @@ class DataVisualizer(object):
         virtual_flow_color = params["virtual_flow_color"]
 
         year_to_data = {}
-        year_to_process_to_flows = flowgraph.get_year_to_process_to_flows()
+        year_to_process_to_flows = flowsolver.get_year_to_process_to_flows()
         for year, process_to_flows in year_to_process_to_flows.items():
             year_to_data[year] = {}
 
@@ -64,9 +64,11 @@ class DataVisualizer(object):
                 outflows = process_to_flows[process]["out"]
                 for flow in outflows:
                     if flow.source_process_id not in process_id_to_index:
+                        print("Source {} not found in process_id_to_index!".format(flow.source_process_id))
                         continue
 
                     if flow.target_process_id not in process_id_to_index:
+                        print("Target {} not found in process_id_to_index!".format(flow.target_process_id))
                         continue
 
                     source_index = process_id_to_index[flow.source_process_id]
@@ -557,7 +559,7 @@ class DataVisualizer(object):
             if(isVirtualNode) {
                 text += "<b>Virtual process</b><br />"
             }
-
+            
             text += "<extra></extra>"
             dataUpdate["node.hovertemplate"] = text
 
