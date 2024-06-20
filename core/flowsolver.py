@@ -110,10 +110,21 @@ class FlowSolver(object):
         return df
 
     def get_flows_as_dataframe(self) -> DataFrame:
-        df = pd.DataFrame({"Year": [], "Flow ID": [], "Source process ID": [], "Target process ID": [], "Value": []})
+        # df = pd.DataFrame({"Year": [], "Flow ID": [], "Source process ID": [], "Target process ID": [], "Value": []})
+        # for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
+        #     for flow_id, flow in flow_id_to_flow.items():
+        #         new_row = [year, flow_id, flow.source_process_id, flow.target_process_id, flow.evaluated_value]
+        #         df.loc[len(df.index)] = new_row
+        # return df
+        cols = {
+            "Year": [], "Flow ID": [], "Source process ID": [], "Target process ID": [],
+            "Value (SWE)": [], "Value (Carbon)": []
+        }
+        df = pd.DataFrame(cols)
         for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             for flow_id, flow in flow_id_to_flow.items():
-                new_row = [year, flow_id, flow.source_process_id, flow.target_process_id, flow.evaluated_value]
+                new_row = [year, flow_id, flow.source_process_id, flow.target_process_id,
+                           flow.evaluated_value, flow.evaluated_value_carbon]
                 df.loc[len(df.index)] = new_row
         return df
 
@@ -167,6 +178,33 @@ class FlowSolver(object):
             total += flow.evaluated_value
         return total
 
+    def get_process_inflows_total_swe(self, process_id, year=-1):
+        total = 0.0
+        inflows = self._get_process_inflows(process_id, year)
+        for flow in inflows:
+            total += flow.evaluated_value
+        return total
+
+    def get_process_inflows_total_carbon(self, process_id, year=-1):
+        total = 0.0
+        inflows = self._get_process_inflows(process_id, year)
+        for flow in inflows:
+            total += flow.evaluated_value
+        return total
+
+    def get_process_outflows_total_swe(self, process_id, year=-1):
+        total = 0.0
+        outflows = self._get_process_outflows(process_id, year)
+        for flow in outflows:
+            total += flow.evaluated_value
+        return total
+
+    def get_process_outflows_total_carbon(self, process_id, year=-1):
+        total = 0.0
+        outflows = self._get_process_outflows(process_id, year)
+        for flow in outflows:
+            total += flow.evaluated_value_carbon
+        return total
 
     def solve_timesteps(self):
         """

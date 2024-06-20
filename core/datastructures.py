@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class ObjectBase(object):
     def __init__(self):
         self._id = -1
@@ -67,7 +70,7 @@ class Process(ObjectBase):
             return
 
         # Skip totally empty row
-        if params.isnull().all():
+        if params.isna().all():
             return
 
         self._name = params.iloc[0]
@@ -268,6 +271,8 @@ class Flow(ObjectBase):
         self._data_source = None
         self._data_source_comment = None
         self._comment = None
+        self._carbon_content_factor = 1.0
+        self._carbon_content_source = None
 
         # Evaluated per timestep
         self._is_evaluated = False
@@ -276,14 +281,14 @@ class Flow(ObjectBase):
 
         self._flow_share = 0.0
         self._flow_value = 0.0
+        self._indicators = {}
 
         if params is None:
             return
 
         # Skip totally empty row
-        if params.isnull().all():
+        if params.isna().all():
             return
-
 
         self._source_process = params.iloc[0]
         self._source_process_transformation_stage = params.iloc[1]
@@ -299,15 +304,31 @@ class Flow(ObjectBase):
         self._data_source = params.iloc[11]
         self._data_source_comment = params.iloc[12]
         self._conversion_factor_used = params.iloc[13]
-        self._carbon_content_factor = params.iloc[14]
+        
+        # Carbon content
+        self._carbon_content_factor = 1.0 if np.isnan(params.iloc[14]) else params.iloc[14]
         self._carbon_content_source = params.iloc[15]
 
         # Rest of the elements except last element are indicators
         # There should be even number of indicators because each indicator has value and comment
-        indicators = params[16:-2]
-        self._indicators = {}
-        # for indicator_index in enumerate(params[16:-2]):
-        #     raise SystemExit(-1)
+        first_indicator_index = 16
+        indicators = params[first_indicator_index:]
+        if len(indicators) % 2:
+            print("Not even number of indicator columns in data file.")
+            print("Each indicator needs two columns (value and comment) in this order.")
+            raise SystemExit(-1)
+
+        # Go through indicators with step size of 2
+        # column at index i   = indicator value
+        # column at index i+1 = indicator comment
+        for i in range(0, len(indicators), 2):
+            indicator_name = str(indicators.index[i])
+            indicator_value = indicators.iloc[i]
+            indicator_comment = indicators.iloc[i+1]
+
+            # Default to 1 as indicator value if no value is provided
+            indicator_value = 1 if np.isnan(indicator_value) else indicator_value
+            self._indicators[indicator_name] = indicator_value
 
         self._row_number = row_number  # Track Excel file row number, last element in list
 
@@ -446,6 +467,14 @@ class Flow(ObjectBase):
         self._carbon_content_source = value
 
     @property
+    def indicators(self) -> dict[str, float]:
+        return self._indicators
+
+    @indicators.setter
+    def indicators(self, val):
+        self._indicators = val
+
+    @property
     def is_evaluated(self) -> bool:
         return self._is_evaluated
 
@@ -468,6 +497,10 @@ class Flow(ObjectBase):
     @evaluated_share.setter
     def evaluated_share(self, value: float):
         self._evaluated_share = value
+
+    @property
+    def evaluated_value_carbon(self) -> float:
+        return self.evaluated_value * self.carbon_content_factor
 
 
 # Stock is created for each process that has lifetime
@@ -517,5 +550,4 @@ class Stock(ObjectBase):
     @property
     def distribution_params(self):
         return self._process.stock_distribution_params
-
 

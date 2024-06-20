@@ -1,7 +1,7 @@
 from typing import List
-import openpyxl
+
+import numpy as np
 import pandas as pd
-from openpyxl.utils.exceptions import InvalidFileException
 from core.datastructures import Process, Flow, Stock
 
 
@@ -121,9 +121,14 @@ class DataProvider(object):
 
         row_number = row_start
         for row in rows:
+            if not self._is_row_valid(row):
+                row_number += 1
+                continue
+
             new_instance = object_type(row, row_number)
             if new_instance.is_valid():
                 result.append(new_instance)
+
             row_number += 1
 
         return result
@@ -140,6 +145,14 @@ class DataProvider(object):
                 result.append(new_stock)
 
         return result
+
+    def _is_row_valid(self, row):
+        # Each row must have all first columns defined
+        cols = row.iloc[0:4]
+        if any(pd.isna(cols)):
+            return False
+
+        return True
 
     def get_processes(self) -> List[Process]:
         return self._processes
