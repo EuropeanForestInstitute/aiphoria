@@ -39,7 +39,7 @@ class ObjectBase(object):
 
 
 class Process(ObjectBase):
-    def __init__(self, params=None):
+    def __init__(self, params=None, row_number=-1):
         super().__init__()
 
         self._name = None
@@ -63,27 +63,31 @@ class Process(ObjectBase):
         self._label_in_graph = None
 
         # Leave instance to default state if params is not provided
-        if not params:
+        if params is None:
             return
 
-        self._name = params[0].value
-        self._location = params[1].value
-        self._id = params[2].value
-        self._transformation_stage = params[3].value
-        self._lifetime = params[4].value
-        self._lifetime_source = params[5].value
-        self._stock_distribution_type = params[6].value
-        self._stock_distribution_params = params[7].value
-        self._wood_content = params[8].value
-        self._wood_content_source = params[9].value
-        self._density = params[10].value
-        self._density_source = params[11].value
-        self._modelling_status = params[12].value
-        self._comment = params[13].value
-        self._position_x = params[14].value
-        self._position_y = params[15].value
-        self._label_in_graph = params[16].value
-        self._row_number = params[-1]  # Track Excel file row number, last element in list
+        # Skip totally empty row
+        if params.isnull().all():
+            return
+
+        self._name = params.iloc[0]
+        self._location = params.iloc[1]
+        self._id = params.iloc[2]
+        self._transformation_stage = params.iloc[3]
+        self._lifetime = params.iloc[4]
+        self._lifetime_source = params.iloc[5]
+        self._stock_distribution_type = params.iloc[6]
+        self._stock_distribution_params = params.iloc[7]
+        self._wood_content = params.iloc[8]
+        self._wood_content_source = params.iloc[9]
+        self._density = params.iloc[10]
+        self._density_source = params.iloc[11]
+        self._modelling_status = params.iloc[12]
+        self._comment = params.iloc[13]
+        self._position_x = params.iloc[14]
+        self._position_y = params.iloc[15]
+        self._label_in_graph = params.iloc[16]
+        self._row_number = row_number
 
     def __str__(self) -> str:
         s = "Process '{}': Lifetime: {}".format(self.id, self.lifetime)
@@ -247,7 +251,7 @@ class Process(ObjectBase):
 
 
 class Flow(ObjectBase):
-    def __init__(self, params=None):
+    def __init__(self, params=None, row_number=-1):
         super().__init__()
 
         self._source_process = None
@@ -262,7 +266,7 @@ class Flow(ObjectBase):
         self._unit = None
         self._year = None
         self._data_source = None
-        self._data_type = None
+        self._data_source_comment = None
         self._comment = None
 
         # Evaluated per timestep
@@ -273,34 +277,39 @@ class Flow(ObjectBase):
         self._flow_share = 0.0
         self._flow_value = 0.0
 
-        if not params:
+        if params is None:
             return
 
-        self._source_process = params[0].value
-        self._source_process_transformation_stage = params[1].value
-        self._source_process_location = params[2].value
-        self._target_process = params[3].value
-        self._target_process_transformation_stage = params[4].value
-        self._target_process_location = params[5].value
-        self._source_process_id = params[6].value
-        self._target_process_id = params[7].value
-        self._value = params[8].value
-        self._unit = params[9].value
-        self._year = params[10].value
-        self._data_source = params[11].value
-        self._data_type = params[12].value
-        self._comment = params[13].value
-        self._conversion_factor_used = params[14].value
-        self._carbon_content_factor = params[15].value
-        self._carbon_content_source = params[16].value
+        # Skip totally empty row
+        if params.isnull().all():
+            return
 
-        self._row_number = params[-1]  # Track Excel file row number, last element in list
 
-        # # Export is indicated by negative value
-        # # Switch source and target process IDs so because data is defined as "to -> from" and with the negative value
-        # if self._value and self._value < 0.0:
-        #     self._source_process_id, self._target_process_id = self._target_process_id, self._source_process_id
-        #     self._value = abs(self._value)
+        self._source_process = params.iloc[0]
+        self._source_process_transformation_stage = params.iloc[1]
+        self._source_process_location = params.iloc[2]
+        self._target_process = params.iloc[3]
+        self._target_process_transformation_stage = params.iloc[4]
+        self._target_process_location = params.iloc[5]
+        self._source_process_id = params.iloc[6]
+        self._target_process_id = params.iloc[7]
+        self._value = params.iloc[8]
+        self._unit = params.iloc[9]
+        self._year = params.iloc[10]
+        self._data_source = params.iloc[11]
+        self._data_source_comment = params.iloc[12]
+        self._conversion_factor_used = params.iloc[13]
+        self._carbon_content_factor = params.iloc[14]
+        self._carbon_content_source = params.iloc[15]
+
+        # Rest of the elements except last element are indicators
+        # There should be even number of indicators because each indicator has value and comment
+        indicators = params[16:-2]
+        self._indicators = {}
+        # for indicator_index in enumerate(params[16:-2]):
+        #     raise SystemExit(-1)
+
+        self._row_number = row_number  # Track Excel file row number, last element in list
 
     def __str__(self):
         s = "Flow '{}' -> '{}': Value={} Unit={}, is_evaluated={}, evaluated_share={}, evaluated_value={}".format(
@@ -413,8 +422,8 @@ class Flow(ObjectBase):
         return self._data_source
 
     @property
-    def data_type(self) -> str:
-        return self._data_type
+    def data_source_comment(self) -> str:
+        return self._data_source_comment
 
     @property
     def comment(self) -> str:
@@ -463,7 +472,7 @@ class Flow(ObjectBase):
 
 # Stock is created for each process that has lifetime
 class Stock(ObjectBase):
-    def __init__(self, params=None):
+    def __init__(self, params=None, row_number=-1):
         super().__init__()
         self._process: Process = None
         self._id = -1

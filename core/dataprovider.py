@@ -1,5 +1,6 @@
 from typing import List
 import openpyxl
+import pandas as pd
 from openpyxl.utils.exceptions import InvalidFileException
 from core.datastructures import Process, Flow, Stock
 
@@ -20,12 +21,12 @@ class DataProvider(object):
             # Process related
             "sheet_name_processes",
             "column_range_processes",
-            "row_start_processes",
+            "skip_num_rows_processes",
 
             # Flow related
             "sheet_name_flows",
             "column_range_flows",
-            "row_start_flows",
+            "skip_num_rows_flows",
 
             # Model related
             "detect_year_range",
@@ -49,9 +50,30 @@ class DataProvider(object):
         filename = params["filename"]
         sheet_name_processes = params["sheet_name_processes"]
         sheet_name_flows = params["sheet_name_flows"]
+        col_range_processes = params["column_range_processes"]
+        col_range_flows = params["column_range_flows"]
+        skip_num_rows_processes = params["skip_num_rows_processes"]
+        skip_num_rows_flows = params["skip_num_rows_flows"]
+
+        # Sheet name to DataFrame
+        sheets = {}
         try:
-            self._workbook = openpyxl.load_workbook(filename, read_only=False, data_only=True)
-        except InvalidFileException:
+            with pd.ExcelFile(params["filename"]) as xls:
+                try:
+                    sheet_processes = pd.read_excel(xls, sheet_name=sheet_name_processes,
+                                                    skiprows=skip_num_rows_processes, usecols=col_range_processes)
+                    sheets[sheet_name_processes] = sheet_processes
+                except ValueError:
+                    pass
+
+                try:
+                    sheet_flows = pd.read_excel(xls, sheet_name=sheet_name_flows,
+                                                    skiprows=skip_num_rows_flows, usecols=col_range_flows)
+                    sheets[sheet_name_flows] = sheet_flows
+                except ValueError:
+                    pass
+
+        except FileNotFoundError:
             print("DataProvider: file not found (" + filename + ")")
             raise SystemExit(-1)
 
@@ -63,7 +85,7 @@ class DataProvider(object):
 
         missing_sheet_names = []
         for key in required_sheet_names:
-            if key not in self._workbook:
+            if key not in sheets:
                 missing_sheet_names.append(key)
 
         if missing_sheet_names:
@@ -75,58 +97,34 @@ class DataProvider(object):
         self._sheet_name_processes = sheet_name_processes
         self._sheet_name_flows = sheet_name_flows
 
-        # Read Processes
-        col_range_processes = params["column_range_processes"]
-        row_start_processes = params["row_start_processes"]
-        sheet_processes = self._workbook[sheet_name_processes]
-        rows_processes = self._read_rows_from_range(sheet=sheet_processes,
-                                              col_range=col_range_processes,
-                                              row_start=row_start_processes)
+        # Create Processes
+        rows_processes = []
+        df_processes = sheets[self._sheet_name_processes]
+        for (row_index, row) in df_processes.iterrows():
+            rows_processes.append(row)
+        self._processes = self._create_objects_from_rows(Process, rows_processes, row_start=skip_num_rows_processes + 2)
 
-        self._processes = self._create_objects_from_rows(Process, rows_processes)
+        # Create Flows
+        rows_flows = []
+        df_flows = sheets[self._sheet_name_flows]
+        for (row_index, row) in df_flows.iterrows():
+            rows_flows.append(row)
+        self._flows = self._create_objects_from_rows(Flow, rows_flows, row_start=skip_num_rows_flows + 2)
 
-        # Read Flows
-        col_range_flows = params["column_range_flows"]
-        row_start_flows = params["row_start_flows"]
-        sheet_flows = self._workbook[sheet_name_flows]
-        rows_flows = self._read_rows_from_range(sheet=sheet_flows,
-                                      col_range=col_range_flows,
-                                      row_start=row_start_flows)
-
-        self._flows = self._create_objects_from_rows(Flow, rows_flows)
-
-        # Create stocks from Processes
+        # Create Stocks from Processes
         self._stocks = self._create_stocks_from_processes(self._processes)
 
-    def _read_rows_from_range(self, sheet=None, col_range=None, row_start=-1):
-        rows = []
-        if not sheet:
-            return rows
-
-        columns = sheet[col_range]
-        num_rows = len(columns[0])
-
-        for row_index in range(row_start, num_rows):
-            row = []
-            for col in columns:
-                row.append(col[row_index])
-
-            # Track also Excel file row number
-            excel_row_number = row_index + 1
-            row.append(excel_row_number)
-            rows.append(row)
-
-        return rows
-
-    def _create_objects_from_rows(self, object_type=None, rows=[]) -> List:
+    def _create_objects_from_rows(self, object_type=None, rows=[], row_start=-1) -> List:
         result = []
         if not object_type:
             return result
 
+        row_number = row_start
         for row in rows:
-            new_instance = object_type(row)
+            new_instance = object_type(row, row_number)
             if new_instance.is_valid():
                 result.append(new_instance)
+            row_number += 1
 
         return result
 
