@@ -4,14 +4,14 @@
 
 > ℹ️ _This library is under continuous development_
 
-This is a Python library that facilitates the assessment of wood materials flows and their visualization over time. `aiphoria` builds on top of [ODYM - Open Dynamic Material Systems Model](https://github.com/IndEcol/ODYM).
+This is a Python library that facilitates the assessment of wood materials flows (carbon) and their visualization over time. `aiphoria` builds on top of [ODYM - Open Dynamic Material Systems Model](https://github.com/IndEcol/ODYM).
 
 ## Features:
 `aiphoria` allows you to:
 
 - **Solve flows** provided both in absolute and relative (%) values, for example semi-finished wood product statistics (absolute values) to end-uses (relative values)
-- **Visualize material flows** through a Sankey diagram and provided timestep
-- **Conduct dynamic MFA**. 
+- **Conduct dynamic MFA and temporary carbon accounting**
+- **Visualize material flows** through a Sankey diagram and provided timestep.
 
 ## Use cases:
 `aiphoria` is ideal for:
