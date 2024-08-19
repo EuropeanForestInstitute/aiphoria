@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
@@ -90,7 +92,8 @@ class FlowSolver(object):
                     flow.evaluated_value = 0.0
 
         # Stock ID to ODYM DynamicStockModel
-        self._stock_id_to_dsm = {}
+        self._stock_id_to_dsm_swe = {}
+        self._stock_id_to_dsm_carbon = {}
 
     def get_all_processes(self):
         return self._all_processes
@@ -135,7 +138,7 @@ class FlowSolver(object):
         unique_flows = self.get_unique_flows()
         df_flow_values = pd.DataFrame(index=self._years)
         for flow_id in unique_flows:
-            df_flow_values[flow_id] = [0.0 for year in self._years]
+            df_flow_values[flow_id] = [0.0 for _ in self._years]
 
         year_to_process_to_flows = self.get_year_to_process_to_flows()
 
@@ -173,11 +176,17 @@ class FlowSolver(object):
         """
         return self._process_id_to_stock[process_id]
 
-    def get_dynamic_stocks(self) -> dict[str, DynamicStockModel]:
+    def get_dynamic_stocks_swe(self) -> dict[str, DynamicStockModel]:
         """
-        Get dictionary (stock ID -> DynamicStockModel) of DynamicStockModels.
+        Get dictionary of stock ID to solid-wood equivalent DynamicStockModel.
         """
-        return self._stock_id_to_dsm
+        return self._stock_id_to_dsm_swe
+
+    def get_dynamic_stocks_carbon(self) -> dict[str, DynamicStockModel]:
+        """
+        Get dictionary of stock ID to carbon DynamicStockModel.
+        """
+        return self._stock_id_to_dsm_carbon
 
     def get_process_inflows_total(self, process_id, year=-1):
         total = 0.0
@@ -310,14 +319,16 @@ class FlowSolver(object):
         outflows = self._get_process_outflows(process_id, year)
 
         # Root process, all outflows are absolute
-        total_inflows = 0.0
         if not inflows:
             is_evaluated = True
             return is_evaluated, outflows
 
+        total_inflows = 0.0
+        total_inflows_carbon = 0.0
         for flow in inflows:
             if flow.is_evaluated:
                 total_inflows += flow.evaluated_value
+                total_inflows_carbon += flow.evaluated_value_carbon
 
         # Distribute outflows (stock or direct) only if all the inflows are already evaluated
         if all([flow.is_evaluated for flow in inflows]):
@@ -325,35 +336,20 @@ class FlowSolver(object):
 
             # Subtract absolute outflows from total inflows
             # and distribute the remaining total between all relative flows
-            if process_id in self._stock_id_to_dsm:
-                # Resetting some DynamicStockModel properties are needed to make
-                # timestep stock accumulation and other calculations work
-
-                # Accumulate all inflows to DSM
-                dsm = self._stock_id_to_dsm[process_id]
+            if process_id in self._stock_id_to_dsm_swe:
+                # Accumulate inflows to dynamic stock
                 year_index = self._years.index(self._year_current)
 
-                # Update inflows to stock for this year
-                dsm.i[year_index] = total_inflows
+                # Update DSM SWE
+                dsm_swe = self._stock_id_to_dsm_swe[process_id]
+                self.accumulate_dynamic_stock_inflows(dsm_swe, total_inflows, year)
 
-                # Recalculate stock by cohort
-                dsm.s_c = None
-                stock_by_cohort = dsm.compute_s_c_inflow_driven()
+                # Update DSM carbon
+                dsm_carbon = self._stock_id_to_dsm_carbon[process_id]
+                self.accumulate_dynamic_stock_inflows(dsm_carbon, total_inflows_carbon, year)
 
-                # Recalculate outflow by cohort
-                dsm.o_c = None
-                outflow_by_cohort = dsm.compute_o_c_from_s_c()
-
-                # Recalculate stock total
-                dsm.s = None
-                stock_total = dsm.compute_stock_total()
-
-                # Get stock total
-                stock_change = dsm.compute_stock_change()
-
-                # Recalculate stock outflow
-                dsm.o = None
-                stock_outflow_total = dsm.compute_outflow_total()
+                # Distribute SWE total outflow values
+                stock_outflow = self._get_dynamic_stock_outflow_value(dsm_swe, year)
 
                 outflows_abs = []
                 outflows_rel = []
@@ -363,13 +359,13 @@ class FlowSolver(object):
                     else:
                         outflows_rel.append(flow)
 
-                stock_outflow = stock_outflow_total[year_index]
-
                 # Check that if process has absolute outflow then outflow value must be
                 # less than stock outflow. If absolute outflow is greater than stock outflow
                 # then there is user error with the data
-                outflows_abs = np.sum([outflows_abs])
-                total_outflows_rel = stock_outflow - outflows_abs
+                total_abs = 0.0
+                for outflow in outflows_abs:
+                    total_abs += outflow.evaluated_value
+                total_outflows_rel = stock_outflow - total_abs
 
                 if total_outflows_rel < 0.0:
                     # This is error: absolute outflow from stock is more than the stock outflow
@@ -613,17 +609,67 @@ class FlowSolver(object):
                 'Scale': [scale],
             }
 
-            new_dsm = DynamicStockModel(t=np.array(self._years),
-                                        i=stock_total_inflows,
-                                        s=stock_total,
-                                        lt=stock_lifetime_params)
+            new_dsm_swe = DynamicStockModel(t=np.array(self._years),
+                                            i=stock_total_inflows,
+                                            s=stock_total,
+                                            lt=stock_lifetime_params)
 
-            new_dsm.compute_s_c_inflow_driven()
-            new_dsm.compute_o_c_from_s_c()
-            new_dsm.compute_stock_total()
-            new_dsm.compute_stock_change()
-            new_dsm.compute_outflow_total()
-            self._stock_id_to_dsm[stock.id] = new_dsm
+            new_dsm_carbon = DynamicStockModel(t=np.array(self._years),
+                                               i=copy.deepcopy(stock_total_inflows),
+                                               s=copy.deepcopy(stock_total),
+                                               lt=copy.deepcopy(stock_lifetime_params))
+
+            # Compute initial SWE dynamic stock model data
+            new_dsm_swe.compute_s_c_inflow_driven()
+            new_dsm_swe.compute_o_c_from_s_c()
+            new_dsm_swe.compute_stock_total()
+            new_dsm_swe.compute_stock_change()
+            new_dsm_swe.compute_outflow_total()
+
+            # Compute initial carbon dynamic stock model data
+            new_dsm_carbon.compute_s_c_inflow_driven()
+            new_dsm_carbon.compute_o_c_from_s_c()
+            new_dsm_carbon.compute_stock_total()
+            new_dsm_carbon.compute_stock_change()
+            new_dsm_carbon.compute_outflow_total()
+
+            self._stock_id_to_dsm_swe[stock.id] = new_dsm_swe
+            self._stock_id_to_dsm_carbon[stock.id] = new_dsm_carbon
+
+    def accumulate_dynamic_stock_inflows(self, dsm: DynamicStockModel, total_inflows: float, year: int) -> None:
+        """
+        Update and accumulate inflows to DynamicStockModel.
+
+        :param dsm: Target DynamicStockModel
+        :param total_inflows: Total inflows for the stock (float)
+        :param year: Target year (int)
+        :return: None
+        """
+
+        year_index = self._years.index(year)
+
+        # Resetting some DynamicStockModel properties are needed to make
+        # timestep stock accumulation and other calculations work
+        dsm.i[year_index] = total_inflows
+
+        # Recalculate stock by cohort
+        dsm.s_c = None
+        dsm.compute_s_c_inflow_driven()
+
+        # Recalculate outflow by cohort
+        dsm.o_c = None
+        dsm.compute_o_c_from_s_c()
+
+        # Recalculate stock total
+        dsm.s = None
+        dsm.compute_stock_total()
+
+        # Get stock total
+        dsm.compute_stock_change()
+
+        # Recalculate stock outflow
+        dsm.o = None
+        dsm.compute_outflow_total()
 
     def _evaluate_dynamic_stock_outflows(self, year: int) -> None:
         """
@@ -637,9 +683,22 @@ class FlowSolver(object):
         """
         # Get stock outflow for year, distribute that to outflows and mark those Flows as evaluated
         year_index = self._years.index(year)
-        for stock_id, dsm in self.get_dynamic_stocks().items():
+        for stock_id, dsm in self.get_dynamic_stocks_swe().items():
             stock_total_outflow = dsm.compute_outflow_total()[year_index]
             outflows = self._get_process_outflows(stock_id)
             for flow in outflows:
                 flow.is_evaluated = True
                 flow.evaluated_value = flow.evaluated_share * stock_total_outflow
+
+    def _get_dynamic_stock_outflow_value(self, dsm: DynamicStockModel, year: int) -> float:
+        """
+        Get dynamic stock total outflow value.
+
+        :param dsm: Target DynamicStockModel
+        :param year: Target year
+        :return: Total stock outflow  (float)
+        """
+        year_index = self._years.index(year)
+        stock_outflow_total = dsm.compute_outflow_total()
+        return stock_outflow_total[year_index]
+

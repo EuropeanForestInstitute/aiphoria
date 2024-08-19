@@ -415,6 +415,7 @@ class DataChecker(object):
             data_min_year = flow_id_to_min_year[flow_data.name]
             empty_flow_data = copy.deepcopy(flow_data.loc[data_min_year])
             empty_flow_data.value = 0.0
+            empty_flow_data.evaluated_value = 0.0
 
             years_missing_flow_data = flow_data.loc[:data_min_year].drop(index=data_min_year)
             if len(years_missing_flow_data):
