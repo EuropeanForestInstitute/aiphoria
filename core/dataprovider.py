@@ -1,8 +1,16 @@
+from collections.abc import Callable
+from enum import Enum
 from typing import List
-
 import numpy as np
 import pandas as pd
 from core.datastructures import Process, Flow, Stock
+
+
+class ModelParameterNames(Enum):
+    Filename = "filename"
+    SheetNameProcesses = "sheet_name_processes"
+    ColumnRangeProcesses = "column_range_processes"
+    SkipNumRowsProcesses = "skip_num_rows_processes"
 
 
 class DataProvider(object):
@@ -63,7 +71,8 @@ class DataProvider(object):
                     sheet_processes = pd.read_excel(xls,
                                                     sheet_name=sheet_name_processes,
                                                     skiprows=skip_num_rows_processes,
-                                                    usecols=col_range_processes)
+                                                    usecols=col_range_processes
+                                                    )
                     sheets[sheet_name_processes] = sheet_processes
                 except ValueError:
                     pass
@@ -71,7 +80,8 @@ class DataProvider(object):
                 try:
                     sheet_flows = pd.read_excel(xls, sheet_name=sheet_name_flows,
                                                 skiprows=skip_num_rows_flows,
-                                                usecols=col_range_flows)
+                                                usecols=col_range_flows
+                                                )
                     sheets[sheet_name_flows] = sheet_flows
                 except ValueError:
                     pass
@@ -110,8 +120,10 @@ class DataProvider(object):
         # Create Flows
         rows_flows = []
         df_flows = sheets[self._sheet_name_flows]
+
         for (row_index, row) in df_flows.iterrows():
             rows_flows.append(row)
+
         self._flows = self._create_objects_from_rows(Flow, rows_flows, row_start=skip_num_rows_flows)
 
         # Create Stocks from Processes
@@ -136,11 +148,14 @@ class DataProvider(object):
 
         return result
 
-    def _create_stocks_from_processes(self, processes=[]) -> List:
+    def _create_stocks_from_processes(self, processes=None) -> List[Stock]:
         # Create stocks only for Processes that have lifetime > 1
+        if processes is None:
+            processes = []
+
         result = []
         for process in processes:
-            if process.lifetime <= 1:
+            if process.lifetime == 0:
                 continue
 
             new_stock = Stock(process)

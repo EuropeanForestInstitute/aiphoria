@@ -1,21 +1,27 @@
-from typing import List, Dict
+import numpy as np
 import pandas as pd
 from pandas import DataFrame
 from core.datastructures import Process, Flow, Stock
-
-VIRTUAL_PROCESS_ID_PREFIX = "VP_"
-VIRTUAL_FLOW_ID_PREFIX = "VF_"
-MAX_ITERATION_COUNT = 100000
-VIRTUAL_PROCESS_TRANSFORMATION_STAGE = "Virtual"
+from lib.odym.modules.dynamic_stock_model import DynamicStockModel
+from typing import List, Dict
 
 
 # Solves flows to absolute values
 class FlowSolver(object):
-    def __init__(self, graph_data={}, use_virtual_flows=True, virtual_flow_epsilon=0.1):
+    """
+    Solves flows to absolute values, evaluates Process in- and outflow values,
+    and handles dynamic stocks.
+    """
+    _virtual_process_id_prefix = "VP_"
+    _virtual_flow_id_prefix = "VF_"
+    _max_iterations = 100000
+    _virtual_process_transformation_stage = "Virtual"
+
+    def __init__(self, data={}, use_virtual_flows=True, virtual_flows_epsilon=0.1):
         self._use_virtual_flows = use_virtual_flows
-        self._virtual_flow_epsilon = virtual_flow_epsilon
-        self._df_process_to_flows = graph_data["df_process_to_flows"]
-        self._df_flows = graph_data["df_flows"]
+        self._virtual_flows_epsilon = virtual_flows_epsilon
+        self._df_process_to_flows = data["df_process_to_flows"]
+        self._df_flows = data["df_flows"]
 
         # Create year -> process ID -> process
         self._year_to_process_id_to_process = {}
@@ -46,17 +52,17 @@ class FlowSolver(object):
 
                 self._year_to_flow_id_to_flow[year][flow_id] = cell
 
-        self._process_id_to_stock = graph_data["process_id_to_stock"]
-        self._all_processes = graph_data["all_processes"]
-        self._all_flows = graph_data["all_flows"]
-        self._all_stocks = graph_data["all_stocks"]
-        self._unique_processes_id_to_process = graph_data["unique_process_id_to_process"]
-        self._unique_flow_id_to_flow = graph_data["unique_flow_id_to_flow"]
+        self._process_id_to_stock = data["process_id_to_stock"]
+        self._all_processes = data["all_processes"]
+        self._all_flows = data["all_flows"]
+        self._all_stocks = data["all_stocks"]
+        self._unique_processes_id_to_process = data["unique_process_id_to_process"]
+        self._unique_flow_id_to_flow = data["unique_flow_id_to_flow"]
 
         # Time range
-        self._year_start = graph_data["year_start"]
-        self._year_end = graph_data["year_end"]
-        self._years = graph_data["years"]
+        self._year_start = data["year_start"]
+        self._year_end = data["year_end"]
+        self._years = data["years"]
         self._year_current = self._year_start
         self._year_prev = 0
 
@@ -82,6 +88,9 @@ class FlowSolver(object):
                     flow.is_evaluated = False
                     flow.evaluated_share = flow.value / 100.0
                     flow.evaluated_value = 0.0
+
+        # Stock ID to ODYM DynamicStockModel
+        self._stock_id_to_dsm = {}
 
     def get_all_processes(self):
         return self._all_processes
@@ -110,17 +119,10 @@ class FlowSolver(object):
         return df
 
     def get_flows_as_dataframe(self) -> DataFrame:
-        # df = pd.DataFrame({"Year": [], "Flow ID": [], "Source process ID": [], "Target process ID": [], "Value": []})
-        # for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
-        #     for flow_id, flow in flow_id_to_flow.items():
-        #         new_row = [year, flow_id, flow.source_process_id, flow.target_process_id, flow.evaluated_value]
-        #         df.loc[len(df.index)] = new_row
-        # return df
-        cols = {
+        df = pd.DataFrame({
             "Year": [], "Flow ID": [], "Source process ID": [], "Target process ID": [],
             "Value (SWE)": [], "Value (Carbon)": []
-        }
-        df = pd.DataFrame(cols)
+        })
         for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             for flow_id, flow in flow_id_to_flow.items():
                 new_row = [year, flow_id, flow.source_process_id, flow.target_process_id,
@@ -161,8 +163,21 @@ class FlowSolver(object):
 
         return self._current_flow_id_to_flow[flow_id]
 
-    def get_stock(self, process_id) -> Stock:
+    def get_stock(self, process_id: str) -> Stock:
+        """
+        Get stock by ID.
+        NOTE: Process and stocks share the same ID
+
+        :param process_id: Process ID
+        :return:
+        """
         return self._process_id_to_stock[process_id]
+
+    def get_dynamic_stocks(self) -> dict[str, DynamicStockModel]:
+        """
+        Get dictionary (stock ID -> DynamicStockModel) of DynamicStockModels.
+        """
+        return self._stock_id_to_dsm
 
     def get_process_inflows_total(self, process_id, year=-1):
         total = 0.0
@@ -206,16 +221,16 @@ class FlowSolver(object):
             total += flow.evaluated_value_carbon
         return total
 
-    def solve_timesteps(self):
+    def solve_timesteps(self) -> None:
         """
         Solves all timesteps.
-        :return: True if successful, False otherwise
+
+        :return: None
         """
-        for year in self._years:
+        self._create_dynamic_stocks()
+        for _ in self._years:
             self._solve_timestep()
             self._advance_timestep()
-
-        return True
 
     def get_year_to_process_to_flows(self):
         year_to_process_to_flows = {}
@@ -304,23 +319,83 @@ class FlowSolver(object):
             if flow.is_evaluated:
                 total_inflows += flow.evaluated_value
 
+        # Distribute outflows (stock or direct) only if all the inflows are already evaluated
         if all([flow.is_evaluated for flow in inflows]):
-            # All inflows are now evaluated:
+            total_outflows = 0.0
+
             # Subtract absolute outflows from total inflows
             # and distribute the remaining total between all relative flows
-            total_outflows = 0
-            flows_relative = []
-            for flow in outflows:
-                if flow.is_unit_absolute_value:
-                    total_outflows += flow.evaluated_value
-                else:
-                    flows_relative.append(flow)
+            if process_id in self._stock_id_to_dsm:
+                # Resetting some DynamicStockModel properties are needed to make
+                # timestep stock accumulation and other calculations work
 
-            # Calculate values for all relative outflows
-            total_rel = total_inflows - total_outflows
-            for flow in flows_relative:
-                flow.is_evaluated = True
-                flow.evaluated_value = flow.evaluated_share * total_rel
+                # Accumulate all inflows to DSM
+                dsm = self._stock_id_to_dsm[process_id]
+                year_index = self._years.index(self._year_current)
+
+                # Update inflows to stock for this year
+                dsm.i[year_index] = total_inflows
+
+                # Recalculate stock by cohort
+                dsm.s_c = None
+                stock_by_cohort = dsm.compute_s_c_inflow_driven()
+
+                # Recalculate outflow by cohort
+                dsm.o_c = None
+                outflow_by_cohort = dsm.compute_o_c_from_s_c()
+
+                # Recalculate stock total
+                dsm.s = None
+                stock_total = dsm.compute_stock_total()
+
+                # Get stock total
+                stock_change = dsm.compute_stock_change()
+
+                # Recalculate stock outflow
+                dsm.o = None
+                stock_outflow_total = dsm.compute_outflow_total()
+
+                outflows_abs = []
+                outflows_rel = []
+                for flow in outflows:
+                    if flow.is_unit_absolute_value:
+                        outflows_abs.append(flow)
+                    else:
+                        outflows_rel.append(flow)
+
+                stock_outflow = stock_outflow_total[year_index]
+
+                # Check that if process has absolute outflow then outflow value must be
+                # less than stock outflow. If absolute outflow is greater than stock outflow
+                # then there is user error with the data
+                outflows_abs = np.sum([outflows_abs])
+                total_outflows_rel = stock_outflow - outflows_abs
+
+                if total_outflows_rel < 0.0:
+                    # This is error: absolute outflow from stock is more than the stock outflow
+                    # Inform user about the error
+                    s = "Process {}: stock outflow is less than sum of absolute outflows in year {}!".format(
+                        process_id, year)
+                    raise Exception(s)
+
+                for flow in outflows_rel:
+                    flow.is_evaluated = True
+                    flow.evaluated_value = flow.evaluated_share * total_outflows_rel
+
+            else:
+                # Process has no stocks
+                outflows_relative = []
+                for flow in outflows:
+                    if flow.is_unit_absolute_value:
+                        total_outflows += flow.evaluated_value
+                    else:
+                        outflows_relative.append(flow)
+
+                # Calculate values for all relative outflows
+                total_rel = total_inflows - total_outflows
+                for flow in outflows_relative:
+                    flow.is_evaluated = True
+                    flow.evaluated_value = flow.evaluated_share * total_rel
 
             is_evaluated = True
             return is_evaluated, outflows
@@ -331,9 +406,12 @@ class FlowSolver(object):
 
         return is_evaluated, outflows
 
-    def _solve_timestep(self):
+    def _solve_timestep(self) -> None:
         self._current_flow_id_to_flow = self._year_to_flow_id_to_flow[self._year_current]
         self._current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[self._year_current]
+
+        # Each year evaluate dynamic stock outflows and related outflows as evaluated
+        self._evaluate_dynamic_stock_outflows(self._year_current)
 
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
@@ -372,7 +450,7 @@ class FlowSolver(object):
 
             # Break from infinite loop if detected one
             current_iteration += 1
-            if current_iteration >= MAX_ITERATION_COUNT:
+            if current_iteration >= self._max_iterations:
                 print("Infinite loop detected!")
 
                 # Print out the unevaluated process ids that are part of the loop
@@ -386,38 +464,7 @@ class FlowSolver(object):
         # and create virtual flows to balance out those processes
         if self._use_virtual_flows:
             # epsilon is max allowed difference of input and outputs, otherwise create virtual processes and flows
-            self._create_virtual_flows(self._virtual_flow_epsilon)
-
-        # Skip carrying values over to next year if next year is not valid anymore
-        next_year = self._year_current + 1
-        if next_year > self._year_end:
-            return
-
-        # # TODO: If target process contains loop then no carryover happens?
-        # # Check for processes that carryover values to next timestep
-        # for process_id in self.current_process_id_to_flow_ids:
-        #     process = self.get_process(process_id, self.year_current)
-        #     if process.is_virtual:
-        #         continue
-        #
-        #     outflows = self.get_process_outflows(process_id, self.year_current)
-        #     num_populated_outflows = 0
-        #     for flow in outflows:
-        #         if flow.value != 0:
-        #             num_populated_outflows += 1
-        #
-        #     # Carry over values from processes that have no outflows and have no stocks
-        #     has_no_stock = process_id not in self.process_id_to_stock
-        #     if not num_populated_outflows and has_no_stock:
-        #         total_inflows = self.get_process_inflows_total(process_id, self.year_current)
-        #         outflows_next = self.get_process_outflows(process_id, next_year)
-        #
-        #         # Distribute total absolute inflows among all outflows next year
-        #         # TODO: Now distribute all only to first outflow!
-        #         if outflows_next:
-        #             flow_id = outflows_next[0].id
-        #             self.year_to_flow_id_to_flow[next_year][flow_id].value += total_inflows
-        #             self.year_to_flow_id_to_flow[next_year][flow_id].evaluated_value += total_inflows
+            self._create_virtual_flows(self._virtual_flows_epsilon)
 
     def _advance_timestep(self):
         self._year_prev = self._year_current
@@ -478,9 +525,9 @@ class FlowSolver(object):
 
             if need_virtual_inflow:
                 # Create new virtual Process
-                v_id = VIRTUAL_PROCESS_ID_PREFIX + process.id
-                v_name = VIRTUAL_PROCESS_ID_PREFIX + process.name
-                v_ts = VIRTUAL_PROCESS_TRANSFORMATION_STAGE
+                v_id = self._virtual_process_id_prefix + process.id
+                v_name = self._virtual_process_id_prefix + process.name
+                v_ts = self._virtual_process_transformation_stage
                 v_process = self._create_virtual_process(v_id, v_name, v_ts)
                 created_virtual_processes[v_process.id] = v_process
 
@@ -494,9 +541,9 @@ class FlowSolver(object):
 
             if need_virtual_outflow:
                 # Create new virtual Process
-                v_id = VIRTUAL_PROCESS_ID_PREFIX + process.id
-                v_name = VIRTUAL_PROCESS_ID_PREFIX + process.name
-                v_ts = VIRTUAL_PROCESS_TRANSFORMATION_STAGE
+                v_id = self._virtual_process_id_prefix + process.id
+                v_name = self._virtual_process_id_prefix + process.name
+                v_ts = self._virtual_process_transformation_stage
                 v_process = self._create_virtual_process(v_id, v_name, v_ts)
                 created_virtual_processes[v_process.id] = v_process
 
@@ -534,3 +581,65 @@ class FlowSolver(object):
 
             print("")
 
+    def _create_dynamic_stocks(self) -> None:
+        """
+        Convert Stocks to ODYM DynamicStockModels.
+        :return: None
+        """
+
+        # Create DynamicStockModels for Processes that contain Stock
+        for stock in self.get_all_stocks():
+            stock_total = [0.0 for _ in self._years]
+            stock_total_inflows = [0.0 for _ in self._years]
+
+            # If stock.distribution_params is float then use as default StdDev value
+            # Otherwise check if the StdDev is defined for the cell
+            stddev = 0.0
+            shape = 1.0
+            scale = 1.0
+            if type(stock.distribution_params) is float:
+                stddev = stock.distribution_params
+
+            if type(stock.distribution_params) is dict:
+                stddev = stock.distribution_params.get("stddev", 1.0)
+                shape = stock.distribution_params.get("shape", 1.0)
+                scale = stock.distribution_params.get("scale", 1.0)
+
+            stock_lifetime_params = {
+                'Type': stock.distribution_type,
+                'Mean': [stock.lifetime],
+                'StdDev': [stddev],
+                'Shape': [shape],
+                'Scale': [scale],
+            }
+
+            new_dsm = DynamicStockModel(t=np.array(self._years),
+                                        i=stock_total_inflows,
+                                        s=stock_total,
+                                        lt=stock_lifetime_params)
+
+            new_dsm.compute_s_c_inflow_driven()
+            new_dsm.compute_o_c_from_s_c()
+            new_dsm.compute_stock_total()
+            new_dsm.compute_stock_change()
+            new_dsm.compute_outflow_total()
+            self._stock_id_to_dsm[stock.id] = new_dsm
+
+    def _evaluate_dynamic_stock_outflows(self, year: int) -> None:
+        """
+        Evaluate dynamic stock outflows and distribute stock outflow among all outflows.
+        Marks stock outflows as evaluated.
+
+        This method must be called at the beginning of every timestep before starting evaluating Processes.
+
+        :param year: Year
+        :return: None
+        """
+        # Get stock outflow for year, distribute that to outflows and mark those Flows as evaluated
+        year_index = self._years.index(year)
+        for stock_id, dsm in self.get_dynamic_stocks().items():
+            stock_total_outflow = dsm.compute_outflow_total()[year_index]
+            outflows = self._get_process_outflows(stock_id)
+            for flow in outflows:
+                flow.is_evaluated = True
+                flow.evaluated_value = flow.evaluated_share * stock_total_outflow

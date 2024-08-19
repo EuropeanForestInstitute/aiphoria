@@ -137,6 +137,15 @@ class DataChecker(object):
         flows = self.dataprovider.get_flows()
         stocks = self.dataprovider.get_stocks()
 
+        if not processes:
+            print("No processes!")
+
+        if not flows:
+            print("DataChecker: No valid flows flows!")
+
+        if not processes or not flows:
+            raise SystemExit("No processes or flows found!")
+
         # If 'detect_year_range' is set to True, detect start and end year
         # automatically from data. Year is converted to int.
         if detect_year_range:
@@ -152,7 +161,7 @@ class DataChecker(object):
             self.year_start = start_year
             self.year_end = end_year
 
-        # Build array of available years
+        # Build array of available years, last year is also included in year range
         self.years = [year for year in range(self.year_start, self.year_end + 1)]
 
         # Get unique flow and process IDs as dictionaries
@@ -185,7 +194,6 @@ class DataChecker(object):
         if not self._check_process_inflows_and_outflows_mismatch(df_process_to_flows, epsilon=0.1):
             #raise SystemExit(-1)
             pass
-
 
         # Build graph data
         process_id_to_process = {}
@@ -236,6 +244,7 @@ class DataChecker(object):
     def _detect_year_range(self, flows: List[Flow]) -> (int, int):
         year_min = 9999
         year_max = 0
+
         for flow in flows:
             flow_year = flow.year
             if flow_year is None:
@@ -279,7 +288,6 @@ class DataChecker(object):
 
         return result
 
-
     def _get_unique_flow_ids(self, flows: List[Flow]) -> Dict[str, Flow]:
         unique_flow_id_to_flow = {}
         for flow in flows:
@@ -304,7 +312,7 @@ class DataChecker(object):
                 year_to_flow_id_to_flow[flow.year][flow.id] = flow
         return year_to_flow_id_to_flow
 
-    def _create_year_to_flow_data(self, unique_flow_ids, flows) -> pd.DataFrame:
+    def _create_year_to_flow_data(self, unique_flow_ids: dict[str, Flow], flows: list[Flow]) -> pd.DataFrame:
         years = self._get_year_range()
         df = pd.DataFrame(index=years, columns=unique_flow_ids)
         for flow in flows:
@@ -383,19 +391,60 @@ class DataChecker(object):
             df[flow_id] = np.where(pd.isnull(df[flow_id]), False, True)
         return df
 
-    def _create_flow_data_for_missing_years(self, df_flows) -> pd.DataFrame:
+    def _create_flow_data_for_missing_years(self, df_flows: pd.DataFrame) -> pd.DataFrame:
         # Create flow has data as boolean mapping
         df_flow_id_has_data = df_flows.copy()
         for flow_id in df_flow_id_has_data.columns:
             df_flow_id_has_data[flow_id] = np.where(pd.isnull(df_flow_id_has_data[flow_id]), False, True)
 
-        # Insert missing years as keys, sort the dictionary keys in ascending order
+        # Find earliest and latest year of Flow data for each Flow ID
+        flow_id_to_min_year = {flow_id: max(df_flows.index) for flow_id in df_flows}
+        flow_id_to_max_year = {flow_id: min(df_flows.index) for flow_id in df_flows}
+        for flow_id in df_flows.columns:
+            for year, has_flow_data in df_flows[flow_id].items():
+                if pd.notna(has_flow_data):
+                    if year < flow_id_to_min_year[flow_id]:
+                        flow_id_to_min_year[flow_id] = year
+                    if year > flow_id_to_max_year[flow_id]:
+                        flow_id_to_max_year[flow_id] = year
+
+        # Fill with empty data until real Flow data is found
+        year_start = min(df_flows.index)
+        year_end = max(df_flows.index)
+        for flow_id, flow_data in df_flows.items():
+            data_min_year = flow_id_to_min_year[flow_data.name]
+            empty_flow_data = copy.deepcopy(flow_data.loc[data_min_year])
+            empty_flow_data.value = 0.0
+
+            years_missing_flow_data = flow_data.loc[:data_min_year].drop(index=data_min_year)
+            if len(years_missing_flow_data):
+                for missing_year in years_missing_flow_data.keys():
+                    empty_flow_data.year = missing_year
+                    df_flows.at[missing_year, flow_id] = empty_flow_data
+
+            # Start filling Flow data from min year for each Flow to next year
+            # until new Flow data is found. Update current_flow_data to use found flow data.
+            # Repeat this for the remaining years.
+            current_flow_data = df_flows.at[data_min_year, flow_id]
+            remaining_years = [year for year in flow_data.index if year > data_min_year]
+            for year in remaining_years:
+                existing_flow_data = df_flows.at[year, flow_id]
+                if pd.isna(existing_flow_data):
+                    # No flow data for this year
+                    new_flow_data = copy.deepcopy(current_flow_data)
+                    new_flow_data.year = year
+                    df_flows.at[year, flow_id] = new_flow_data
+                else:
+                    # Update current_flow_data to use this years' data
+                    current_flow_data = existing_flow_data
+
         # and propagate flow data for years that are missing flow data
         last_flow_data = {}
         df_result = df_flows.copy()
         for year in df_flow_id_has_data.index:
             for flow_id in df_flow_id_has_data.columns:
                 if df_flow_id_has_data.at[year, flow_id]:
+                    # Insert missing years as keys, sort the dictionary keys in ascending order
                     # Update flow ID to use data from this year
                     last_flow_data[flow_id] = df_result.at[year, flow_id]
                 else:
@@ -466,13 +515,13 @@ class DataChecker(object):
 
             print("")
             print("\tValid stock distribution types are:")
-            for type in allowed_distribution_types:
-                print("\t{}".format(type))
+            for distribution_type in allowed_distribution_types:
+                print("\t{}".format(distribution_type))
             print("")
             result_type = False
 
-        # Check if Process has valid definition for stock distribution parameters
-        # Expected: float in range [0, 1]
+        # Check if Process has valid parameters for stock distribution parameters
+        # Expected: float or dictionary with valid keys (stddev, shape, scale)
         errors = []
         result_params = True
         print("Checking stock distribution parameters...")
@@ -484,27 +533,45 @@ class DataChecker(object):
                 errors.append(msg)
                 continue
 
-            # Check if value is float and in range
-            try:
-                val = float(process.stock_distribution_params)
-                in_range = 0.0 <= val <= 1.0
-                if not in_range:
-                    msg = "Process {} has stock distribution parameter '{}' outside valid range in row {} in sheet '{}'".format(
-                        process.id, process.stock_distribution_params, process.row_number, self.dataprovider.sheet_name_processes)
+            # Mean uses StdDev
+            # Normal uses Mean and StdDev
+            # FoldedNormal uses Mean and StdDev
+            # LogNormal uses Mean and StdDev
+            required_params_for_distribution_type = {
+                "Fixed": [""],
+                "Normal": ['stddev'],
+                "FoldedNormal": ['stddev'],
+                "LogNormal": ['stddev'],
+                "Weibull": ['shape', 'scale'],
+            }
+
+            is_fixed = process.stock_distribution_type == "Fixed"
+            is_weibull = process.stock_distribution_type == "Weibull"
+            is_float = type(process.stock_distribution_params) is float
+            required_params = required_params_for_distribution_type[process.stock_distribution_type]
+            num_required_params = len(required_params)
+            missing_required_params = []
+            for param in required_params:
+                if num_required_params > 1 and is_float:
+                    msg = "Stock distribution parameters was number, following parameters are required "
+                    msg += "for distribution type '{}'".format(process.stock_distribution_type)
                     errors.append(msg)
-            except ValueError:
-                msg = "Process {} has invalid stock distribution parameter '{}' in row {} in sheet '{}'".format(
-                        process.id, process.stock_distribution_params, process.row_number,
-                        self.dataprovider.sheet_name_processes)
-                errors.append(msg)
+                    for p in required_params:
+                        errors.append("\t{}".format(p))
+
+                if not is_float:
+                    if is_fixed:
+                        errors.append("Stock distribution type 'Fixed' needs only number as distribution parameter")
+                        continue
+
+                    if param not in process.stock_distribution_params:
+                        errors.append("Stock distribution type '{}' needs following additional parameters:".format(
+                            process.stock_distribution_type))
+                        errors.append("\t{}".format(param))
 
         if errors:
             for msg in errors:
-                print("\t{}".format(msg))
-
-            print("")
-            print("\tOnly value between 0.0 and 1.0 is valid for stock distribution parameter. ")
-            print("\t0.0 and 1.0 are included in valid range.")
+                print("{}".format(msg))
             result_params = False
 
         return result_type and result_params
