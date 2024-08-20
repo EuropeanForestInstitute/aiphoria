@@ -189,6 +189,13 @@ class FlowSolver(object):
         return self._stock_id_to_dsm_carbon
 
     def get_process_inflows_total(self, process_id, year=-1):
+        """
+        Get total inflows (SWE) for Process ID.
+
+        :param process_id: Target Process ID
+        :param year: Target year
+        :return: Total of all inflows (SWE)
+        """
         total = 0.0
         inflows = self._get_process_inflows(process_id, year)
         for flow in inflows:
@@ -196,6 +203,13 @@ class FlowSolver(object):
         return total
 
     def get_process_outflows_total(self, process_id, year=-1):
+        """
+        Get total outflows (SWE) for Process ID.
+
+        :param process_id: Target Process ID
+        :param year: Target year
+        :return: Total of all outflows (SWE)
+        """
         total = 0.0
         outflows = self._get_process_outflows(process_id, year)
         for flow in outflows:
@@ -213,7 +227,7 @@ class FlowSolver(object):
         total = 0.0
         inflows = self._get_process_inflows(process_id, year)
         for flow in inflows:
-            total += flow.evaluated_value
+            total += flow.evaluated_value_carbon
         return total
 
     def get_process_outflows_total_swe(self, process_id, year=-1):
@@ -337,9 +351,6 @@ class FlowSolver(object):
             # Subtract absolute outflows from total inflows
             # and distribute the remaining total between all relative flows
             if process_id in self._stock_id_to_dsm_swe:
-                # Accumulate inflows to dynamic stock
-                year_index = self._years.index(self._year_current)
-
                 # Update DSM SWE
                 dsm_swe = self._stock_id_to_dsm_swe[process_id]
                 self.accumulate_dynamic_stock_inflows(dsm_swe, total_inflows, year)
