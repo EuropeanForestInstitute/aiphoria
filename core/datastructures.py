@@ -1,3 +1,4 @@
+from typing import Tuple
 import numpy as np
 
 
@@ -81,6 +82,12 @@ class Process(ObjectBase):
         self._lifetime_source = params.iloc[5]
         self._stock_distribution_type = params.iloc[6]
         self._stock_distribution_params = params.iloc[7]
+
+        success, messages = self._parse_and_set_distribution_params(s=params.iloc[7], row_number=row_number)
+        if not success:
+            for msg in messages:
+                print("{}".format(msg))
+
         self._wood_content = params.iloc[8]
         self._wood_content_source = params.iloc[9]
         self._density = params.iloc[10]
@@ -251,6 +258,48 @@ class Process(ObjectBase):
     @label_in_graph.setter
     def label_in_graph(self, value: str):
         self._label_in_graph = value
+
+    def _parse_and_set_distribution_params(self, s: str, row_number: int = -1) -> Tuple[bool, list[str]]:
+        """
+        Parse keys from string for distribution parameters.
+        Valid keys for distribution parameters are:
+        - stddev
+        - shape
+        - scale
+
+        :param s: String containing distribution parameters
+        :return: Tuple (was parsing successful success, error messages)
+        """
+        # Try converting s to float. If successful, set the value and return success
+        success = True
+        messages = []
+        try:
+            # Check if cell contains only value
+            self._stock_distribution_params = float(s)
+            return success, messages
+        except ValueError:
+            pass
+
+        # Try parsing keys from the string, format: key=value, key1=value1, etc.
+        params = {}
+        for entry in s.split(","):
+            key, value = entry.strip().split("=")
+            try:
+                param_name = key.lower()
+                param_value = float(value)
+                params[param_name] = param_value
+            except ValueError as ex:
+                success = False
+                messages.append("No value defined for distribution parameter key '{}' for Process {} in row {}!".format(
+                    key, id, row_number))
+
+        # Parsing keys was not successful
+        if not success:
+            return success, messages
+
+        # Update the stock distribution params to instance
+        self._stock_distribution_params = params
+        return success, messages
 
 
 class Flow(ObjectBase):
@@ -550,4 +599,3 @@ class Stock(ObjectBase):
     @property
     def distribution_params(self):
         return self._process.stock_distribution_params
-
