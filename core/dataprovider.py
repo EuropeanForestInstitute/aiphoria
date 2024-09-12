@@ -145,6 +145,7 @@ class DataProvider(object):
                         found_param_value = self._to_bool(found_param_value)
                     param_value = param_type(found_param_value)
                     self._param_name_to_value[param_name] = param_value
+
                 except ValueError as e:
                     print("Invalid type for required parameter '{}': expected {}, got {}".format(
                         param_name, param_type_to_str[param_type], param_type_to_str[found_param_type]))
@@ -308,6 +309,9 @@ class DataProvider(object):
         if isinstance(value, str):
             if value.lower() == "true":
                 return True
+
+        if isinstance(value, bool):
+            return value
 
         else:
             return False
