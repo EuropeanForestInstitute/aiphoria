@@ -19,9 +19,9 @@ class FlowSolver(object):
     _max_iterations = 100000
     _virtual_process_transformation_stage = "Virtual"
 
-    def __init__(self, data={}, use_virtual_flows=True, virtual_flows_epsilon=0.1):
-        self._use_virtual_flows = use_virtual_flows
-        self._virtual_flows_epsilon = virtual_flows_epsilon
+    def __init__(self, data={}, use_virtual_flows: bool = True, virtual_flows_epsilon: float = 0.1):
+        self._use_virtual_flows = data["use_virtual_flows"]
+        self._virtual_flows_epsilon = data["virtual_flows_epsilon"]
         self._df_process_to_flows = data["df_process_to_flows"]
         self._df_flows = data["df_flows"]
 
@@ -277,6 +277,44 @@ class FlowSolver(object):
 
         return year_to_process_to_flows
 
+    # TODO: Implement as public method, same as self._get_process_inflows/outflows() etc...
+    def get_process_flows(self, process_id, year) -> Dict[str, Flow]:
+        process_inflows = self._get_process_inflows(process_id, year)
+        process_outflows = self._get_process_outflows(process_id, year)
+        return {"Inflows": process_inflows, "Outflows": process_outflows}
+
+    def is_root_process(self, process_id):
+        """
+        Returns True if process has no inflows at any year.
+
+        :param process_id: Process ID
+        :return: True if process has no inflows at any year, False otherwise
+        """
+        is_root = True
+        for year in self._years:
+            inflows = self._get_process_inflows(process_id, year)
+            if inflows:
+                is_root = False
+                break
+
+        return is_root
+
+    def is_leaf_process(self, process_id):
+        """
+        Returns True if process has no outflows at any year.
+
+        :param process_id: Process ID
+        :return: True if process has no outflows at any year, False otherwise
+        """
+        is_leaf = True
+        for year in self._years:
+            inflows = self._get_process_outflows(process_id, year)
+            if inflows:
+                is_leaf = False
+                break
+
+        return is_leaf
+
     def _get_year_to_process_id_to_process(self) -> Dict[str, Dict[str, Process]]:
         return self._year_to_process_id_to_process
 
@@ -481,7 +519,7 @@ class FlowSolver(object):
         new_virtual_process = Process()
         new_virtual_process.id = process_id
         new_virtual_process.name = process_name
-        new_virtual_process.lifetime = 1
+        new_virtual_process.stock_lifetime = 1
         new_virtual_process.conversion_factor = 1.0
         new_virtual_process.transformation_stage = transformation_stage
         new_virtual_process.is_virtual = True
@@ -604,17 +642,17 @@ class FlowSolver(object):
             stddev = 0.0
             shape = 1.0
             scale = 1.0
-            if type(stock.distribution_params) is float:
-                stddev = stock.distribution_params
+            if type(stock.stock_distribution_params) is float:
+                stddev = stock.stock_distribution_params
 
-            if type(stock.distribution_params) is dict:
-                stddev = stock.distribution_params.get("stddev", 1.0)
-                shape = stock.distribution_params.get("shape", 1.0)
-                scale = stock.distribution_params.get("scale", 1.0)
+            if type(stock.stock_distribution_params) is dict:
+                stddev = stock.stock_distribution_params.get("stddev", 1.0)
+                shape = stock.stock_distribution_params.get("shape", 1.0)
+                scale = stock.stock_distribution_params.get("scale", 1.0)
 
             stock_lifetime_params = {
-                'Type': stock.distribution_type,
-                'Mean': [stock.lifetime],
+                'Type': stock.stock_distribution_type,
+                'Mean': [stock.stock_lifetime],
                 'StdDev': [stddev],
                 'Shape': [shape],
                 'Scale': [scale],

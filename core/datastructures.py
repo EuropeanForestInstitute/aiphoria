@@ -50,8 +50,8 @@ class Process(ObjectBase):
         self._location = None
         self._id = None
         self._transformation_stage = None
-        self._lifetime = None
-        self._lifetime_source = None
+        self._stock_lifetime = None
+        self._stock_lifetime_source = None
         self._stock_distribution_type = None
         self._stock_distribution_params = None
         self._wood_content = None
@@ -78,8 +78,8 @@ class Process(ObjectBase):
         self._location = params.iloc[1]
         self._id = params.iloc[2]
         self._transformation_stage = params.iloc[3]
-        self._lifetime = params.iloc[4]
-        self._lifetime_source = params.iloc[5]
+        self._stock_lifetime = params.iloc[4]
+        self._stock_lifetime_source = params.iloc[5]
         self._stock_distribution_type = params.iloc[6]
         self._stock_distribution_params = params.iloc[7]
 
@@ -100,7 +100,7 @@ class Process(ObjectBase):
         self._row_number = row_number
 
     def __str__(self) -> str:
-        s = "Process '{}': Lifetime: {}".format(self.id, self.lifetime)
+        s = "Process '{}': Lifetime: {}".format(self.id, self.stock_lifetime)
         return s
 
     def __hash__(self):
@@ -148,20 +148,20 @@ class Process(ObjectBase):
         self._transformation_stage = value
 
     @property
-    def lifetime(self) -> int:
-        return self._lifetime
+    def stock_lifetime(self) -> int:
+        return self._stock_lifetime
 
-    @lifetime.setter
-    def lifetime(self, value: int):
-        self._lifetime = value
+    @stock_lifetime.setter
+    def stock_lifetime(self, value: int):
+        self._stock_lifetime = value
 
     @property
-    def lifetime_source(self) -> str:
-        return self._lifetime_source
+    def stock_lifetime_source(self) -> str:
+        return self._stock_lifetime_source
 
-    @lifetime_source.setter
-    def lifetime_source(self, value: str):
-        self._lifetime_source = value
+    @stock_lifetime_source.setter
+    def stock_lifetime_source(self, value: str):
+        self._stock_lifetime_source = value
 
     @property
     def stock_distribution_type(self) -> str:
@@ -569,7 +569,7 @@ class Stock(ObjectBase):
         if not self.is_valid():
             return "Stock: no process"
 
-        s = "Stock: Process='{}', lifetime={}".format(self.id, self.lifetime)
+        s = "Stock: Process='{}', lifetime={}".format(self.id, self.stock_lifetime)
         return s
 
     def is_valid(self):
@@ -589,13 +589,13 @@ class Stock(ObjectBase):
         return self._process.name
 
     @property
-    def lifetime(self):
-        return self._process.lifetime
+    def stock_lifetime(self):
+        return self._process.stock_lifetime
 
     @property
-    def distribution_type(self):
+    def stock_distribution_type(self):
         return self._process.stock_distribution_type
 
     @property
-    def distribution_params(self):
+    def stock_distribution_params(self):
         return self._process.stock_distribution_params

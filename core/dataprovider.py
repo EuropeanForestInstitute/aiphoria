@@ -1,11 +1,16 @@
 from enum import Enum
 from typing import List, Union, Any
 import numpy as np
+import openpyxl
 import pandas as pd
 from core.datastructures import Process, Flow, Stock
 
 
 class ParameterName(Enum):
+    # ***********************
+    # * Required parameters *
+    # ***********************
+
     # Process related
     SheetNameProcesses: str = "sheet_name_processes"
     ColumnRangeProcesses: str = "column_range_processes"
@@ -21,15 +26,31 @@ class ParameterName(Enum):
     EndYear: str = "end_year"
     DetectYearRange: str = "detect_year_range"
     UseVirtualFlows: str = "use_virtual_flows"
+    VirtualFlowsEpsilon: str = "virtual_flows_epsilon"
+
+    # ***********************
+    # * Optional parameters *
+    # ***********************
+    ConversionFactorCToCO2: str = "conversion_factor_c_to_co2"
+
+    def __str__(self):
+        return str(self.value)
+
+    def __repr__(self):
+        return str(self.value)
+
+    def __len__(self):
+        return len(self.value)
 
 
 class DataProvider(object):
     def __init__(self, filename: str = "",
                  sheet_settings_name: str = "Settings",
-                 sheet_settings_col_range: str = "B:C",
+                 sheet_settings_col_range: Union[str, int] = "B:C",
                  sheet_settings_skip_num_rows: int = 5
                  ):
         self._workbook = None
+        self._param_name_to_value = {}
         self._processes = []
         self._flows = []
         self._stocks = []
@@ -37,7 +58,6 @@ class DataProvider(object):
         self._sheet_name_flows = None
 
         # Check that all required keys exists
-        param_name_to_value = {}
         required_params = [
             [ParameterName.SheetNameProcesses.value, str, "Sheet name that contains data for Processes, (e.g. Processes)"],
             [ParameterName.ColumnRangeProcesses.value, str, "Start and end column names separated by colon (e.g. B:R) that contain data for Processes"],
@@ -53,11 +73,23 @@ class DataProvider(object):
             [ParameterName.EndYear.value, int, "Ending year of the model, included in time range"],
             [ParameterName.DetectYearRange.value, bool, "Detect the year range automatically from file"],
             [ParameterName.UseVirtualFlows.value, bool, "Use virtual flows (create missing flows for Processes that have imbalance of input and output flows, i.e. unreported flows)"],
+            [ParameterName.VirtualFlowsEpsilon.value, float,
+             "Maximum allowed absolute difference of process input and outputs before creating virtual flow"],
         ]
 
-        param_type_to_str = {int: "integer", str: "string", bool: "boolean"}
+        optional_params = [
+            [ParameterName.ConversionFactorCToCO2.value, float, "Conversion factor from C to CO2"],
+        ]
+
+        param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean"}
+
+        # Suppress openpyxl warning about the Data Validation removed in the future
+        # We don't care that much about the actual Data Validation inside Excel, only that
+        # the cells contain values
+        openpyxl.reader.excel.warnings.simplefilter(action='ignore')
 
         # Read settings sheet from the file
+        param_name_to_value = {}
         try:
             with pd.ExcelFile(filename) as xls:
                 try:
@@ -87,11 +119,10 @@ class DataProvider(object):
 
         # Print missing parameters and information
         if missing_params:
-            print("DataProvider: Settings sheet is missing required following parameters")
+            print("DataProvider: Settings sheet (Sheet) is missing required following parameters")
             max_param_name_len = 0
             for entry in missing_params:
                 param_name = entry[0]
-                print(param_name)
                 max_param_name_len = len(param_name) if len(param_name) > max_param_name_len else max_param_name_len
 
             for entry in missing_params:
@@ -102,6 +133,35 @@ class DataProvider(object):
 
             raise SystemExit(-1)
 
+        # Check that required and optionals parameters are correct types
+        for entry in required_params:
+            param_name, param_type, param_desc = entry
+            if param_name in param_name_to_value:
+                found_param_value = param_name_to_value[param_name]
+                found_param_type = type(found_param_value)
+                try:
+                    # Convert Excel value needed as bool to Python bool
+                    if param_type is bool:
+                        found_param_value = self._to_bool(found_param_value)
+                    param_value = param_type(found_param_value)
+                    self._param_name_to_value[param_name] = param_value
+                except ValueError as e:
+                    print("Invalid type for required parameter '{}': expected {}, got {}".format(
+                        param_name, param_type_to_str[param_type], param_type_to_str[found_param_type]))
+
+        for entry in optional_params:
+            param_name, param_type, param_desc = entry
+            if param_name in param_name_to_value:
+                found_param_value = param_name_to_value[param_name]
+                found_param_type = type(found_param_value)
+                try:
+                    param_value = param_type(found_param_value)
+                    self._param_name_to_value[param_name] = param_value
+                except ValueError as e:
+                    print("Invalid type for optional parameter '{}': expected {}, got {}".format(
+                        param_name, param_type_to_str[param_type], param_type_to_str[found_param_type]))
+
+        # Create Processes and Flows
         sheet_name_processes = param_name_to_value[ParameterName.SheetNameProcesses.value]
         sheet_name_flows = param_name_to_value[ParameterName.SheetNameFlows.value]
         col_range_processes = param_name_to_value[ParameterName.ColumnRangeProcesses.value]
@@ -161,19 +221,19 @@ class DataProvider(object):
         df_processes = sheets[self._sheet_name_processes]
         for (row_index, row) in df_processes.iterrows():
             rows_processes.append(row)
+
         self._processes = self._create_objects_from_rows(Process, rows_processes, row_start=skip_num_rows_processes)
 
         # Create Flows
         rows_flows = []
         df_flows = sheets[self._sheet_name_flows]
-
         for (row_index, row) in df_flows.iterrows():
             rows_flows.append(row)
 
         self._flows = self._create_objects_from_rows(Flow, rows_flows, row_start=skip_num_rows_flows)
 
-        # # Create Stocks from Processes
-        # self._stocks = self._create_stocks_from_processes(self._processes)
+        # Create Stocks from Processes
+        self._stocks = self._create_stocks_from_processes(self._processes)
 
     def _create_objects_from_rows(self, object_type=None, rows=[], row_start=-1) -> List:
         result = []
@@ -201,7 +261,7 @@ class DataProvider(object):
 
         result = []
         for process in processes:
-            if process.lifetime == 0:
+            if process.stock_lifetime == 0:
                 continue
 
             new_stock = Stock(process)
@@ -218,6 +278,14 @@ class DataProvider(object):
 
         return True
 
+    def get_model_params(self) -> dict[ParameterName, Any]:
+        """
+        Get model parameters read from the data file.
+
+        :return: Dictionary of parameter name to parameter value
+        """
+        return self._param_name_to_value
+
     def get_processes(self) -> List[Process]:
         return self._processes
 
@@ -226,6 +294,23 @@ class DataProvider(object):
 
     def get_stocks(self) -> List[Stock]:
         return self._stocks
+
+    def _to_bool(self, value: Any) -> bool:
+        """
+        Check and convert value to bool.
+        If value is string then converts to lowercase and checks if value is either "true" or "false"
+        and returns corresponding value as bool.\n
+        NOTE: Only converts value to string and checks bool validity, no other checking is done.
+
+        :param value: Value to convert to bool
+        :return: Value as bool
+        """
+        if isinstance(value, str):
+            if value.lower() == "true":
+                return True
+
+        else:
+            return False
 
     @property
     def sheet_name_processes(self):
@@ -237,7 +322,6 @@ class DataProvider(object):
 
 
 if __name__ == "__main__":
-
     dp = DataProvider("C:/dev/PythonProjects/aiphoria/data/example_data.xlsx",
                       sheet_settings_name="Settings",
                       sheet_settings_col_range="B:C",

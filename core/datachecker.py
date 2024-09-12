@@ -1,21 +1,123 @@
 import copy
 from typing import List, Dict
 import numpy as np
-from core.dataprovider import DataProvider
+from core.dataprovider import DataProvider, ParameterName
 from core.datastructures import Process, Flow, Stock
 import pandas as pd
 
 
 class DataChecker(object):
     def __init__(self, dataprovider: DataProvider = None):
-        self.dataprovider = dataprovider
-        self.processes = self.dataprovider.get_processes()
-        self.flows = self.dataprovider.get_flows()
-        self.stocks = self.dataprovider.get_stocks()
-        self.year_to_flow_id_to_flow = {}
-        self.year_start = 0
-        self.year_end = 0
-        self.years = []
+        self._dataprovider = dataprovider
+        self._processes = self._dataprovider.get_processes()
+        self._flows = self._dataprovider.get_flows()
+        self._stocks = self._dataprovider.get_stocks()
+        self._year_to_flow_id_to_flow = {}
+        self._year_start = 0
+        self._year_end = 0
+        self._years = []
+
+    def build_flowsolver_data(self, epsilon: float = 0.1):
+        """
+        Build data for FlowSolver.
+
+        :param epsilon: Maximum allowed absolute difference in process inputs and outputs.
+                        Generate warning message in case this happens.
+                        Default: 0.1
+        :return:        Dictionary with data for FlowSolver.
+        """
+
+        # NOTE: All flows must have data for the starting year
+        processes = self._dataprovider.get_processes()
+        flows = self._dataprovider.get_flows()
+        stocks = self._dataprovider.get_stocks()
+
+        model_params = self._dataprovider.get_model_params()
+        detect_year_range = model_params[ParameterName.DetectYearRange.value]
+        self._year_start = model_params[ParameterName.StartYear.value]
+        self._year_end = model_params[ParameterName.EndYear.value]
+
+        if not processes:
+            print("DataChecker: No valid processes!")
+
+        if not flows:
+            print("DataChecker: No valid flows!")
+
+        if not processes or not flows:
+            raise SystemExit("No processes or flows found!")
+
+        if detect_year_range:
+            # Years are converted to int
+            self._year_start, self._year_end = self._detect_year_range(flows)
+        else:
+            self._year_start = model_params[ParameterName.StartYear.value]
+            self._year_end = model_params[ParameterName.EndYear.value]
+
+        # Build array of available years, last year is also included in year range
+        self._years = self._get_year_range()
+
+        # Get unique flow and process IDs as dictionaries
+        # Dictionary in Python >= 3.7 will preserve insertion order
+        unique_flow_ids = self._get_unique_flow_ids(flows)
+        unique_process_ids = self._get_unique_process_ids(processes)
+        df_flows = self._create_year_to_flow_data(unique_flow_ids, flows)
+
+        # Check that source and target processes for flows are defined
+        if not self._check_flow_sources_and_targets(unique_process_ids, df_flows):
+            raise SystemExit(-1)
+
+        # Check that there is not multiple definitions for the exact same flow per year
+        # Exact means that source and target processes are the same
+        if not self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows):
+            raise SystemExit(-1)
+
+        # Check if stock distribution type and parameters are set and valid
+        if not self._check_process_stock_parameters(processes):
+            raise SystemExit(-1)
+
+        # Create and propagate flow data for missing years
+        df_flows = self._create_flow_data_for_missing_years(df_flows)
+
+        # Create process to flow mappings
+        df_process_to_flows = self._create_process_to_flows(unique_process_ids, processes, df_flows)
+
+        # Check if process only absolute inflows AND absolute outflows so that
+        # the total inflow matches with the total outflows within certain limit
+        if not self._check_process_inflows_and_outflows_mismatch(df_process_to_flows, epsilon=0.1):
+            #raise SystemExit(-1)
+            pass
+
+        # TODO: Check if there is multiple processes with no inflows. This is error because ODYM assumes
+        # that the input to the system is always at the process ID 0.
+
+        # Build graph data
+        process_id_to_process = {}
+        process_id_to_stock = {}
+
+        for process in processes:
+            process_id_to_process[process.id] = process
+
+        for stock in stocks:
+            stock_id = stock.id
+            process_id_to_stock[stock_id] = stock
+
+        flowsolver_data = {
+            "year_start": self._year_start,
+            "year_end": self._year_end,
+            "years": self._years,
+            "process_id_to_process": process_id_to_process,
+            "process_id_to_stock": process_id_to_stock,
+            "df_process_to_flows": df_process_to_flows,
+            "df_flows": df_flows,
+            "all_processes": processes,
+            "all_flows": flows,
+            "all_stocks": stocks,
+            "unique_process_id_to_process": unique_process_ids,
+            "unique_flow_id_to_flow": unique_flow_ids,
+            "use_virtual_flows": False,
+            "virtual_flows_epsilon": 0.1,
+        }
+        return flowsolver_data
 
     def check_processes_integrity(self):
         # Check that there is only processes with unique ids
@@ -24,7 +126,7 @@ class DataChecker(object):
         process_ids = set()
         duplicate_process_ids = []
 
-        for process in self.processes:
+        for process in self._processes:
             if process.id not in process_ids:
                 process_ids.add(process.id)
             else:
@@ -47,15 +149,15 @@ class DataChecker(object):
         flows_missing_value = []
         flows_missing_unit = []
 
-        for year, flow_id_to_flow in self.year_to_flow_id_to_flow.items():
+        for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             for flow_id, flow in flow_id_to_flow:
                 source_process_id = flow.source_process_id
                 target_process_id = flow.target_process_id
 
-                if source_process_id not in self.processes:
+                if source_process_id not in self._processes:
                     flows_missing_source_ids.append(flow)
 
-                if target_process_id not in self.processes:
+                if target_process_id not in self._processes:
                     flows_missing_target_ids.append(flow)
 
                 # Value or unit could be 0 so check for None
@@ -100,9 +202,9 @@ class DataChecker(object):
         # This is an error in data
         result = True
         messages = []
-        for year, flow_id_to_flow in self.year_to_flow_id_to_flow.items():
+        for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             process_to_flows = {}
-            for process in self.processes:
+            for process in self._processes:
                 process_to_flows[process] = {"in": [], "out": []}
 
             for flow_id, flow in flow_id_to_flow.items():
@@ -131,106 +233,14 @@ class DataChecker(object):
 
         return True, []
 
-    def build_flowsolver_data(self, start_year=0, end_year=0, detect_year_range=False):
-        # NOTE: All flows must have data for the starting year
-        processes = self.dataprovider.get_processes()
-        flows = self.dataprovider.get_flows()
-        stocks = self.dataprovider.get_stocks()
-
-        if not processes:
-            print("No processes!")
-
-        if not flows:
-            print("DataChecker: No valid flows flows!")
-
-        if not processes or not flows:
-            raise SystemExit("No processes or flows found!")
-
-        # If 'detect_year_range' is set to True, detect start and end year
-        # automatically from data. Year is converted to int.
-        if detect_year_range:
-            self.year_start, self.year_end = self._detect_year_range(flows)
-        else:
-            # Use years passed in as parameters
-            if not start_year:
-                raise SystemExit("DataChecker: No start year defined")
-
-            if not end_year:
-                raise SystemExit("DataChecker: No end year defined")
-
-            self.year_start = start_year
-            self.year_end = end_year
-
-        # Build array of available years, last year is also included in year range
-        self.years = [year for year in range(self.year_start, self.year_end + 1)]
-
-        # Get unique flow and process IDs as dictionaries
-        # Dictionary in Python >= 3.7 will preserve insertion order
-        unique_flow_ids = self._get_unique_flow_ids(flows)
-        unique_process_ids = self._get_unique_process_ids(processes)
-        df_flows = self._create_year_to_flow_data(unique_flow_ids, flows)
-
-        # Check that source and target processes for flows are defined
-        if not self._check_flow_sources_and_targets(unique_process_ids, df_flows):
-            raise SystemExit(-1)
-
-        # Check that there is not multiple definitions for the exact same flow per year
-        # Exact means that source and target processes are the same
-        if not self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows):
-            raise SystemExit(-1)
-
-        # Check if stock distribution type and parameters are set and valid
-        if not self._check_process_stock_parameters(processes):
-            raise SystemExit(-1)
-
-        # Create and propagate flow data for missing years
-        df_flows = self._create_flow_data_for_missing_years(df_flows)
-
-        # Create process to flow mappings
-        df_process_to_flows = self._create_process_to_flows(unique_process_ids, processes, df_flows)
-
-        # Check if process only absolute inflows AND absolute outflows so that
-        # the total inflow matches with the total outflows within certain limit
-        if not self._check_process_inflows_and_outflows_mismatch(df_process_to_flows, epsilon=0.1):
-            #raise SystemExit(-1)
-            pass
-
-        # Build graph data
-        process_id_to_process = {}
-        process_id_to_stock = {}
-
-        for process in processes:
-            process_id_to_process[process.id] = process
-
-        for stock in stocks:
-            stock_id = stock.id
-            process_id_to_stock[stock_id] = stock
-
-        # Data for graph
-        graph_data = {
-            "year_start": self.year_start,
-            "year_end": self.year_end,
-            "years": self.years,
-            "process_id_to_process": process_id_to_process,
-            "process_id_to_stock": process_id_to_stock,
-            "df_process_to_flows": df_process_to_flows,
-            "df_flows": df_flows,
-            "all_processes": processes,
-            "all_flows": flows,
-            "all_stocks": stocks,
-            "unique_process_id_to_process": unique_process_ids,
-            "unique_flow_id_to_flow": unique_flow_ids,
-        }
-        return graph_data
-
     def get_processes(self) -> List[Process]:
-        return self.processes
+        return self._processes
 
     def get_flows(self) -> List[Flow]:
-        return self.flows
+        return self._flows
 
     def get_stocks(self) -> List[Stock]:
-        return self.stocks
+        return self._stocks
 
     def get_start_year(self) -> int:
         return self.year_start
@@ -239,7 +249,7 @@ class DataChecker(object):
         return self.year_end
 
     def get_year_to_flow_id_to_flow_mapping(self):
-        return self.year_to_flow_id_to_flow
+        return self._year_to_flow_id_to_flow
 
     def _detect_year_range(self, flows: List[Flow]) -> (int, int):
         year_min = 9999
@@ -261,12 +271,12 @@ class DataChecker(object):
         return year_start, year_end
 
     def _get_year_range(self) -> list[int]:
-        return [year for year in range(self.year_start, self.year_end + 1)]
+        return [year for year in range(self._year_start, self._year_end + 1)]
 
     def _check_flow_sources_and_targets(self, unique_process_ids, df_flows):
         result = True
-        sheet_name_processes = self.dataprovider.sheet_name_processes
-        sheet_name_flows = self.dataprovider.sheet_name_flows
+        sheet_name_processes = self._dataprovider.sheet_name_processes
+        sheet_name_flows = self._dataprovider.sheet_name_flows
         for year in df_flows.index:
             for flow_id in df_flows.columns:
                 flow = df_flows.at[year, flow_id]
@@ -322,7 +332,7 @@ class DataChecker(object):
     def _check_flow_multiple_definitions_per_year(self, unique_flow_ids: Dict[str, Flow], flows: List[Flow]) -> bool:
         result = True
         years = self._get_year_range()
-        sheet_name_flows = self.dataprovider.sheet_name_flows
+        sheet_name_flows = self._dataprovider.sheet_name_flows
         df = pd.DataFrame(index=years, columns=unique_flow_ids)
         for flow in flows:
             if pd.isnull(df.at[flow.year, flow.id]):
@@ -345,11 +355,11 @@ class DataChecker(object):
 
         return result
 
-    def _check_process_inflows_and_outflows_mismatch(self, df_process_to_flows: pd.DataFrame, epsilon=0.1):
+    def _check_process_inflows_and_outflows_mismatch(self, df_process_to_flows: pd.DataFrame, epsilon: float = 0.1):
         print("Checking process total inflows and total outflows mismatches...")
         result = True
         years = self._get_year_range()
-        sheet_name_flows = self.dataprovider.sheet_name_flows
+        sheet_name_flows = self._dataprovider.sheet_name_flows
         for year in df_process_to_flows.index:
             for process_id in df_process_to_flows.columns:
                 entry = df_process_to_flows.at[year, process_id]
@@ -507,7 +517,7 @@ class DataChecker(object):
             if process.stock_distribution_type not in allowed_distribution_types:
                 msg = "Process {} has invalid stock distribution type '{}' in row {} in sheet '{}'".format(
                     process.id, process.stock_distribution_type,
-                    process.row_number, self.dataprovider.sheet_name_processes)
+                    process.row_number, self._dataprovider.sheet_name_processes)
                 errors.append(msg)
 
         if errors:
@@ -530,7 +540,7 @@ class DataChecker(object):
             if process.stock_distribution_params is None:
                 msg = "Process {} has invalid stock distribution parameter '{}' in row {} in sheet '{}'".format(
                     process.id, process.stock_distribution_params,
-                    process.row_number, self.dataprovider.sheet_name_processes)
+                    process.row_number, self._dataprovider.sheet_name_processes)
                 errors.append(msg)
                 continue
 
