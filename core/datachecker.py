@@ -34,6 +34,13 @@ class DataChecker(object):
 
         model_params = self._dataprovider.get_model_params()
         detect_year_range = model_params[ParameterName.DetectYearRange.value]
+
+        # Virtual flows
+        use_virtual_flows = model_params[ParameterName.UseVirtualFlows.value]
+        virtual_flows_epsilon = 0.1
+        if use_virtual_flows and ParameterName.VirtualFlowsEpsilon in model_params:
+            virtual_flows_epsilon = model_params[ParameterName.VirtualFlowsEpsilon.value]
+
         self._year_start = model_params[ParameterName.StartYear.value]
         self._year_end = model_params[ParameterName.EndYear.value]
 
@@ -114,8 +121,8 @@ class DataChecker(object):
             "all_stocks": stocks,
             "unique_process_id_to_process": unique_process_ids,
             "unique_flow_id_to_flow": unique_flow_ids,
-            "use_virtual_flows": False,
-            "virtual_flows_epsilon": 0.1,
+            "use_virtual_flows": use_virtual_flows,
+            "virtual_flows_epsilon": virtual_flows_epsilon,
         }
         return flowsolver_data
 

@@ -1,7 +1,7 @@
 import copy
-
 import numpy as np
 import pandas as pd
+import tqdm as tqdm
 from pandas import DataFrame
 from core.datastructures import Process, Flow, Stock
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
@@ -250,10 +250,15 @@ class FlowSolver(object):
 
         :return: None
         """
+        print("Solving flows for years {} - {}...".format(self._year_start, self._year_end))
+        print("Using virtual flows = {}".format(self._use_virtual_flows))
+        bar = tqdm.tqdm(total=self._year_end + 1, desc="Solving flows", initial=self._year_start)
         self._create_dynamic_stocks()
         for _ in self._years:
             self._solve_timestep()
             self._advance_timestep()
+            bar.update()
+        bar.close()
 
     def get_year_to_process_to_flows(self):
         year_to_process_to_flows = {}
