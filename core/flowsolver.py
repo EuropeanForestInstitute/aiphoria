@@ -115,8 +115,8 @@ class FlowSolver(object):
         df = pd.DataFrame({"Year": [], "Process ID": [], "Total inflows": [], "Total outflows": []})
         for year, process_id_to_process in self._year_to_process_id_to_process.items():
             for process_id, process in process_id_to_process.items():
-                inflows_total = self.get_process_inflows_total(process_id)
-                outflows_total = self.get_process_outflows_total(process_id)
+                inflows_total = self.get_process_inflows_total(process_id, year)
+                outflows_total = self.get_process_outflows_total(process_id, year)
                 new_row = [year, process_id, inflows_total, outflows_total]
                 df.loc[len(df.index)] = new_row
         return df
@@ -252,7 +252,7 @@ class FlowSolver(object):
         """
         print("Solving flows for years {} - {}...".format(self._year_start, self._year_end))
         print("Using virtual flows = {}".format(self._use_virtual_flows))
-        bar = tqdm.tqdm(total=self._year_end + 1, desc="Solving flows", initial=self._year_start)
+        bar = tqdm.tqdm(total=self._year_end, desc="Solving flows", initial=self._year_start)
         self._create_dynamic_stocks()
         for _ in self._years:
             self._solve_timestep()
