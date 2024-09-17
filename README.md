@@ -4,7 +4,7 @@
 
 > ℹ️ _This library is under continuous development_
 
-This is a Python library that facilitates the assessment of wood materials flows (carbon) and their visualization over time. `aiphoria` builds on top of [ODYM - Open Dynamic Material Systems Model](https://github.com/IndEcol/ODYM).
+This is a Python library that facilitates the assessment of wood materials flows, associated carbon stocks, and stock changes, as well as and their visualization over time. `aiphoria` builds on top of [ODYM - Open Dynamic Material Systems Model](https://github.com/IndEcol/ODYM).
 
 ## Features:
 `aiphoria` allows you to:
