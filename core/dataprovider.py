@@ -79,10 +79,12 @@ class DataProvider(object):
              "Maximum allowed absolute difference of process input and outputs before creating virtual flow"],
         ]
 
+        # Optional parameters entry structure:
+        # Name of the parameter, expected value type, comment, default value
         optional_params = [
-            [ParameterName.ConversionFactorCToCO2.value, float, "Conversion factor from C to CO2"],
-            [ParameterName.FillMissingAbsoluteFlows.value, bool, "Fill missing absolute flows with previous valid flow data?"],
-            [ParameterName.FillMissingRelativeFlows.value, bool, "Fill missing relative flows with previous valid flow data?"],
+            [ParameterName.ConversionFactorCToCO2.value, float, "Conversion factor from C to CO2", None],
+            [ParameterName.FillMissingAbsoluteFlows.value, bool, "Fill missing absolute flows with previous valid flow data?", True],
+            [ParameterName.FillMissingRelativeFlows.value, bool, "Fill missing relative flows with previous valid flow data?", True],
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean"}
@@ -155,7 +157,7 @@ class DataProvider(object):
                         param_name, param_type_to_str[param_type], param_type_to_str[found_param_type]))
 
         for entry in optional_params:
-            param_name, param_type, param_desc = entry
+            param_name, param_type, param_desc, param_default_value = entry
             if param_name in param_name_to_value:
                 found_param_value = param_name_to_value[param_name]
                 found_param_type = type(found_param_value)
@@ -167,6 +169,10 @@ class DataProvider(object):
                 except ValueError as e:
                     print("Invalid type for optional parameter '{}': expected {}, got {}".format(
                         param_name, param_type_to_str[param_type], param_type_to_str[found_param_type]))
+
+            else:
+                # Use default optional parameter value
+                self._param_name_to_value[param_name] = param_default_value
 
         # Create Processes and Flows
         sheet_name_processes = param_name_to_value[ParameterName.SheetNameProcesses.value]
