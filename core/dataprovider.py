@@ -32,6 +32,8 @@ class ParameterName(Enum):
     # * Optional parameters *
     # ***********************
     ConversionFactorCToCO2: str = "conversion_factor_c_to_co2"
+    FillMissingAbsoluteFlows: str = "fill_missing_absolute_flows"
+    FillMissingRelativeFlows: str = "fill_missing_relative_flows"
 
     def __str__(self):
         return str(self.value)
@@ -79,6 +81,8 @@ class DataProvider(object):
 
         optional_params = [
             [ParameterName.ConversionFactorCToCO2.value, float, "Conversion factor from C to CO2"],
+            [ParameterName.FillMissingAbsoluteFlows.value, bool, "Fill missing absolute flows with previous valid flow data?"],
+            [ParameterName.FillMissingRelativeFlows.value, bool, "Fill missing relative flows with previous valid flow data?"],
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean"}
@@ -238,7 +242,10 @@ class DataProvider(object):
         # Create Stocks from Processes
         self._stocks = self._create_stocks_from_processes(self._processes)
 
-    def _create_objects_from_rows(self, object_type=None, rows=[], row_start=-1) -> List:
+    def _create_objects_from_rows(self, object_type=None, rows=None, row_start=-1) -> List:
+        if rows is None:
+            rows = []
+
         result = []
         if not object_type:
             return result

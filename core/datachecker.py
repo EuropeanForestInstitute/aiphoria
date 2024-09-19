@@ -21,10 +21,10 @@ class DataChecker(object):
         """
         Build data for FlowSolver.
 
-        :param epsilon: Maximum allowed absolute difference in process inputs and outputs.
+        :param epsilon: Maximum allowed absolute difference in process inputs and outputs.\n
                         Generate warning message in case this happens.
                         Default: 0.1
-        :return:        Dictionary with data for FlowSolver.
+        :return:        Dictionary with data for FlowSolver.\n
         """
 
         # NOTE: All flows must have data for the starting year
@@ -34,15 +34,25 @@ class DataChecker(object):
 
         model_params = self._dataprovider.get_model_params()
         detect_year_range = model_params[ParameterName.DetectYearRange.value]
-
-        # Virtual flows
-        use_virtual_flows = model_params[ParameterName.UseVirtualFlows.value]
-        virtual_flows_epsilon = 0.1
-        if use_virtual_flows and ParameterName.VirtualFlowsEpsilon in model_params:
-            virtual_flows_epsilon = model_params[ParameterName.VirtualFlowsEpsilon.value]
-
         self._year_start = model_params[ParameterName.StartYear.value]
         self._year_end = model_params[ParameterName.EndYear.value]
+        use_virtual_flows = model_params[ParameterName.UseVirtualFlows.value]
+
+        # Default optional values
+        virtual_flows_epsilon = 0.1
+        if use_virtual_flows and ParameterName.VirtualFlowsEpsilon.value in model_params:
+            virtual_flows_epsilon = model_params[ParameterName.VirtualFlowsEpsilon.value]
+
+        fill_missing_absolute_flows = True
+        if ParameterName.FillMissingAbsoluteFlows.value in model_params:
+            fill_missing_absolute_flows = model_params[ParameterName.FillMissingAbsoluteFlows.value]
+
+        fill_missing_relative_flows = True
+        if ParameterName.FillMissingRelativeFlows.value in model_params:
+            fill_missing_relative_flows = model_params[ParameterName.FillMissingRelativeFlows.value]
+
+        # Checking options
+        epsilon_inflows_outflows_mismatch = 0.1
 
         if not processes:
             print("DataChecker: No valid processes!")
@@ -63,19 +73,20 @@ class DataChecker(object):
         # Build array of available years, last year is also included in year range
         self._years = self._get_year_range()
 
-        # Get unique flow and process IDs as dictionaries
-        # Dictionary in Python >= 3.7 will preserve insertion order
-        unique_flow_ids = self._get_unique_flow_ids(flows)
-        unique_process_ids = self._get_unique_process_ids(processes)
-        df_flows = self._create_year_to_flow_data(unique_flow_ids, flows)
+        # Get all unique Flow IDs and Process IDs that are used in the selected year range as dictionaries
+        # because set does not preserve insertion order
+        # Dictionaries preserve insertion order in Python version >= 3.7
+        unique_flow_ids = self._get_unique_flow_ids_in_year_range(flows, self._years)
+        unique_process_ids = self._get_unique_process_ids_in_year_range(flows, processes, self._years)
+        df_year_to_flows = self._create_year_to_flow_data(unique_flow_ids, flows, self._years)
 
         # Check that source and target processes for flows are defined
-        if not self._check_flow_sources_and_targets(unique_process_ids, df_flows):
+        if not self._check_flow_sources_and_targets(unique_process_ids, df_year_to_flows):
             raise SystemExit(-1)
 
         # Check that there is not multiple definitions for the exact same flow per year
         # Exact means that source and target processes are the same
-        if not self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows):
+        if not self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows, self._years):
             raise SystemExit(-1)
 
         # Check if stock distribution type and parameters are set and valid
@@ -83,19 +94,19 @@ class DataChecker(object):
             raise SystemExit(-1)
 
         # Create and propagate flow data for missing years
-        df_flows = self._create_flow_data_for_missing_years(df_flows)
+        df_year_to_flows = self._create_flow_data_for_missing_years(
+            df_year_to_flows,
+            fill_missing_absolute_flows=fill_missing_absolute_flows,
+            fill_missing_relative_flows=fill_missing_relative_flows)
 
         # Create process to flow mappings
-        df_process_to_flows = self._create_process_to_flows(unique_process_ids, processes, df_flows)
+        df_year_to_process_flows = self._create_process_to_flows(unique_process_ids, df_year_to_flows)
 
         # Check if process only absolute inflows AND absolute outflows so that
         # the total inflow matches with the total outflows within certain limit
-        if not self._check_process_inflows_and_outflows_mismatch(df_process_to_flows, epsilon=0.1):
-            #raise SystemExit(-1)
+        if not self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
+                                                                 epsilon=epsilon_inflows_outflows_mismatch):
             pass
-
-        # TODO: Check if there is multiple processes with no inflows. This is error because ODYM assumes
-        # that the input to the system is always at the process ID 0.
 
         # Build graph data
         process_id_to_process = {}
@@ -114,8 +125,8 @@ class DataChecker(object):
             "years": self._years,
             "process_id_to_process": process_id_to_process,
             "process_id_to_stock": process_id_to_stock,
-            "df_process_to_flows": df_process_to_flows,
-            "df_flows": df_flows,
+            "df_process_to_flows": df_year_to_process_flows,
+            "df_flows": df_year_to_flows,
             "all_processes": processes,
             "all_flows": flows,
             "all_stocks": stocks,
@@ -278,15 +289,27 @@ class DataChecker(object):
         return year_start, year_end
 
     def _get_year_range(self) -> list[int]:
+        """
+        Get year range used in simulation as list of integers. Starting year and end year are included in the range.
+        :return: List of years as integers
+        """
         return [year for year in range(self._year_start, self._year_end + 1)]
 
-    def _check_flow_sources_and_targets(self, unique_process_ids, df_flows):
+    def _check_flow_sources_and_targets(self,
+                                        unique_process_ids: dict[str, Process],
+                                        df_year_to_flows: pd.DataFrame) -> bool:
+        """
+        Check that all Flow sources and target Processes exists.
+
+        :param unique_process_ids:
+        :param df_year_to_flows: DataFrame
+        :return: True if successful, False otherwise
+        """
         result = True
-        sheet_name_processes = self._dataprovider.sheet_name_processes
         sheet_name_flows = self._dataprovider.sheet_name_flows
-        for year in df_flows.index:
-            for flow_id in df_flows.columns:
-                flow = df_flows.at[year, flow_id]
+        for year in df_year_to_flows.index:
+            for flow_id in df_year_to_flows.columns:
+                flow = df_year_to_flows.at[year, flow_id]
                 if pd.isnull(flow):
                     continue
 
@@ -318,7 +341,63 @@ class DataChecker(object):
             if process.id not in unique_process_id_to_process:
                 unique_process_id_to_process[process.id] = process
         return unique_process_id_to_process
-    
+
+    def _get_unique_flow_ids_in_year_range(self, flows: list[Flow], years: list[int]) -> dict[str, Flow]:
+        """
+        Get unique Flow IDs used in the year range as dictionary [Flow ID -> Flow].
+
+        :param flows: List of Flows
+        :param years: List of years
+        :return: Dictionary [Flow ID -> Flow]
+        """
+        unique_flow_id_to_flow = {}
+        for flow in flows:
+            flow_year = flow.year
+            if flow_year not in years:
+                continue
+
+            flow_id = flow.id
+            if flow_id not in unique_flow_id_to_flow:
+                unique_flow_id_to_flow[flow_id] = flow
+
+        return unique_flow_id_to_flow
+
+    def _get_unique_process_ids_in_year_range(self,
+                                              flows: list[Flow],
+                                              processes: list[Process],
+                                              years: list[int]) -> dict[str, Process]:
+        """
+        Get unique Process IDs used in the year range as dictionary [Process ID -> Process].
+
+        :param flows: List of Flows
+        :param years: List of years
+        :return: Dictionary [Process ID -> Process]
+        """
+        # Map Process IDs to Processes (this contains all Processes)
+        process_id_to_process = {}
+        for process in processes:
+            process_id = process.id
+            process_id_to_process[process_id] = process
+
+        # Map all unique Process IDs to Processes
+        unique_process_id_to_process = {}
+        for flow in flows:
+            flow_year = flow.year
+            if flow_year not in years:
+                continue
+
+            source_process_id = flow.source_process_id
+            if source_process_id not in unique_process_id_to_process:
+                source_process = process_id_to_process[source_process_id]
+                unique_process_id_to_process[source_process_id] = source_process
+
+            target_process_id = flow.target_process_id
+            if target_process_id not in unique_process_id_to_process:
+                target_process = process_id_to_process[target_process_id]
+                unique_process_id_to_process[target_process_id] = target_process
+
+        return unique_process_id_to_process
+
     def _create_year_to_flow_mapping(self, flows) -> Dict[int, Dict[str, Flow]]:
         year_to_flow_id_to_flow = {}
         for flow in flows:
@@ -329,19 +408,51 @@ class DataChecker(object):
                 year_to_flow_id_to_flow[flow.year][flow.id] = flow
         return year_to_flow_id_to_flow
 
-    def _create_year_to_flow_data(self, unique_flow_ids: dict[str, Flow], flows: list[Flow]) -> pd.DataFrame:
-        years = self._get_year_range()
-        df = pd.DataFrame(index=years, columns=unique_flow_ids)
+    def _create_year_to_flow_data(self,
+                                  unique_flow_ids: dict[str, Flow],
+                                  flows: list[Flow],
+                                  years: list[int]) -> pd.DataFrame:
+        """
+        Create DataFrame that has year as index and Flow IDs as column and cell is Flow-object.
+
+        :param unique_flow_ids: Dictionary of unique [Flow ID -> Flow]
+        :param flows: List of Flows
+        :param years: list of years
+        :return: DataFrame
+        """
+
+        df = pd.DataFrame(index=years, columns=unique_flow_ids.keys())
         for flow in flows:
+            if flow.year not in years:
+                continue
+
             df.at[flow.year, flow.id] = flow
+
         return df
 
-    def _check_flow_multiple_definitions_per_year(self, unique_flow_ids: Dict[str, Flow], flows: List[Flow]) -> bool:
+    def _check_flow_multiple_definitions_per_year(self,
+                                                  unique_flow_ids: Dict[str, Flow],
+                                                  flows: List[Flow],
+                                                  years: list[int]
+                                                  ) -> bool:
+        """
+        Check that there is only one Flow definition per year.
+
+        :param unique_flow_ids: Dictionary of unique [Flow ID -> Flow]
+        :param flows: List of Flows
+        :param years: List of years
+        :return: True if successful, False otherwise
+        """
         result = True
-        years = self._get_year_range()
         sheet_name_flows = self._dataprovider.sheet_name_flows
         df = pd.DataFrame(index=years, columns=unique_flow_ids)
         for flow in flows:
+            if flow.year not in years:
+                continue
+
+            if flow.year > max(years):
+                continue
+
             if pd.isnull(df.at[flow.year, flow.id]):
                 df.at[flow.year, flow.id] = []
             df.at[flow.year, flow.id].append(flow)
@@ -365,7 +476,6 @@ class DataChecker(object):
     def _check_process_inflows_and_outflows_mismatch(self, df_process_to_flows: pd.DataFrame, epsilon: float = 0.1):
         print("Checking process total inflows and total outflows mismatches...")
         result = True
-        years = self._get_year_range()
         sheet_name_flows = self._dataprovider.sheet_name_flows
         for year in df_process_to_flows.index:
             for process_id in df_process_to_flows.columns:
@@ -397,7 +507,6 @@ class DataChecker(object):
                             print("- flow '{}' in row {}".format(flow.id, flow.row_number))
 
                         print("")
-
                         result = False
 
         return result
@@ -408,17 +517,37 @@ class DataChecker(object):
             df[flow_id] = np.where(pd.isnull(df[flow_id]), False, True)
         return df
 
-    def _create_flow_data_for_missing_years(self, df_flows: pd.DataFrame) -> pd.DataFrame:
+    def _create_flow_data_for_missing_years(self,
+                                            df_year_flows: pd.DataFrame,
+                                            fill_missing_absolute_flows: bool,
+                                            fill_missing_relative_flows: bool) -> pd.DataFrame:
+        """
+        Fill years missing Flow data with the previous valid Flow data.\n
+        If fill_absolute_flows is set to True then process Flows with absolute values.\n
+        If fill_relative_values is set to True then process Flows with relative values.\n
+        If both fill_absolute_flows and fill_relative_flows are set to False then returns copy
+        of the original.\n
+
+        :param df_flows:
+        :param fill_missing_absolute_flows: If True then process Flows with absolute values
+        :param fill_missing_relative_flows: If True then process Flows with relative values
+        :return: DataFrame
+        """
+        # No filling, convert nan in DataFrame to None
+        if (not fill_missing_absolute_flows) and (not fill_missing_relative_flows):
+            result = df_year_flows.copy()
+            return result
+
         # Create flow has data as boolean mapping
-        df_flow_id_has_data = df_flows.copy()
+        df_flow_id_has_data = df_year_flows.copy()
         for flow_id in df_flow_id_has_data.columns:
             df_flow_id_has_data[flow_id] = np.where(pd.isnull(df_flow_id_has_data[flow_id]), False, True)
 
         # Find earliest and latest year of Flow data for each Flow ID
-        flow_id_to_min_year = {flow_id: max(df_flows.index) for flow_id in df_flows}
-        flow_id_to_max_year = {flow_id: min(df_flows.index) for flow_id in df_flows}
-        for flow_id in df_flows.columns:
-            for year, has_flow_data in df_flows[flow_id].items():
+        flow_id_to_min_year = {flow_id: max(df_year_flows.index) for flow_id in df_year_flows}
+        flow_id_to_max_year = {flow_id: min(df_year_flows.index) for flow_id in df_year_flows}
+        for flow_id in df_year_flows.columns:
+            for year, has_flow_data in df_year_flows[flow_id].items():
                 if pd.notna(has_flow_data):
                     if year < flow_id_to_min_year[flow_id]:
                         flow_id_to_min_year[flow_id] = year
@@ -426,39 +555,54 @@ class DataChecker(object):
                         flow_id_to_max_year[flow_id] = year
 
         # Fill with empty data until real Flow data is found
-        year_start = min(df_flows.index)
-        year_end = max(df_flows.index)
-        for flow_id, flow_data in df_flows.items():
-            data_min_year = flow_id_to_min_year[flow_data.name]
-            empty_flow_data = copy.deepcopy(flow_data.loc[data_min_year])
+        year_start = min(df_year_flows.index)
+        year_end = max(df_year_flows.index)
+        for flow_id, flow_data in df_year_flows.items():
+            flow_id_min_year = flow_id_to_min_year[flow_data.name]
+            empty_flow_data = copy.deepcopy(flow_data.loc[flow_id_min_year])
             empty_flow_data.value = 0.0
             empty_flow_data.evaluated_value = 0.0
 
-            years_missing_flow_data = flow_data.loc[:data_min_year].drop(index=data_min_year)
-            if len(years_missing_flow_data):
-                for missing_year in years_missing_flow_data.keys():
-                    empty_flow_data.year = missing_year
-                    df_flows.at[missing_year, flow_id] = empty_flow_data
+            # Fill missing data from start year to first entry
+            is_absolute_flow = empty_flow_data.is_unit_absolute_value
+            is_relative_flow = not is_absolute_flow
+
+            # TODO: Should always skip flow data between start year and first valid flow data?
+            if (is_absolute_flow and fill_missing_absolute_flows) or (is_relative_flow and fill_missing_relative_flows):
+                years_missing_flow_data = flow_data.loc[:flow_id_min_year].drop(index=flow_id_min_year)
+                if len(years_missing_flow_data):
+                    for missing_year in years_missing_flow_data.keys():
+                        empty_flow_data.year = missing_year
+                        df_year_flows.at[missing_year, flow_id] = empty_flow_data
 
             # Start filling Flow data from min year for each Flow to next year
             # until new Flow data is found. Update current_flow_data to use found flow data.
             # Repeat this for the remaining years.
-            current_flow_data = df_flows.at[data_min_year, flow_id]
-            remaining_years = [year for year in flow_data.index if year > data_min_year]
+            current_flow_data = df_year_flows.at[flow_id_min_year, flow_id]
+            remaining_years = [year for year in flow_data.index if year > flow_id_min_year]
             for year in remaining_years:
-                existing_flow_data = df_flows.at[year, flow_id]
+                if is_absolute_flow and not fill_missing_absolute_flows:
+                    continue
+
+                if is_relative_flow and not fill_missing_relative_flows:
+                    continue
+
+                # Flow data for the year
+                existing_flow_data = df_year_flows.at[year, flow_id]
                 if pd.isna(existing_flow_data):
-                    # No flow data for this year
+                    # No existing data for this year, copy last previous valid data
+                    # for this year and update year to match this year
                     new_flow_data = copy.deepcopy(current_flow_data)
                     new_flow_data.year = year
-                    df_flows.at[year, flow_id] = new_flow_data
+                    df_year_flows.at[year, flow_id] = new_flow_data
                 else:
-                    # Update current_flow_data to use this years' data
+                    # Valid data found this year, update the last valid flow data to this year data
                     current_flow_data = existing_flow_data
 
         # and propagate flow data for years that are missing flow data
+        # Fill Flow data for years after
         last_flow_data = {}
-        df_result = df_flows.copy()
+        df_result = df_year_flows.copy()
         for year in df_flow_id_has_data.index:
             for flow_id in df_flow_id_has_data.columns:
                 if df_flow_id_has_data.at[year, flow_id]:
@@ -495,17 +639,26 @@ class DataChecker(object):
                 df.at[year, flow.target_process_id]["flow_ids"]["in"].append(flow.id)
         return df
 
-    def _create_process_to_flows(self, unique_process_ids, processes: List[Process], df_flows: pd.DataFrame) -> pd.DataFrame:
-        df = pd.DataFrame(dtype="object", index=df_flows.index, columns=unique_process_ids)
-        for year in df_flows.index:
-            for process in processes:
+    def _create_process_to_flows(self,
+                                 unique_process_ids: dict[str, Process],
+                                 df_year_flows: pd.DataFrame) -> pd.DataFrame:
+        """
+
+        :param unique_process_ids: Dictionary of unique [Process ID -> Process]
+        :param df_year_flows: DataFrame, year to Flows
+        :return: DataFrame
+        """
+
+        df = pd.DataFrame(index=df_year_flows.index, columns=unique_process_ids.keys(), dtype="object")
+        for year in df_year_flows.index:
+            for process_id, process in unique_process_ids.items():
                 df.at[year, process.id] = {"process": copy.deepcopy(process), "flows": {"in": [], "out": []}}
 
         # Add process inflows and outflows for every year
-        for year in df_flows.index:
-            for flow_id in df_flows.columns:
+        for year in df_year_flows.index:
+            for flow_id in df_year_flows.columns:
                 # No data defined for process ID at this year
-                flow = df_flows.at[year, flow_id]
+                flow = df_year_flows.at[year, flow_id]
                 if pd.isnull(flow):
                     continue
 
@@ -564,7 +717,6 @@ class DataChecker(object):
             }
 
             is_fixed = process.stock_distribution_type == "Fixed"
-            is_weibull = process.stock_distribution_type == "Weibull"
             is_float = type(process.stock_distribution_params) is float
             required_params = required_params_for_distribution_type[process.stock_distribution_type]
             num_required_params = len(required_params)

@@ -367,7 +367,14 @@ class FlowSolver(object):
         flows = []
         outflow_ids = self._get_process_outflow_ids(process_id, year)
         for flow_id in outflow_ids:
-            flows.append(self.get_flow(flow_id, year))
+            flow = self.get_flow(flow_id, year)
+            flows.append(flow)
+
+            # if flow.year == year:
+            #     # TODO: HACK! The the self.get_flow(flow_id, year) has flows outside of the requested years!
+            #     # TODO: Look into DataChecker!!!
+            #     #print(flow.year, year)
+            #     flows.append(flow)
         return flows
 
     def _evaluate_process(self, process_id, year):
@@ -466,10 +473,17 @@ class FlowSolver(object):
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
         evaluated_process_ids = []
-        for process in self._all_processes:
-            inflows = self._get_process_inflows(process.id)
+        current_year_process_ids = list(self._year_to_process_id_to_process[self._year_current].keys())
+        for process_id in current_year_process_ids:
+            inflows = self._get_process_inflows(process_id, year=self._year_current)
             if not inflows:
-                unevaluated_process_ids.append(process.id)
+                unevaluated_process_ids.append(process_id)
+
+        # TODO: all_processes are used to stabilize node positions
+        # for process in self._all_processes:
+        #         inflows = self._get_process_inflows(process.id, year=self._year_current)
+        #     if not inflows:
+        #         unevaluated_process_ids.append(process.id)
 
         # Process flow value propagation until all inflows to processes are calculated
         current_iteration = 0

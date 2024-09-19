@@ -349,7 +349,7 @@ class Flow(ObjectBase):
         self._target_process_id = params.iloc[7]
         self._value = params.iloc[8]
         self._unit = params.iloc[9]
-        self._year = params.iloc[10]
+        self._year = int(params.iloc[10])
         self._data_source = params.iloc[11]
         self._data_source_comment = params.iloc[12]
         self._conversion_factor_used = params.iloc[13]
@@ -382,9 +382,9 @@ class Flow(ObjectBase):
         self._row_number = row_number  # Track Excel file row number, last element in list
 
     def __str__(self):
-        s = "Flow '{}' -> '{}': Value={} Unit={}, is_evaluated={}, evaluated_share={}, evaluated_value={}".format(
+        s = "Flow '{}' -> '{}': Value={} Unit={}, is_evaluated={}, evaluated_share={}, evaluated_value={}, year={}".format(
             self.source_process_id, self.target_process_id, self.value, self.unit,
-            self.is_evaluated, self.evaluated_share, self.evaluated_value)
+            self.is_evaluated, self.evaluated_share, self.evaluated_value, self.year)
         return s
 
     def __hash__(self):
