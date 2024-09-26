@@ -21,4 +21,4 @@ This is a Python library that facilitates the assessment of wood materials flows
 ## Support:
 If you have any questions or need help, do not hesitate to contact us:
 - [cleo.orfanidou@efi.int](mailto:cleo.orfanidou@efi.int)
-- [Janne.Jarvikyla@efi.int](mailto:Janne.Jarvikyla@efi.int)
+- [janne.jarvikyla@efi.int](mailto:janne.jarvikyla@efi.int)
