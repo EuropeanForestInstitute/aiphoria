@@ -323,10 +323,31 @@ class FlowSolver(object):
         return is_leaf
 
     def has_flow(self, flow_id: str, year=-1) -> bool:
+        """
+        Check if Flow with ID exists in the selected year.
+
+        :param flow_id: Flow ID
+        :param year: Selected year. If not defined then uses the current year inside FlowSolver.
+        :return: True if Flow with ID exists for year, False otherwise.
+        """
+
         if year >= 0:
             return flow_id in self._year_to_flow_id_to_flow[year]
 
         return flow_id in self._current_flow_id_to_flow
+
+    def has_process(self, process_id: str, year=-1) -> bool:
+        """
+        Check if Process with ID exists in the selected year.
+
+        :param process_id: Process ID
+        :param year: Selected year. If not defined then uses the current year inside FlowSolver.
+        :return: True if Process with ID exists for year, False otherwise.
+        """
+        if year >= 0:
+            return process_id in self._year_to_process_id_to_process[year]
+
+        return process_id in self._current_process_id_to_process
 
     def _get_year_to_process_id_to_process(self) -> Dict[str, Dict[str, Process]]:
         return self._year_to_process_id_to_process
