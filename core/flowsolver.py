@@ -154,13 +154,13 @@ class FlowSolver(object):
 
         return df_flow_values
 
-    def get_process(self, process_id, year=-1) -> Process:
+    def get_process(self, process_id: str, year=-1) -> Process:
         if year >= 0:
             return self._year_to_process_id_to_process[year][process_id]
 
         return self._current_process_id_to_flow_ids[process_id]
 
-    def get_flow(self, flow_id, year=-1) -> Flow:
+    def get_flow(self, flow_id: str, year=-1) -> Flow:
         if year >= 0:
             return self._year_to_flow_id_to_flow[year][flow_id]
 
@@ -250,11 +250,13 @@ class FlowSolver(object):
 
         :return: None
         """
+
         print("Solving flows for years {} - {}...".format(self._year_start, self._year_end))
         print("Using virtual flows = {}".format(self._use_virtual_flows))
-        bar = tqdm.tqdm(total=self._year_end, desc="Solving flows", initial=self._year_start)
+        bar = tqdm.tqdm(initial=0)
         self._create_dynamic_stocks()
         for _ in self._years:
+            bar.set_description("Solving {}/{}".format(self._year_start + bar.n, self._year_end))
             self._solve_timestep()
             self._advance_timestep()
             bar.update()
@@ -319,6 +321,12 @@ class FlowSolver(object):
                 break
 
         return is_leaf
+
+    def has_flow(self, flow_id: str, year=-1) -> bool:
+        if year >= 0:
+            return flow_id in self._year_to_flow_id_to_flow[year]
+
+        return flow_id in self._current_flow_id_to_flow
 
     def _get_year_to_process_id_to_process(self) -> Dict[str, Dict[str, Process]]:
         return self._year_to_process_id_to_process
