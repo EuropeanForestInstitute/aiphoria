@@ -1,7 +1,8 @@
 import copy
 from typing import List, Dict
 import numpy as np
-from core.dataprovider import DataProvider, ParameterName
+from core.dataprovider import DataProvider
+from core.parameters import ParameterName, ParameterFillMethod
 from core.datastructures import Process, Flow, Stock
 import pandas as pd
 
@@ -33,23 +34,30 @@ class DataChecker(object):
         stocks = self._dataprovider.get_stocks()
 
         model_params = self._dataprovider.get_model_params()
-        detect_year_range = model_params[ParameterName.DetectYearRange.value]
-        self._year_start = model_params[ParameterName.StartYear.value]
-        self._year_end = model_params[ParameterName.EndYear.value]
-        use_virtual_flows = model_params[ParameterName.UseVirtualFlows.value]
+        detect_year_range = model_params[ParameterName.DetectYearRange]
+        self._year_start = model_params[ParameterName.StartYear]
+        self._year_end = model_params[ParameterName.EndYear]
+        use_virtual_flows = model_params[ParameterName.UseVirtualFlows]
 
         # Default optional values
+        # The default values are set inside DataProvider but
+        # in this is to ensure that the optional parameters have default
+        # values if they are missing from the settings file
         virtual_flows_epsilon = 0.1
-        if use_virtual_flows and ParameterName.VirtualFlowsEpsilon.value in model_params:
-            virtual_flows_epsilon = model_params[ParameterName.VirtualFlowsEpsilon.value]
+        if use_virtual_flows and ParameterName.VirtualFlowsEpsilon in model_params:
+            virtual_flows_epsilon = model_params[ParameterName.VirtualFlowsEpsilon]
 
         fill_missing_absolute_flows = True
-        if ParameterName.FillMissingAbsoluteFlows.value in model_params:
-            fill_missing_absolute_flows = model_params[ParameterName.FillMissingAbsoluteFlows.value]
+        if ParameterName.FillMissingAbsoluteFlows in model_params:
+            fill_missing_absolute_flows = model_params[ParameterName.FillMissingAbsoluteFlows]
 
         fill_missing_relative_flows = True
-        if ParameterName.FillMissingRelativeFlows.value in model_params:
-            fill_missing_relative_flows = model_params[ParameterName.FillMissingRelativeFlows.value]
+        if ParameterName.FillMissingRelativeFlows in model_params:
+            fill_missing_relative_flows = model_params[ParameterName.FillMissingRelativeFlows]
+
+        fill_method = ParameterFillMethod.Zeros
+        if ParameterName.FillMethod in model_params:
+            fill_method = model_params[ParameterName.FillMethod]
 
         # Checking options
         epsilon_inflows_outflows_mismatch = 0.1
@@ -67,8 +75,8 @@ class DataChecker(object):
             # Years are converted to int
             self._year_start, self._year_end = self._detect_year_range(flows)
         else:
-            self._year_start = model_params[ParameterName.StartYear.value]
-            self._year_end = model_params[ParameterName.EndYear.value]
+            self._year_start = model_params[ParameterName.StartYear]
+            self._year_end = model_params[ParameterName.EndYear]
 
         # Build array of available years, last year is also included in year range
         self._years = self._get_year_range()
@@ -557,7 +565,9 @@ class DataChecker(object):
         # Fill with empty data until real Flow data is found
         year_start = min(df_year_flows.index)
         year_end = max(df_year_flows.index)
-        for flow_id, flow_data in df_year_flows.items():
+        for flow_id in df_year_flows.columns:
+            flow_data = df_year_flows[flow_id]
+
             flow_id_min_year = flow_id_to_min_year[flow_data.name]
             empty_flow_data = copy.deepcopy(flow_data.loc[flow_id_min_year])
             empty_flow_data.value = 0.0
@@ -570,10 +580,9 @@ class DataChecker(object):
             # TODO: Should always skip flow data between start year and first valid flow data?
             if (is_absolute_flow and fill_missing_absolute_flows) or (is_relative_flow and fill_missing_relative_flows):
                 years_missing_flow_data = flow_data.loc[:flow_id_min_year].drop(index=flow_id_min_year)
-                if len(years_missing_flow_data):
-                    for missing_year in years_missing_flow_data.keys():
-                        empty_flow_data.year = missing_year
-                        df_year_flows.at[missing_year, flow_id] = empty_flow_data
+                for missing_year in years_missing_flow_data.keys():
+                    empty_flow_data.year = missing_year
+                    df_year_flows.at[missing_year, flow_id] = empty_flow_data
 
             # Start filling Flow data from min year for each Flow to next year
             # until new Flow data is found. Update current_flow_data to use found flow data.
@@ -599,25 +608,45 @@ class DataChecker(object):
                     # Valid data found this year, update the last valid flow data to this year data
                     current_flow_data = existing_flow_data
 
-        # and propagate flow data for years that are missing flow data
-        # Fill Flow data for years after
+
+        # Find latest year of flow data for each Flow
+        # This data is used to check if Flow is absolute or relative
+        flow_id_to_latest_year_with_data = {}
+        for flow_id, flow_has_data in df_flow_id_has_data.items():
+            flow_id_to_latest_year_with_data[flow_id] = df_flow_id_has_data.index[0]
+            for year, value in flow_has_data.items():
+                if value:
+                    flow_id_to_latest_year_with_data[flow_id] = year
+
+        # Fill missing years after the last found Flow data year if
         last_flow_data = {}
         df_result = df_year_flows.copy()
         for year in df_flow_id_has_data.index:
             for flow_id in df_flow_id_has_data.columns:
                 if df_flow_id_has_data.at[year, flow_id]:
-                    # Insert missing years as keys, sort the dictionary keys in ascending order
-                    # Update flow ID to use data from this year
+                    # Flow data exists for this year already, update the previous valid flow data
                     last_flow_data[flow_id] = df_result.at[year, flow_id]
                 else:
-                    # Skip to next if there is not yet last flow data
-                    # This happens for all the years before flow data is first defined
-                    if flow_id not in last_flow_data:
+                    # No flow data for this flow_id and for this year
+                    # Check and fill missing flow data if filling missing flows is enabled
+                    latest_year_with_data = flow_id_to_latest_year_with_data[flow_id]
+                    latest_flow_data = df_year_flows.at[latest_year_with_data, flow_id]
+                    is_absolute_flow = latest_flow_data.is_unit_absolute_value
+                    is_relative_flow = not is_absolute_flow
+
+                    if is_absolute_flow and not fill_missing_absolute_flows:
                         continue
 
-                    new_data = copy.deepcopy(last_flow_data[flow_id])
-                    new_data.year = year
-                    df_result.at[year, flow_id] = new_data
+                    if is_relative_flow and not fill_missing_relative_flows:
+                        continue
+
+                    # TODO: last_flow_data not populated in Gustavo's scenario
+                    a = 0
+                    missing_flow_data = copy.deepcopy(last_flow_data[flow_id])
+                    missing_flow_data.year = year
+                    df_result.at[year, flow_id] = missing_flow_data
+
+        a = 0
 
         return df_result
 

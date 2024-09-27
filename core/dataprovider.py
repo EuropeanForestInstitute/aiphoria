@@ -1,48 +1,9 @@
-from enum import Enum
 from typing import List, Union, Any
 import numpy as np
 import openpyxl
 import pandas as pd
 from core.datastructures import Process, Flow, Stock
-
-
-class ParameterName(Enum):
-    # ***********************
-    # * Required parameters *
-    # ***********************
-
-    # Process related
-    SheetNameProcesses: str = "sheet_name_processes"
-    ColumnRangeProcesses: str = "column_range_processes"
-    SkipNumRowsProcesses: str = "skip_num_rows_processes"
-
-    # Flow related
-    SheetNameFlows: str = "sheet_name_flows"
-    ColumnRangeFlows: str = "column_range_flows"
-    SkipNumRowsFlows: str = "skip_num_rows_flows"
-
-    # Model parameters
-    StartYear: str = "start_year"
-    EndYear: str = "end_year"
-    DetectYearRange: str = "detect_year_range"
-    UseVirtualFlows: str = "use_virtual_flows"
-    VirtualFlowsEpsilon: str = "virtual_flows_epsilon"
-
-    # ***********************
-    # * Optional parameters *
-    # ***********************
-    ConversionFactorCToCO2: str = "conversion_factor_c_to_co2"
-    FillMissingAbsoluteFlows: str = "fill_missing_absolute_flows"
-    FillMissingRelativeFlows: str = "fill_missing_relative_flows"
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return str(self.value)
-
-    def __len__(self):
-        return len(self.value)
+from core.parameters import ParameterName, ParameterFillMethod
 
 
 class DataProvider(object):
@@ -61,30 +22,47 @@ class DataProvider(object):
 
         # Check that all required keys exists
         required_params = [
-            [ParameterName.SheetNameProcesses.value, str, "Sheet name that contains data for Processes, (e.g. Processes)"],
-            [ParameterName.ColumnRangeProcesses.value, str, "Start and end column names separated by colon (e.g. B:R) that contain data for Processes"],
-            [ParameterName.SkipNumRowsProcesses.value, int, "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!"],
+            [ParameterName.SheetNameProcesses, str, "Sheet name that contains data for Processes, (e.g. Processes)"],
+            [ParameterName.ColumnRangeProcesses, str, "Start and end column names separated by colon (e.g. B:R) that contain data for Processes"],
+            [ParameterName.SkipNumRowsProcesses, int, "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!"],
 
             # Flow related
-            [ParameterName.SheetNameFlows.value, str, "Sheet name that contains data for Flows (e.g. Flows)"],
-            [ParameterName.ColumnRangeFlows.value, str, "Start and end column names separated by colon (e.g. B:R) that contain data for Flows"],
-            [ParameterName.SkipNumRowsFlows.value, int, "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!"],
+            [ParameterName.SheetNameFlows, str, "Sheet name that contains data for Flows (e.g. Flows)"],
+            [ParameterName.ColumnRangeFlows, str, "Start and end column names separated by colon (e.g. B:R) that contain data for Flows"],
+            [ParameterName.SkipNumRowsFlows, int, "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!"],
 
             # Model related
-            [ParameterName.StartYear.value, int, "Starting year of the model"],
-            [ParameterName.EndYear.value, int, "Ending year of the model, included in time range"],
-            [ParameterName.DetectYearRange.value, bool, "Detect the year range automatically from file"],
-            [ParameterName.UseVirtualFlows.value, bool, "Use virtual flows (create missing flows for Processes that have imbalance of input and output flows, i.e. unreported flows)"],
-            [ParameterName.VirtualFlowsEpsilon.value, float,
+            [ParameterName.StartYear, int, "Starting year of the model"],
+            [ParameterName.EndYear, int, "Ending year of the model, included in time range"],
+            [ParameterName.DetectYearRange, bool, "Detect the year range automatically from file"],
+            [ParameterName.UseVirtualFlows, bool, "Use virtual flows (create missing flows for Processes that have imbalance of input and output flows, i.e. unreported flows)"],
+            [ParameterName.VirtualFlowsEpsilon, float,
              "Maximum allowed absolute difference of process input and outputs before creating virtual flow"],
         ]
 
         # Optional parameters entry structure:
         # Name of the parameter, expected value type, comment, default value
         optional_params = [
-            [ParameterName.ConversionFactorCToCO2.value, float, "Conversion factor from C to CO2", None],
-            [ParameterName.FillMissingAbsoluteFlows.value, bool, "Fill missing absolute flows with previous valid flow data?", True],
-            [ParameterName.FillMissingRelativeFlows.value, bool, "Fill missing relative flows with previous valid flow data?", True],
+            [ParameterName.ConversionFactorCToCO2,
+             float,
+             "Conversion factor from C to CO2",
+             None],
+
+            [ParameterName.FillMissingAbsoluteFlows,
+             bool,
+             "Fill missing absolute flows with previous valid flow data?",
+             True],
+
+            [ParameterName.FillMissingRelativeFlows,
+             bool,
+             "Fill missing relative flows with previous valid flow data?",
+             True],
+
+            [ParameterName.FillMethod,
+             str,
+             "Fill method if fill missing flows values are enabled",
+             ParameterFillMethod.Zeros,
+             ],
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean"}
@@ -170,17 +148,43 @@ class DataProvider(object):
                     print("Invalid type for optional parameter '{}': expected {}, got {}".format(
                         param_name, param_type_to_str[param_type], param_type_to_str[found_param_type]))
 
+                # Check that FillMethod has valid value
+                if param_name is ParameterName.FillMethod:
+                    valid_fill_method_names = []
+                    for method_name in dir(ParameterFillMethod):
+                        if not method_name.startswith("__"):
+                            valid_fill_method_names.append(method_name)
+
+                    # Convert found param name and valid fill method names to lowercase
+                    # and check if found param name is one of the valid method names
+                    found_param_value_lower = found_param_value.lower()
+                    valid_method_names_lower = [name.lower() for name in valid_fill_method_names]
+                    if found_param_value_lower in valid_method_names_lower:
+                        self._param_name_to_value[param_name] = found_param_value
+                    else:
+                        print("{} not valid value for {}! ".format(found_param_value, param_name), end="")
+                        print("Valid values are: ", end="")
+                        for index, method_name in enumerate(valid_fill_method_names):
+                            print(method_name, end="")
+                            if index < len(valid_fill_method_names) - 1:
+                                print(", ", end="")
+                            else:
+                                print("")
+
+                        self._param_name_to_value[param_name] = param_default_value
+                        print("")
+
             else:
                 # Use default optional parameter value
                 self._param_name_to_value[param_name] = param_default_value
 
         # Create Processes and Flows
-        sheet_name_processes = param_name_to_value[ParameterName.SheetNameProcesses.value]
-        sheet_name_flows = param_name_to_value[ParameterName.SheetNameFlows.value]
-        col_range_processes = param_name_to_value[ParameterName.ColumnRangeProcesses.value]
-        col_range_flows = param_name_to_value[ParameterName.ColumnRangeFlows.value]
-        skip_num_rows_processes = param_name_to_value[ParameterName.SkipNumRowsProcesses.value]
-        skip_num_rows_flows = param_name_to_value[ParameterName.SkipNumRowsFlows.value]
+        sheet_name_processes = param_name_to_value[ParameterName.SheetNameProcesses]
+        sheet_name_flows = param_name_to_value[ParameterName.SheetNameFlows]
+        col_range_processes = param_name_to_value[ParameterName.ColumnRangeProcesses]
+        col_range_flows = param_name_to_value[ParameterName.ColumnRangeFlows]
+        skip_num_rows_processes = param_name_to_value[ParameterName.SkipNumRowsProcesses]
+        skip_num_rows_flows = param_name_to_value[ParameterName.SkipNumRowsFlows]
 
         # Sheet name to DataFrame
         sheets = {}
