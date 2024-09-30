@@ -60,7 +60,7 @@ class DataProvider(object):
 
             [ParameterName.FillMethod,
              str,
-             "Fill method if fill missing flows values are enabled",
+             "Fill method if 'fill_missing_flows' values are enabled",
              ParameterFillMethod.Zeros,
              ],
         ]
@@ -237,6 +237,7 @@ class DataProvider(object):
         rows_processes = []
         df_processes = sheets[self._sheet_name_processes]
         for (row_index, row) in df_processes.iterrows():
+            row = self._convert_row_nan_to_none(row)
             rows_processes.append(row)
 
         self._processes = self._create_objects_from_rows(Process, rows_processes, row_start=skip_num_rows_processes)
@@ -245,6 +246,7 @@ class DataProvider(object):
         rows_flows = []
         df_flows = sheets[self._sheet_name_flows]
         for (row_index, row) in df_flows.iterrows():
+            row = self._convert_row_nan_to_none(row)
             rows_flows.append(row)
 
         self._flows = self._create_objects_from_rows(Flow, rows_flows, row_start=skip_num_rows_flows)
@@ -297,6 +299,19 @@ class DataProvider(object):
             return False
 
         return True
+
+    def _convert_row_nan_to_none(self, row: pd.Series) -> pd.Series:
+        """
+        Check the row and convert NaN to None.
+        Modifies the original row.
+
+        :param row: Series
+        :return: Returns the original modified row
+        """
+        for col_name, value in row.items():
+            if np.isreal(value) and np.isnan(value):
+                row[col_name] = None
+        return row
 
     def get_model_params(self) -> dict[ParameterName, Any]:
         """
