@@ -1,5 +1,6 @@
 from typing import Tuple
 import numpy as np
+import pandas as pd
 
 
 class ObjectBase(object):
@@ -376,7 +377,7 @@ class Flow(ObjectBase):
             indicator_comment = indicators.iloc[i+1]
 
             # Default to 1 as indicator value if no value is provided
-            indicator_value = 1 if np.isnan(indicator_value) else indicator_value
+            indicator_value = 1 if indicator_value is None else indicator_value
             self._indicators[indicator_name] = indicator_value
 
         self._row_number = row_number  # Track Excel file row number, last element in list
