@@ -38,6 +38,7 @@ class DataChecker(object):
         self._year_start = model_params[ParameterName.StartYear]
         self._year_end = model_params[ParameterName.EndYear]
         use_virtual_flows = model_params[ParameterName.UseVirtualFlows]
+        fill_method = model_params[ParameterName.FillMethod]
 
         # Default optional values
         # The default values are set inside DataProvider but
@@ -105,7 +106,9 @@ class DataChecker(object):
         df_year_to_flows = self._create_flow_data_for_missing_years(
             df_year_to_flows,
             fill_missing_absolute_flows=fill_missing_absolute_flows,
-            fill_missing_relative_flows=fill_missing_relative_flows)
+            fill_missing_relative_flows=fill_missing_relative_flows,
+            fill_method=fill_method
+        )
 
         # Create process to flow mappings
         df_year_to_process_flows = self._create_process_to_flows(unique_process_ids, df_year_to_flows)
@@ -528,7 +531,9 @@ class DataChecker(object):
     def _create_flow_data_for_missing_years(self,
                                             df_year_flows: pd.DataFrame,
                                             fill_missing_absolute_flows: bool,
-                                            fill_missing_relative_flows: bool) -> pd.DataFrame:
+                                            fill_missing_relative_flows: bool,
+                                            fill_method: str = ParameterFillMethod.Zeros
+                                            ) -> pd.DataFrame:
         """
         Fill years missing Flow data with the previous valid Flow data.\n
         If fill_absolute_flows is set to True then process Flows with absolute values.\n
@@ -562,93 +567,102 @@ class DataChecker(object):
                     if year > flow_id_to_max_year[flow_id]:
                         flow_id_to_max_year[flow_id] = year
 
-        # Fill with empty data until real Flow data is found
+        # Find gaps flow data columns and set values according to fill_method
         year_start = min(df_year_flows.index)
         year_end = max(df_year_flows.index)
         for flow_id in df_year_flows.columns:
             flow_data = df_year_flows[flow_id]
+            flow_has_data = df_flow_id_has_data[flow_id]
 
-            flow_id_min_year = flow_id_to_min_year[flow_data.name]
-            empty_flow_data = copy.deepcopy(flow_data.loc[flow_id_min_year])
-            empty_flow_data.value = 0.0
-            empty_flow_data.evaluated_value = 0.0
+            # NOTE: Now checks the flow type on from the first occurrence of flow data!
+            # TODO: Do we need more fine-grained control? Current implementation makes the filling decision
+            # TODO: based on the flow type of the first flow data occurrence!
+            first_valid_flow = flow_data[flow_id_to_min_year[flow_id]]
+            is_abs_flow = first_valid_flow.is_unit_absolute_value
+            is_rel_flow = not is_abs_flow
 
-            # Fill missing data from start year to first entry
-            is_absolute_flow = empty_flow_data.is_unit_absolute_value
-            is_relative_flow = not is_absolute_flow
+            # Skip to next if not using filling for flow type
+            if is_abs_flow and not fill_missing_absolute_flows:
+                continue
 
-            # TODO: Should always skip flow data between start year and first valid flow data?
-            if (is_absolute_flow and fill_missing_absolute_flows) or (is_relative_flow and fill_missing_relative_flows):
-                years_missing_flow_data = flow_data.loc[:flow_id_min_year].drop(index=flow_id_min_year)
-                for missing_year in years_missing_flow_data.keys():
-                    empty_flow_data.year = missing_year
-                    df_year_flows.at[missing_year, flow_id] = empty_flow_data
+            if is_rel_flow and not fill_missing_relative_flows:
+                continue
 
-            # Start filling Flow data from min year for each Flow to next year
-            # until new Flow data is found. Update current_flow_data to use found flow data.
-            # Repeat this for the remaining years.
-            current_flow_data = df_year_flows.at[flow_id_min_year, flow_id]
-            remaining_years = [year for year in flow_data.index if year > flow_id_min_year]
-            for year in remaining_years:
-                if is_absolute_flow and not fill_missing_absolute_flows:
-                    continue
+            if fill_method == ParameterFillMethod.Zeros:
+                # Fill all missing flow values with zeros
+                flow_id_min_year = flow_id_to_min_year[flow_data.name]
+                missing_flow_base = copy.deepcopy(flow_data.loc[flow_id_min_year])
+                for year, has_data in flow_has_data.items():
+                    if not has_data:
+                        new_flow_data = copy.deepcopy(missing_flow_base)
+                        new_flow_data.value = 0.0
+                        new_flow_data.year = year
+                        flow_data[year] = new_flow_data
+                        flow_has_data[year] = True
 
-                if is_relative_flow and not fill_missing_relative_flows:
-                    continue
+            if fill_method == ParameterFillMethod.Previous:
+                # Fill all missing flow values using the last found flow values
+                # Do not fill flows if flows are missing at the start of the flow_data
+                flow_data.ffill(inplace=True)
 
-                # Flow data for the year
-                existing_flow_data = df_year_flows.at[year, flow_id]
-                if pd.isna(existing_flow_data):
-                    # No existing data for this year, copy last previous valid data
-                    # for this year and update year to match this year
-                    new_flow_data = copy.deepcopy(current_flow_data)
-                    new_flow_data.year = year
-                    df_year_flows.at[year, flow_id] = new_flow_data
-                else:
-                    # Valid data found this year, update the last valid flow data to this year data
-                    current_flow_data = existing_flow_data
-
-
-        # Find latest year of flow data for each Flow
-        # This data is used to check if Flow is absolute or relative
-        flow_id_to_latest_year_with_data = {}
-        for flow_id, flow_has_data in df_flow_id_has_data.items():
-            flow_id_to_latest_year_with_data[flow_id] = df_flow_id_has_data.index[0]
-            for year, value in flow_has_data.items():
-                if value:
-                    flow_id_to_latest_year_with_data[flow_id] = year
-
-        # Fill missing years after the last found Flow data year if
-        last_flow_data = {}
-        df_result = df_year_flows.copy()
-        for year in df_flow_id_has_data.index:
-            for flow_id in df_flow_id_has_data.columns:
-                if df_flow_id_has_data.at[year, flow_id]:
-                    # Flow data exists for this year already, update the previous valid flow data
-                    last_flow_data[flow_id] = df_result.at[year, flow_id]
-                else:
-                    # No flow data for this flow_id and for this year
-                    # Check and fill missing flow data if filling missing flows is enabled
-                    latest_year_with_data = flow_id_to_latest_year_with_data[flow_id]
-                    latest_flow_data = df_year_flows.at[latest_year_with_data, flow_id]
-                    is_absolute_flow = latest_flow_data.is_unit_absolute_value
-                    is_relative_flow = not is_absolute_flow
-
-                    if is_absolute_flow and not fill_missing_absolute_flows:
+                # TODO: Should we fill also the flows missing at the start of the flow_data?
+                # DataFrame.ffill copies the object that the new created object references
+                # to the last found flow object so overwrite all objects in flow_data
+                # with the new deepcopied flow object
+                for year, flow in flow_data.items():
+                    if pd.isna(flow):
                         continue
 
-                    if is_relative_flow and not fill_missing_relative_flows:
+                    new_flow = copy.deepcopy(flow)
+                    new_flow.year = year
+                    flow_data.at[year] = new_flow
+                    flow_has_data[year] = True
+
+            if fill_method == ParameterFillMethod.Next:
+                # Fill all missing flow values using the next found flow values
+                # Do not fill flows if flows are missing at the end of the flow_data
+                flow_data.bfill(inplace=True)
+
+                # TODO: Should we fill also the flows missing at the end of the flow_data?
+                # DataFrame.bfill copies the object that the new created object references
+                # to the last found flow object so overwrite all objects in flow_data
+                # with the new deepcopied flow object
+                for year, flow in flow_data.items():
+                    if pd.isna(flow):
                         continue
 
-                    # TODO: last_flow_data not populated in Gustavo's scenario
-                    a = 0
-                    missing_flow_data = copy.deepcopy(last_flow_data[flow_id])
-                    missing_flow_data.year = year
-                    df_result.at[year, flow_id] = missing_flow_data
+                    new_flow = copy.deepcopy(flow)
+                    new_flow.year = year
+                    flow_data.at[year] = new_flow
+                    flow_has_data[year] = True
 
-        a = 0
+            if fill_method == ParameterFillMethod.Interpolate:
+                # Fill all missing flow values using interpolation
+                # Do not fill flow values if missing at the start of flow_data or missing at the end of flow_data
+                flow_values = flow_data.copy()
+                for year, has_data in flow_has_data.items():
+                    if not has_data:
+                        continue
 
-        return df_result
+                    flow_values[year] = flow_data[year].value
+
+                flow_values = flow_values.astype("float64")
+                flow_values.interpolate(limit_direction="forward", inplace=True)
+
+                # Get first valid flow data and use that as missing flow base
+                flow_id_min_year = flow_id_to_min_year[flow_data.name]
+                missing_flow_base = copy.deepcopy(flow_data.loc[flow_id_min_year])
+                for year, interpolated_value in flow_values.items():
+                    if pd.isna(interpolated_value):
+                        continue
+
+                    new_flow = copy.deepcopy(missing_flow_base)
+                    new_flow.value = flow_values[year]
+                    new_flow.year = year
+                    flow_data[year] = new_flow
+                    flow_has_data[year] = True
+
+        return df_year_flows
 
     def _create_process_to_flow_ids(self, unique_process_ids, processes: List[Process], df_flows: pd.DataFrame) -> pd.DataFrame:
         df = pd.DataFrame(dtype="object", index=df_flows.index, columns=unique_process_ids)
