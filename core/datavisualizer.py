@@ -8,6 +8,7 @@ from PIL import Image
 class DataVisualizer(object):
     def __init__(self):
         self._process_name_override_mappings = dict()
+        self._button_font_size = 13
         self._fig = None
         self._script = ""
 
@@ -226,6 +227,7 @@ class DataVisualizer(object):
                     x=0.0, xanchor="left",
                     y=0.0, yanchor="top",
                     bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
+                    font=dict(size=self._button_font_size)
                 ),
                 dict(
                     buttons=list([
@@ -249,6 +251,7 @@ class DataVisualizer(object):
                     x=0.0, xanchor="left",
                     y=0.08, yanchor="top",
                     bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
+                    font=dict(size=self._button_font_size)
                 ),
                 dict(
                     buttons=list([
@@ -272,6 +275,7 @@ class DataVisualizer(object):
                     x=0.0, xanchor="left",
                     y=0.16, yanchor="top",
                     bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
+                    font=dict(size=self._button_font_size)
                 )
             ],
         )
