@@ -1,4 +1,5 @@
 import copy
+from collections import namedtuple
 from typing import List, Dict
 import numpy as np
 from core.dataprovider import DataProvider
@@ -118,6 +119,10 @@ class DataChecker(object):
         if not self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
                                                                  epsilon=epsilon_inflows_outflows_mismatch):
             pass
+
+        # Check that flow type stays the same during the simulation
+        if not self._check_flow_type_changes(df_year_to_flows):
+            raise SystemExit(-1)
 
         # Build graph data
         process_id_to_process = {}
@@ -519,6 +524,38 @@ class DataChecker(object):
 
                         print("")
                         result = False
+
+        return result
+
+    def _check_flow_type_changes(self, df_year_to_flows: pd.DataFrame) -> bool:
+        """
+        Check that flows do not change the type during the simulation.
+
+        :param df_year_to_flows: DataFrame
+        :return: True if flows do not change the types during the simulation, False otherwise.
+        """
+        print("Checking flow type changes...")
+        result = True
+        for flow_id in df_year_to_flows.columns:
+            is_flow_abs_entry = []
+            flow_data = df_year_to_flows[flow_id]
+            for year, flow in flow_data.items():
+                if pd.notna(flow):
+                    new_entry = [flow.is_unit_absolute_value, year]
+                    is_flow_abs_entry.append(new_entry)
+
+            # Compare the rest of the list for the first state
+            initial_entry = is_flow_abs_entry[0]
+            is_same_as_initial_state = [entry[0] == initial_entry[0] for entry in is_flow_abs_entry]
+            if not all(is_same_as_initial_state):
+                print("Found following errors:")
+                source_type_name = "absolute" if initial_entry[0] else "relative"
+                target_type_name = "relative" if initial_entry[0] else "absolute"
+                for entry in is_flow_abs_entry:
+                    if entry[0] != initial_entry[0]:
+                        print("\t- Flow '{}' was defined initially as {} in year {} but changed to {} in year {}".format(
+                            flow_id, source_type_name, initial_entry[1], target_type_name, entry[1]))
+                    result = False
 
         return result
 
