@@ -356,7 +356,7 @@ class Flow(ObjectBase):
         self._conversion_factor_used = params.iloc[13]
         
         # Carbon content
-        self._carbon_content_factor = 1.0 if np.isnan(params.iloc[14]) else params.iloc[14]
+        self._carbon_content_factor = 1.0 if params.iloc[14] is None else params.iloc[14]
         self._carbon_content_source = params.iloc[15]
 
         # Rest of the elements except last element are indicators
