@@ -41,7 +41,7 @@ class ParameterFillMethod(str, Enum):
     Valid values for parameter FillMethod
     """
 
-    Zeros: str = "zeros"
-    Previous: str = "previous"
-    Next: str = "next"
-    Interpolate: str = "interpolate"
+    Zeros: str = "Zeros"
+    Previous: str = "Previous"
+    Next: str = "Next"
+    Interpolate: str = "Interpolate"
