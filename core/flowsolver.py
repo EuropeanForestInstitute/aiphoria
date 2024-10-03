@@ -252,11 +252,10 @@ class FlowSolver(object):
         """
 
         print("Solving flows for years {} - {}...".format(self._year_start, self._year_end))
-        print("Using virtual flows = {}".format(self._use_virtual_flows))
         bar = tqdm.tqdm(initial=0)
         self._create_dynamic_stocks()
-        for _ in self._years:
-            bar.set_description("Solving {}/{}".format(self._year_start + bar.n, self._year_end))
+        for current_year in self._years:
+            bar.set_description("Solving {}/{}".format(current_year, self._year_end))
             self._solve_timestep()
             self._advance_timestep()
             bar.update()
@@ -268,7 +267,7 @@ class FlowSolver(object):
             year_to_process_to_flows[year] = {}
             current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[year]
             current_flow_id_to_flow = self._year_to_flow_id_to_flow[year]
-            for process_id, process in self._current_process_id_to_process.items():
+            for process_id, process in current_process_id_to_process.items():
                 flow_ids = current_process_id_to_flow_ids[process_id]
                 inflow_ids = flow_ids["in"]
                 outflow_ids = flow_ids["out"]
@@ -284,43 +283,36 @@ class FlowSolver(object):
 
         return year_to_process_to_flows
 
-    # TODO: Implement as public method, same as self._get_process_inflows/outflows() etc...
-    def get_process_flows(self, process_id, year) -> Dict[str, Flow]:
+    def get_process_flows(self, process_id: str, year: int) -> Dict[str, Flow]:
         process_inflows = self._get_process_inflows(process_id, year)
         process_outflows = self._get_process_outflows(process_id, year)
         return {"Inflows": process_inflows, "Outflows": process_outflows}
 
-    def is_root_process(self, process_id):
+    def get_process_inflows(self, process_id: str, year: int) -> List[Flow]:
+        return self._get_process_inflows(process_id, year)
+
+    def get_process_outflows(self, process_id: str, year: int) -> List[Flow]:
+        return self._get_process_inflows(process_id, year)
+
+    def is_root_process(self, process_id: str, year: int = -1) -> bool:
         """
-        Returns True if process has no inflows at any year.
+        Check if Process has no inflows in the given year.
 
         :param process_id: Process ID
-        :return: True if process has no inflows at any year, False otherwise
+        :param year: Selected year
+        :return: True if Process has no inflows, False otherwise
         """
-        is_root = True
-        for year in self._years:
-            inflows = self._get_process_inflows(process_id, year)
-            if inflows:
-                is_root = False
-                break
+        return len(self._get_process_inflows(process_id, year)) == 0
 
-        return is_root
-
-    def is_leaf_process(self, process_id):
+    def is_leaf_process(self, process_id: str, year: int = -1) -> bool:
         """
-        Returns True if process has no outflows at any year.
+        Check if Process has no outflows in the given year.
 
         :param process_id: Process ID
-        :return: True if process has no outflows at any year, False otherwise
+        :param year: Selected year
+        :return: True if Process has no outflows, False otherwise
         """
-        is_leaf = True
-        for year in self._years:
-            inflows = self._get_process_outflows(process_id, year)
-            if inflows:
-                is_leaf = False
-                break
-
-        return is_leaf
+        return len(self._get_process_outflows(process_id, year)) == 0
 
     def has_flow(self, flow_id: str, year=-1) -> bool:
         """
@@ -382,7 +374,7 @@ class FlowSolver(object):
             result = []
         return result
 
-    def _get_process_inflows(self, process_id, year=-1) -> List[Flow]:
+    def _get_process_inflows(self, process_id: str, year: int = -1) -> List[Flow]:
         # Get list of process inflows for current year
         flows = []
         inflow_ids = self._get_process_inflow_ids(process_id, year)
@@ -391,22 +383,23 @@ class FlowSolver(object):
         return flows
 
     # Get list of outflows (DataFlows)
-    def _get_process_outflows(self, process_id, year=-1) -> List[Flow]:
+    def _get_process_outflows(self, process_id: str, year: int = -1) -> List[Flow]:
+        """
+        Get list of Process outflows for the selected year.
+
+        :param process_id: Process ID
+        :param year: Selected year
+        :return: List of Flows
+        """
         # Get list of outflows for current year
         flows = []
         outflow_ids = self._get_process_outflow_ids(process_id, year)
         for flow_id in outflow_ids:
             flow = self.get_flow(flow_id, year)
             flows.append(flow)
-
-            # if flow.year == year:
-            #     # TODO: HACK! The the self.get_flow(flow_id, year) has flows outside of the requested years!
-            #     # TODO: Look into DataChecker!!!
-            #     #print(flow.year, year)
-            #     flows.append(flow)
         return flows
 
-    def _evaluate_process(self, process_id, year):
+    def _evaluate_process(self, process_id: str, year: int) -> tuple[bool, List]:
         is_evaluated = False
         inflows = self._get_process_inflows(process_id, year)
         outflows = self._get_process_outflows(process_id, year)
@@ -559,7 +552,7 @@ class FlowSolver(object):
             # epsilon is max allowed difference of input and outputs, otherwise create virtual processes and flows
             self._create_virtual_flows(self._virtual_flows_epsilon)
 
-    def _advance_timestep(self):
+    def _advance_timestep(self) -> None:
         self._year_prev = self._year_current
         self._year_current += 1
 
@@ -573,7 +566,7 @@ class FlowSolver(object):
         new_virtual_process.is_virtual = True
         return new_virtual_process
 
-    def _create_virtual_flow(self, source_process_id, target_process_id, value, unit):
+    def _create_virtual_flow(self, source_process_id, target_process_id, value, unit) -> Flow:
         new_virtual_flow = Flow()
         new_virtual_flow.source_process_id = source_process_id
         new_virtual_flow.target_process_id = target_process_id
@@ -584,7 +577,7 @@ class FlowSolver(object):
         new_virtual_flow.is_virtual = True
         return new_virtual_flow
 
-    def _create_virtual_flows(self, epsilon=0.1):
+    def _create_virtual_flows(self, epsilon=0.1) -> None:
         # Virtual outflow is unreported flow of process
         created_virtual_processes = {}
         created_virtual_flows = {}
@@ -595,17 +588,14 @@ class FlowSolver(object):
             if process.is_virtual:
                 continue
 
-            inflows = self._get_process_inflows(process_id)
-            outflows = self._get_process_outflows(process_id)
-            inflows_total = self.get_process_inflows_total(process_id)
-            outflows_total = self.get_process_outflows_total(process_id)
-
-            # Ignore root and leaf processes (= input and output processes to the system)
-            # because those root processes do not have any inflows and
-            # leaf processes do not have any outflows
-            if not inflows or not outflows:
+            # Ignore root and leaf processes (= root process has no inflows and leaf process has no outflows)
+            is_root_process = self.is_root_process(process_id, self._year_current)
+            is_leaf_process = self.is_leaf_process(process_id, self._year_current)
+            if is_root_process or is_leaf_process:
                 continue
 
+            inflows_total = self.get_process_inflows_total(process_id)
+            outflows_total = self.get_process_outflows_total(process_id)
             process_mass_balance = inflows_total - outflows_total
             if abs(process_mass_balance) < epsilon:
                 # Inflows and outflows are balanced, do nothing and continue to next process
