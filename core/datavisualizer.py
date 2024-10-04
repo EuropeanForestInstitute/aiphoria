@@ -1,5 +1,4 @@
 import os
-
 from core.flowsolver import FlowSolver
 import plotly.graph_objects as go
 from PIL import Image

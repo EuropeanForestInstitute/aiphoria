@@ -399,13 +399,44 @@ class FlowSolver(object):
             flows.append(flow)
         return flows
 
+    def _get_process_outflows_abs(self, process_id: str, year: int = -1) -> List[Flow]:
+        """
+        Get list of absolute outflows from Process for the selected year.
+
+        :param process_id: Process ID
+        :param year: Selected uear
+        :return: List of absolute outflows (Flow)
+        """
+        outflows_abs = []
+        flows = self._get_process_outflows(process_id, year)
+        for flow in flows:
+            if flow.is_unit_absolute_value:
+                outflows_abs.append(flow)
+        return outflows_abs
+
+    def _get_process_outflows_rel(self, process_id: str, year: int = -1) -> List[Flow]:
+        """
+        Get list of relative outflows from Process for the selected year.
+
+        :param process_id: Process ID
+        :param year: Selected uear
+        :return: List of relative outflows (Flow)
+        """
+
+        outflows_rel = []
+        flows = self._get_process_outflows(process_id, year)
+        for flow in flows:
+            if not flow.is_unit_absolute_value:
+                outflows_rel.append(flow)
+        return outflows_rel
+
     def _evaluate_process(self, process_id: str, year: int) -> tuple[bool, List]:
         is_evaluated = False
         inflows = self._get_process_inflows(process_id, year)
         outflows = self._get_process_outflows(process_id, year)
 
-        # Root process, all outflows are absolute
-        if not inflows:
+        # Root process should have only absolute outflow
+        if self.is_root_process(process_id, year):
             is_evaluated = True
             return is_evaluated, outflows
 
@@ -434,47 +465,38 @@ class FlowSolver(object):
                 # Distribute SWE total outflow values
                 stock_outflow = self._get_dynamic_stock_outflow_value(dsm_swe, year)
 
-                outflows_abs = []
-                outflows_rel = []
-                for flow in outflows:
-                    if flow.is_unit_absolute_value:
-                        outflows_abs.append(flow)
-                    else:
-                        outflows_rel.append(flow)
-
                 # Check that if process has absolute outflow then outflow value must be
                 # less than stock outflow. If absolute outflow is greater than stock outflow
                 # then there is user error with the data
-                total_abs = 0.0
-                for outflow in outflows_abs:
-                    total_abs += outflow.evaluated_value
-                total_outflows_rel = stock_outflow - total_abs
+                outflows_abs = self._get_process_outflows_abs(process_id, year)
+                outflows_rel = self._get_process_outflows_rel(process_id, year)
+                total_outflows_abs = np.sum([outflow.evaluated_value for outflow in outflows_abs])
+                total_outflows_rel = stock_outflow - total_outflows_abs
 
                 if total_outflows_rel < 0.0:
-                    # This is error: absolute outflow from stock is more than the stock outflow
-                    # Inform user about the error
+                    # This is error: Total absolute outflows are greater than stock outflow and
+                    # it means that there is not enough flows to distribute between remaining
+                    # relative outflows
                     s = "Process {}: stock outflow is less than sum of absolute outflows in year {}!".format(
                         process_id, year)
                     raise Exception(s)
 
+                # total_outflows_rel is the remaining outflows to be distributed between all relative outflows
                 for flow in outflows_rel:
                     flow.is_evaluated = True
                     flow.evaluated_value = flow.evaluated_share * total_outflows_rel
 
             else:
                 # Process has no stocks
-                outflows_relative = []
-                for flow in outflows:
-                    if flow.is_unit_absolute_value:
-                        total_outflows += flow.evaluated_value
-                    else:
-                        outflows_relative.append(flow)
+                outflows_abs = self._get_process_outflows_abs(process_id, year)
+                outflows_rel = self._get_process_outflows_rel(process_id, year)
+                total_outflows_abs = np.sum([flow.evaluated_value for flow in outflows_abs])
 
-                # Calculate values for all relative outflows
-                total_rel = total_inflows - total_outflows
-                for flow in outflows_relative:
+                # Remaining outflows to be distributed between all relative outflows
+                total_outflows_rel = total_inflows - total_outflows_abs
+                for flow in outflows_rel:
                     flow.is_evaluated = True
-                    flow.evaluated_value = flow.evaluated_share * total_rel
+                    flow.evaluated_value = flow.evaluated_share * total_outflows_rel
 
             is_evaluated = True
             return is_evaluated, outflows
@@ -550,7 +572,7 @@ class FlowSolver(object):
         # and create virtual flows to balance out those processes
         if self._use_virtual_flows:
             # epsilon is max allowed difference of input and outputs, otherwise create virtual processes and flows
-            self._create_virtual_flows(self._virtual_flows_epsilon)
+            self._create_virtual_flows(self._year_current, self._virtual_flows_epsilon)
 
     def _advance_timestep(self) -> None:
         self._year_prev = self._year_current
@@ -577,11 +599,10 @@ class FlowSolver(object):
         new_virtual_flow.is_virtual = True
         return new_virtual_flow
 
-    def _create_virtual_flows(self, epsilon=0.1) -> None:
+    def _create_virtual_flows(self, year: int, epsilon: float = 0.1) -> None:
         # Virtual outflow is unreported flow of process
         created_virtual_processes = {}
         created_virtual_flows = {}
-
         for process_id, process in self._current_process_id_to_process.items():
             # Skip virtual processes that were included during previous timesteps
             # to prevent cascading effect of creating infinite number of virtual processes and flows
@@ -589,17 +610,37 @@ class FlowSolver(object):
                 continue
 
             # Ignore root and leaf processes (= root process has no inflows and leaf process has no outflows)
-            is_root_process = self.is_root_process(process_id, self._year_current)
-            is_leaf_process = self.is_leaf_process(process_id, self._year_current)
+            is_root_process = self.is_root_process(process_id, year)
+            is_leaf_process = self.is_leaf_process(process_id, year)
             if is_root_process or is_leaf_process:
                 continue
 
-            inflows_total = self.get_process_inflows_total(process_id)
-            outflows_total = self.get_process_outflows_total(process_id)
-            process_mass_balance = inflows_total - outflows_total
-            if abs(process_mass_balance) < epsilon:
-                # Inflows and outflows are balanced, do nothing and continue to next process
-                continue
+            inflows_total = self.get_process_inflows_total(process_id, year)
+            outflows_total = self.get_process_outflows_total(process_id, year)
+
+            # If process has stock then consider only the stock outflows
+            if process_id in self._process_id_to_stock:
+                # Distribute SWE total outflow values
+                dsm_swe = self.get_dynamic_stocks_swe()[process.id]
+                stock_outflow = self._get_dynamic_stock_outflow_value(dsm_swe, year)
+
+                # Check that if process has absolute outflow then outflow value must be
+                # less than stock outflow. If absolute outflow is greater than stock outflow
+                # then there is user error with the data
+                outflows_abs = self._get_process_outflows_abs(process_id, year)
+                outflows_rel = self._get_process_outflows_rel(process_id, year)
+                total_outflows_abs = np.sum([flow.evaluated_value for flow in outflows_abs])
+                total_outflows_rel = np.sum([flow.evaluated_value for flow in outflows_rel])
+                process_mass_balance = stock_outflow - total_outflows_abs - total_outflows_rel
+
+                print(process_mass_balance)
+
+            else:
+                # Process has no stock
+                process_mass_balance = inflows_total - outflows_total
+                if abs(process_mass_balance) < epsilon:
+                    # Inflows and outflows are balanced, do nothing and continue to next process
+                    continue
 
             need_virtual_inflow = process_mass_balance < 0.0
             need_virtual_outflow = process_mass_balance > 0.0
@@ -608,7 +649,7 @@ class FlowSolver(object):
 
             if need_virtual_inflow:
                 # Create new virtual Process
-                v_id = self._virtual_process_id_prefix + process.id
+                v_id = self._virtual_process_id_prefix + process_id
                 v_name = self._virtual_process_id_prefix + process.name
                 v_ts = self._virtual_process_transformation_stage
                 v_process = self._create_virtual_process(v_id, v_name, v_ts)
@@ -624,7 +665,7 @@ class FlowSolver(object):
 
             if need_virtual_outflow:
                 # Create new virtual Process
-                v_id = self._virtual_process_id_prefix + process.id
+                v_id = self._virtual_process_id_prefix + process_id
                 v_name = self._virtual_process_id_prefix + process.name
                 v_ts = self._virtual_process_transformation_stage
                 v_process = self._create_virtual_process(v_id, v_name, v_ts)
@@ -640,21 +681,21 @@ class FlowSolver(object):
 
         # Add create virtual Flows and Processes to current year data
         for v_id, virtual_process in created_virtual_processes.items():
-            self._year_to_process_id_to_process[self._year_current][v_id] = virtual_process
-            self._year_to_process_id_to_flow_ids[self._year_current][v_id] = {"in": [], "out": []}
+            self._year_to_process_id_to_process[year][v_id] = virtual_process
+            self._year_to_process_id_to_flow_ids[year][v_id] = {"in": [], "out": []}
             self._unique_processes_id_to_process[v_id] = virtual_process
 
         for v_flow_id, virtual_flow in created_virtual_flows.items():
-            self._year_to_flow_id_to_flow[self._year_current][v_flow_id] = virtual_flow
-            self._year_to_process_id_to_flow_ids[self._year_current][virtual_flow.target_process_id]["in"].append(v_flow_id)
-            self._year_to_process_id_to_flow_ids[self._year_current][virtual_flow.source_process_id]["out"].append(v_flow_id)
+            self._year_to_flow_id_to_flow[year][v_flow_id] = virtual_flow
+            self._year_to_process_id_to_flow_ids[year][virtual_flow.target_process_id]["in"].append(v_flow_id)
+            self._year_to_process_id_to_flow_ids[year][virtual_flow.source_process_id]["out"].append(v_flow_id)
             self._unique_flow_id_to_flow[v_flow_id] = virtual_flow
 
         num_virtual_processes = len(created_virtual_processes)
         num_virtual_flows = len(created_virtual_flows)
         if num_virtual_processes or num_virtual_flows:
             print("Created {} virtual processes and {} virtual flows for year {}".format(
-                num_virtual_processes, num_virtual_flows, self._year_current))
+                num_virtual_processes, num_virtual_flows, year))
 
             for v_id, virtual_process in created_virtual_processes.items():
                 print("\t- Virtual process ID '{}'".format(v_id))
@@ -773,7 +814,11 @@ class FlowSolver(object):
         for stock_id, dsm in self.get_dynamic_stocks_swe().items():
             stock_total_outflow = dsm.compute_outflow_total()[year_index]
             outflows = self._get_process_outflows(stock_id)
+
             for flow in outflows:
+                if flow.is_unit_absolute_value:
+                    continue
+
                 flow.is_evaluated = True
                 flow.evaluated_value = flow.evaluated_share * stock_total_outflow
 

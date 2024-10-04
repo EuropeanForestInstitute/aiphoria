@@ -205,6 +205,9 @@ globals.graph.on("plotly_sliderchange", function(eventdata) {
     //console.log(eventdata.slider.name)
     // Update visual state of the selected trace
     updateToggleSmallNodes()
+
+    hideNodeInfoWindow()
+    createNodeInfoWindow()
 })
 
 globals.graph.on('plotly_hover', function(eventdata) {
