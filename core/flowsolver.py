@@ -633,8 +633,6 @@ class FlowSolver(object):
                 total_outflows_rel = np.sum([flow.evaluated_value for flow in outflows_rel])
                 process_mass_balance = stock_outflow - total_outflows_abs - total_outflows_rel
 
-                print(process_mass_balance)
-
             else:
                 # Process has no stock
                 process_mass_balance = inflows_total - outflows_total
