@@ -173,6 +173,7 @@ class DataProvider(object):
 
                         self._param_name_to_value[param_name] = param_default_value
                         print("")
+                        raise SystemExit(-1)
 
             else:
                 # Use default optional parameter value
