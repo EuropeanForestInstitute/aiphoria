@@ -810,10 +810,6 @@ class DataChecker(object):
                         errors.append("\t{}".format(p))
 
                 if not is_float:
-                    if is_fixed:
-                        errors.append("Stock distribution type 'Fixed' needs only number as distribution parameter")
-                        continue
-
                     if param not in process.stock_distribution_params:
                         errors.append("Stock distribution type '{}' needs following additional parameters:".format(
                             process.stock_distribution_type))
