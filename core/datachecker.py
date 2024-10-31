@@ -124,6 +124,10 @@ class DataChecker(object):
         if not self._check_flow_type_changes(df_year_to_flows):
             raise SystemExit(-1)
 
+        # Check if process has no inflows and only relative outflows:
+        if not self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows):
+            raise SystemExit(-1)
+
         # Build graph data
         process_id_to_process = {}
         process_id_to_stock = {}
@@ -611,9 +615,8 @@ class DataChecker(object):
             flow_data = df_year_flows[flow_id]
             flow_has_data = df_flow_id_has_data[flow_id]
 
-            # NOTE: Now checks the flow type on from the first occurrence of flow data!
-            # TODO: Do we need more fine-grained control? Current implementation makes the filling decision
-            # TODO: based on the flow type of the first flow data occurrence!
+            # NOTE: Now checks the flow type on from the first occurrence of flow data and assume that the flow type
+            # NOTE: does not change during the years
             first_valid_flow = flow_data[flow_id_to_min_year[flow_id]]
             is_abs_flow = first_valid_flow.is_unit_absolute_value
             is_rel_flow = not is_abs_flow
@@ -639,10 +642,9 @@ class DataChecker(object):
 
             if fill_method == ParameterFillMethod.Previous:
                 # Fill all missing flow values using the last found flow values
-                # Do not fill flows if flows are missing at the start of the flow_data
+                # NOTE: Do not fill flows if flows are missing at the start of the flow_data
                 flow_data.ffill(inplace=True)
 
-                # TODO: Should we fill also the flows missing at the start of the flow_data?
                 # DataFrame.ffill copies the object that the new created object references
                 # to the last found flow object so overwrite all objects in flow_data
                 # with the new deepcopied flow object
@@ -657,10 +659,9 @@ class DataChecker(object):
 
             if fill_method == ParameterFillMethod.Next:
                 # Fill all missing flow values using the next found flow values
-                # Do not fill flows if flows are missing at the end of the flow_data
+                # NOTE: Do not fill flows if flows are missing at the end of the flow_data
                 flow_data.bfill(inplace=True)
 
-                # TODO: Should we fill also the flows missing at the end of the flow_data?
                 # DataFrame.bfill copies the object that the new created object references
                 # to the last found flow object so overwrite all objects in flow_data
                 # with the new deepcopied flow object
@@ -747,8 +748,11 @@ class DataChecker(object):
         return df
 
     def _check_process_stock_parameters(self, processes: List[Process]):
-        # Check if Process has valid definition for stock distribution type
-        # Expected: Any keyword in allowed_distribution_types
+        """
+        Check if Process has valid definition for stock distribution type
+        :param processes: List of Processes
+        :return: True if no errors, False otherwise
+        """
         errors = []
         result_type = True
         print("Checking stock distribution types...")
@@ -821,3 +825,45 @@ class DataChecker(object):
             result_params = False
 
         return result_type and result_params
+
+    def _check_process_has_no_inflows_and_only_relative_outflows(self, df_year_to_process_flows: pd.DataFrame) -> bool:
+        """
+        Check for Processes that have no inflows and have only relative outflows.
+        This is error in data.
+
+        :param df_year_to_process_flows: DataFrame (index: year, column: Process name, cell: Dictionary)
+        :return: True if no errors, False otherwise
+        """
+        print("Checking for processes that have no inflows and only relative outflows...")
+        year_to_errors = {}
+        for year in df_year_to_process_flows.index:
+            row = df_year_to_process_flows.loc[year]
+            for entry in row:
+                # entry is Dictionary (keys: "process", "flows")
+                process = entry["process"]
+                flows = entry["flows"]
+                flows_in = flows["in"]
+                flows_out = flows["out"]
+
+                no_inflows = len(flows_in) == 0
+                all_outflows_relative = len(flows_out) > 0 and all([not flow.is_unit_absolute_value for flow in flows_out])
+
+                if no_inflows and all_outflows_relative:
+                    if year not in year_to_errors:
+                        year_to_errors[year] = []
+                    year_to_errors[year].append("{}".format(process.id))
+
+        has_errors = len(year_to_errors.keys()) > 0
+        if has_errors:
+            msg = "DataChecker: Found following Processes that can not be evaluated" + \
+                    " (= processes have no inflows and have ONLY relative outflows)\n"
+
+            msg += "Ensure that any process causing an error has at least one absolute incoming flow in the first year"
+            print(msg)
+            for year, errors in year_to_errors.items():
+                print("Year {} ({} errors):".format(year, len(errors)))
+                for msg in errors:
+                    print("\t{}".format(msg))
+                print("")
+
+        return not has_errors
