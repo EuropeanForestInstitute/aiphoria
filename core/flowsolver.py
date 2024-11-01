@@ -559,13 +559,49 @@ class FlowSolver(object):
             # Break from infinite loop if detected one
             current_iteration += 1
             if current_iteration >= self._max_iterations:
-                print("Infinite loop detected!")
+                print("Encountered processes that could not be evaluated in year {}:".format(self._year_current))
+                print("The following processes have no inflows and have ONLY relative outflows (= error in data)")
+                print("Possible ways to to fix:")
+                print("- Introducing a valid inflow to the process")
+                print("- Ensure that a valid inflow is present for the process in the model's initial year")
+                print("")
 
-                # Print out the unevaluated process ids that are part of the loop
-                print("Unevaluated process IDs:")
-                for pid in unevaluated_process_ids:
-                    print(pid)
+                # Get list of unevaluated flows
+                # The possible process causing the error is probably one of the flows' source processes
+                unevaluated_inflows = []
+                for p_id in current_year_process_ids:
+                    for flow in self._get_process_inflows(p_id, self._year_current):
+                        if not flow.is_evaluated:
+                            unevaluated_inflows.append(flow)
 
+                # Check all flow source processes and check for problematic processes:
+                # Invalid process means:
+                # - no inflows
+                # - only relative outflows
+                # This is definitely error in data
+                unique_process_ids = set()
+                for flow in unevaluated_inflows:
+                    source_process_inflows = self._get_process_inflows(flow.source_process_id, self._year_current)
+                    source_process_outflows = self._get_process_outflows(flow.source_process_id, self._year_current)
+                    has_no_inflows = len(source_process_inflows) == 0
+                    has_only_relative_outflows = len(source_process_outflows) > 0 and all(
+                        [not flow.is_unit_absolute_value for flow in source_process_outflows])
+
+                    if has_no_inflows and has_only_relative_outflows:
+                        unique_process_ids.add(flow.source_process_id)
+
+                print("List of invalid process IDs:")
+                for source_process_id in unique_process_ids:
+                    print("\t{}".format(source_process_id))
+                print("")
+
+                print("List of unevaluated flows:")
+                for flow in unevaluated_inflows:
+                    print("\t{}".format(flow))
+
+                # print("Unevaluated process IDs:")
+                # for pid in unevaluated_process_ids:
+                #     print("\t{}".format(pid))
                 raise SystemExit(-100)
 
         # Check for unreported inflows or outflows (= process mass balance != 0)
