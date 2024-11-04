@@ -80,6 +80,19 @@ class DataChecker(object):
             self._year_start = model_params[ParameterName.StartYear]
             self._year_end = model_params[ParameterName.EndYear]
 
+        # Check if start year is after end year and vice versa
+        if self._year_start > self._year_end:
+            print("Start year is greater than end year! (start year: {}, end year: {})".format(
+                self._year_start, self._year_end))
+            print("Stopping execution...")
+            raise SystemExit(-1)
+
+        if self._year_end < self._year_start:
+            print("End year is less than start year! (start year: {}, end year: {})".format(
+                self._year_start, self._year_end))
+            print("Stopping execution...")
+            raise SystemExit(-1)
+
         # Build array of available years, last year is also included in year range
         self._years = self._get_year_range()
 
