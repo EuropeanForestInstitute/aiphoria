@@ -1,4 +1,3 @@
-// Initialize the echarts instance based on the prepared dom
 const chart = echarts.init(document.getElementById("main"));
 
 // *******************
@@ -10,15 +9,80 @@ addEventListener("resize", (e) => {
   chart.resize();
 });
 
-chart.on("timelinechanged", function (params) {
-  // console.log(params)
-  const year = globals.years[params.currentIndex];
-  console.log("New year: ", year);
+// Listen when user changes process label type
+document.getElementById("processLabelType").addEventListener("change", (event) => {
+  const value = event.target.options[event.target.selectedIndex].value
+  switch(value) {
+    case "id":
+      globals.useProcessIdAsLabel = true
+      break
 
-  const graphData = buildGraphDataForYear(year)
-  const option = buildOption(graphData)
-  chart.setOption(option)
+    case "label":
+      globals.useProcessIdAsLabel = false
+      break
+  }
+
+  update({ resetViewPosition: false })
+})
+
+document.getElementById("hideUnconnectedProcesses").addEventListener("change", (event) => {
+  const value = event.target.options[event.target.selectedIndex].value
+  switch(value) {
+    case "yes":
+      globals.hideUnconnectedProcesses = true
+      break
+    case "no":
+      globals.hideUnconnectedProcesses = false
+      break
+  }
+
+  update({ resetViewPosition: false })
+})
+
+document.getElementById("resetView").addEventListener("click", (event) => {
+  update({ resetViewPosition: true })
+})
+
+
+// **************************
+// * ECharts event handlers *
+// **************************
+
+chart.on("timelinechanged", function (params) {
+  globals.currentYear = globals.years[params.currentIndex];
+  update()
 });
+
+chart.on("click", { dataType: "node" }, (params) => {
+  // console.log(params)
+  // const dataType = params.dataType
+  // const seriesIndex = params.seriesIndex
+  // const dataIndex = params.dataIndex
+  // console.log(dataType, seriesIndex, dataIndex)
+  // selectedNodes.push({ seriesIndex: seriesIndex, dataIndex: dataIndex })
+})
+
+chart.on("mousedown", { dataType: "node" }, (params) => {
+  console.log(params)
+})
+
+chart.on("mouseup", { dataType: "node" }, (params) => {
+  console.log(params)
+  const data = params.data
+  const seriesIndex = params.seriesIndex
+  const dataIndex = params.dataIndex
+  const transform = params.event.target.transform
+
+  const prevOption = chart.getOption()
+
+  // prevOption.series[seriesIndex].data[dataIndex].x = transform[4]
+  // prevOption.series[seriesIndex].data[dataIndex].y = transform[5]
+  // chart.setOption(prevOption)
+})
+
+// chart.on("click", { dataType: "edge" }, (params) => {
+//   console.log(params)
+// })
 
 // ********
 // * Data *
@@ -31,7 +95,7 @@ const globals = {
 
   nodeIds: [],
 
-  // Data from Python script
+  // Data from Python script, this string gets replaced by the JSON object
   yearToData: {year_to_data},
   years: [],
   currentYear: 0,
@@ -44,6 +108,15 @@ const globals = {
     legendData: [],
     processIdToDataIndex: new Map(),
   },
+
+  // ***********************
+  // * Changeable settings *
+  // ***********************
+  // If true, use process_id as label, otherwise use process_label
+  useProcessIdAsLabel: true,
+
+  // If true, hide processes that have no inflows and outflows
+  hideUnconnectedProcesses: false,
 };
 
 // *************
@@ -70,20 +143,40 @@ function buildGraphDataForYear(year) {
     nodeIds.push(node.process_id);
   }
 
+  const visibleNodeIds = []
   for (const [nodeIndex, nodeId] of nodeIds.entries()) {
     const node = nodeData[nodeIndex];
-    const process_id = node.process_id;
+    const processId = node.process_id;
+    const numInflows = node.num_inflows
+    const numOutflows = node.num_outflows
+
+    // If not showing unconnected processes then skip to next iteration
+    if(globals.hideUnconnectedProcesses) {
+      if(numInflows == 0 && numOutflows == 0) {
+        continue
+      }
+    }
+
+    // Check if process label exists
+    // Replace missing process label with text "Missing label (PROCESS_ID)"
+    const processLabel = node.process_label ? node.process_label : `Missing label (${processId})`
+    let processName = globals.useProcessIdAsLabel ? processId : processLabel
+
     const newNodeData = {
-      name: process_id,
-      id: process_id,
-      category: process_id,
+      id: processId,
+      name: processName,
+      label: processLabel,
+      category: processId,
+      numInflows: numInflows,
+      numOutflows: numOutflows,
       value: 0,
-      text: `Process ${process_id}`,
-    };
+      text: `Process ${processId}`,
+    }
 
     // Map process ID to data index
-    graphData.processIdToDataIndex.set(process_id, nodeIndex);
+    graphData.processIdToDataIndex.set(processId, nodeIndex);
     graphData.data.push(newNodeData);
+    visibleNodeIds.push(processId)
   }
 
   // Build edge data
@@ -109,6 +202,7 @@ function buildGraphDataForYear(year) {
         color: isUnitAbsoluteValue
           ? globals.edgeColors[0]
           : globals.edgeColors[1],
+        // width can be used to change line width
       },
 
       // Custom data
@@ -126,34 +220,28 @@ function buildGraphDataForYear(year) {
     graphData.categories.push(newCategoryData);
   }
 
-  // Build legend data
-  graphData.legendData = nodeIds;
-
+  // Build legend data - ECharts uses automatically node ID with this
+  //graphData.legendData = nodeIds;
+  graphData.legendData = visibleNodeIds;
   return graphData;
-  // // Build node data
-  // for(const nodeIndex of Object.keys(nodeData)) {
-  //   const node = nodeData[nodeIndex]
-  //   const process_id = node.process_id
-  //   const newNodeData = {
-  //     name: process_id,
-  //     id: process_id,
-  //     category: process_id,
-  //     value: 0,
-  //     text: `Process ${process_id}`,
-  //   }
-  //
-  //   // Map process ID to data index
-  //   globals.processIdToDataIndex.set(process_id, globals.graphData.data.length)
-  //   globals.graphData.data.push(newNodeData)
-  // }
 }
 
-function buildOption(graphData) {
+function buildOption(graphData, updateOptions = { resetViewPosition: true }) {
+  const center = ["50%", "50%"]
+  if(!updateOptions.resetViewPosition) {
+    // Use previous center
+    const prevOption = chart.getOption()
+    const prevCenter = prevOption.series[0].center
+    center[0] = prevCenter[0]
+    center[1] = prevCenter[1]
+  }
+
   // graphData is year-specific data
   const option = {
     baseOption: {
       title: {
-        text: "Process connections",
+        text: "Process connection graph",
+        subtext: `Year ${globals.currentYear}`
       },
       tooltip: {
         formatter: function (params) {
@@ -198,7 +286,7 @@ function buildOption(graphData) {
           data: graphData.data,
           links: graphData.link,
           categories: graphData.categories,
-          center: [ "50%", "50%"],
+          center: center,
           zoom: 2,
           draggable: true,
           symbolSize: 40,
@@ -232,24 +320,22 @@ function buildOption(graphData) {
 
 // Initialize data
 function initialize() {
-  console.log("yearToData: ", globals.yearToData);
-  console.log("Initializing...");
-
-  // Update years
   globals.years = Object.keys(globals.yearToData);
   globals.currentYear = globals.years[0];
-
-  // Get new graphData for year, build new option and set is as active
-  globals.graphData = buildGraphDataForYear(globals.currentYear);
-  const option = buildOption(globals.graphData);
-  chart.setOption(option, { notMerge: true });
+  update()
 }
 
-initialize();
+function update(updateOptions = { resetViewPosition: true }) {
+  const year = globals.currentYear
+  const graphData = buildGraphDataForYear(year)
+  const option = buildOption(graphData, updateOptions)
+  chart.setOption(option)
+  globals.graphData = graphData
+}
 
-// chart.on("highlight", (e) => {
-//   // console.log("Highlighting ", e)
-// })
+console.log("Initializing...")
+initialize();
+console.log("Done.")
 
 // let selectedNodes = []
 // chart.on("select", (e) => {
@@ -272,19 +358,6 @@ initialize();
 //   }
 //
 //   chart.setOption(newOption)
-// })
-
-// chart.on("click", { dataType: "node" }, (params) => {
-//   console.log(params)
-//
-//   const dataType = params.dataType
-//   const seriesIndex = params.seriesIndex
-//   const dataIndex = params.dataIndex
-//   selectedNodes.push({ seriesIndex: seriesIndex, dataIndex: dataIndex })
-// })
-
-// chart.on("click", { dataType: "edge" }, (params) => {
-//   console.log(params)
 // })
 
 // chart.on("mouseover", (params) => {
