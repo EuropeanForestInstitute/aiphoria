@@ -19,13 +19,12 @@ class NetworkGraph(object):
         with open("./core/network_graph.js", mode="r", encoding="utf-8") as fs:
             self._visualizer = fs.read()
 
-    def build(self, df_process_to_flows: pd.DataFrame, years_to_check: List[int]):
+    def build(self, df_process_to_flows: pd.DataFrame, years_to_check: List[int]) -> None:
         """
-        Build HTML file with ECharts visualization library.
+        Compile and insert data to HTML file.
 
-        :param df_process_to_flows:
-        :param years_to_check:
-        :return:
+        :param df_process_to_flows: DataFrame
+        :param years_to_check: List of years that are included
         """
         year_to_data = {}
         for year in years_to_check:
@@ -78,8 +77,13 @@ class NetworkGraph(object):
         self._html = self._html.replace("{echarts_content}", self._echarts)
         self._html = self._html.replace("{visualizer_content}", self._visualizer)
 
-    def show(self):
-        filename = "export.html"
+    def show(self, output_filename: str = "network_graph.html") -> None:
+        """
+        Build HTML file and open it in browser.
+
+        :param output_filename: Filename for the HTML file
+        """
+        filename = output_filename
         with open(filename, "w", encoding="utf-8") as fs:
             fs.write(self._html)
         webbrowser.open("file://" + os.path.realpath(filename))
