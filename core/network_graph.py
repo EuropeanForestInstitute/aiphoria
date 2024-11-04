@@ -37,11 +37,15 @@ class NetworkGraph(object):
             new_edge_index = 0
             for row in rows:
                 process = row["process"]
+                inflows = row["flows"]["in"]
                 outflows = row["flows"]["out"]
 
                 # Create node data
                 new_node_data = {
                     "process_id": process.id,
+                    "process_label": process.label_in_graph,
+                    "num_inflows": len(inflows),
+                    "num_outflows": len(outflows),
                     "transformation_stage": process.transformation_stage,
                 }
                 node_index_to_data[new_node_index] = new_node_data
@@ -86,4 +90,4 @@ class NetworkGraph(object):
         filename = output_filename
         with open(filename, "w", encoding="utf-8") as fs:
             fs.write(self._html)
-        webbrowser.open("file://" + os.path.realpath(filename))
+        # webbrowser.open("file://" + os.path.realpath(filename))
