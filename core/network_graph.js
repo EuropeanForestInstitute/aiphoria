@@ -22,7 +22,21 @@ document.getElementById("processLabelType").addEventListener("change", (event) =
       break
   }
 
-  update({ resetViewPosition: false })
+  // Toggle node label type (process ID or label)
+  const option = {...chart.getOption()}
+  for(const [nodeIndex, node] of option.series[0].data.entries()) {
+    if(globals.useProcessIdAsLabel) {
+      node.name = node.id
+    } else {
+      if(node.label) {
+        node.name = node.label
+      } else {
+        node.name = `Missing label (${node.id})`
+      }
+    }
+  }
+
+  chart.setOption(option)
 })
 
 document.getElementById("hideUnconnectedProcesses").addEventListener("change", (event) => {
@@ -36,11 +50,40 @@ document.getElementById("hideUnconnectedProcesses").addEventListener("change", (
       break
   }
 
-  update({ resetViewPosition: false })
+  // Rebuild nodes for this year but do not include any nodes that have no inflows AND no outflows
+  // 1) Store node ID to position for all nodes
+  const nodeIndexToPosition = new Map()
+  for(const [nodeIndex, entry] of getNodePositions().entries()) {
+    nodeIndexToPosition.set(nodeIndex, entry)
+  }
+
+  // Apply current position to all nodes
+  // TODO: Not working perfectly yet
+  const option = {...chart.getOption()}
+  for(const [nodeIndex, node] of option.series[0].data.entries()) {
+    const nodePosition = nodeIndexToPosition.get(nodeIndex)
+    node.x = nodePosition.x
+    node.y = nodePosition.y
+  }
+  chart.setOption(option)
+
+  updateNew({ resetView: false })
 })
 
 document.getElementById("resetView").addEventListener("click", (event) => {
-  update({ resetViewPosition: true })
+  updateNew({ resetView: true })
+})
+
+document.getElementById("freezeNodePositions").addEventListener("click", (event) => {
+  const label = document.getElementById("freezeNodePositionsButtonLabel")
+  globals.freezeNodePositions = !globals.freezeNodePositions
+  if(globals.freezeNodePositions) {
+    freezeNodePositions()
+    label.innerHTML = "Unfreeze"
+  } else {
+    unfreezeNodePositions()
+    label.innerHTML = "Freeze"
+  }
 })
 
 
@@ -50,7 +93,11 @@ document.getElementById("resetView").addEventListener("click", (event) => {
 
 chart.on("timelinechanged", function (params) {
   globals.currentYear = globals.years[params.currentIndex];
-  update()
+
+  // Reset freeze button
+  globals.freezeNodePositions = false
+  document.getElementById("freezeNodePositionsButtonLabel").innerHTML = "Freeze"
+  updateNew({ resetView: true})
 });
 
 chart.on("click", { dataType: "node" }, (params) => {
@@ -62,27 +109,30 @@ chart.on("click", { dataType: "node" }, (params) => {
   // selectedNodes.push({ seriesIndex: seriesIndex, dataIndex: dataIndex })
 })
 
-chart.on("mousedown", { dataType: "node" }, (params) => {
-  console.log(params)
-})
-
-chart.on("mouseup", { dataType: "node" }, (params) => {
-  console.log(params)
-  const data = params.data
-  const seriesIndex = params.seriesIndex
-  const dataIndex = params.dataIndex
-  const transform = params.event.target.transform
-
-  const prevOption = chart.getOption()
-
-  // prevOption.series[seriesIndex].data[dataIndex].x = transform[4]
-  // prevOption.series[seriesIndex].data[dataIndex].y = transform[5]
-  // chart.setOption(prevOption)
-})
-
 // chart.on("click", { dataType: "edge" }, (params) => {
 //   console.log(params)
 // })
+
+let selectedNode = null
+chart.on("mousedown", { dataType: "node" }, (params) => {
+  selectedNode = {
+    seriesIndex: params.seriesIndex,
+    dataIndex: params.dataIndex,
+  }
+})
+
+chart.on("mousemove", { dataType: "node" }, (params) => {
+  if(!selectedNode) {
+    return
+  }
+
+  updateNodePosition(globals.currentYear, selectedNode.seriesIndex, selectedNode.dataIndex)
+})
+
+chart.on("mouseup", { dataType: "node" }, (params) => {
+  selectedNode = null
+})
+
 
 // ********
 // * Data *
@@ -90,13 +140,15 @@ chart.on("mouseup", { dataType: "node" }, (params) => {
 
 // Global variables
 const globals = {
+  // Original data, this will get replaced with JSON object from Python
+  originalYearToData: {year_to_data},
+
   // [Absolute flow color, relative flow color]
   edgeColors: ["rgba(59, 162, 114, 1)", "rgba(255, 50, 50, 1)"],
 
   nodeIds: [],
 
-  // Data from Python script, this string gets replaced by the JSON object
-  yearToData: {year_to_data},
+  yearToData: new Map(),
   years: [],
   currentYear: 0,
 
@@ -117,11 +169,74 @@ const globals = {
 
   // If true, hide processes that have no inflows and outflows
   hideUnconnectedProcesses: false,
+
+  // Freeze node positions, disabled by default to allow force layout
+  // to find node positions
+  freezeNodePositions: false,
 };
 
 // *************
 // * Functions *
 // *************
+
+function getGraphNodeFromNodeData(nodeIndex, year) {
+  const yearData = globals.yearToData.get(year)
+  const nodeIndexToData = yearData.get("nodeIndexToData")
+  const nodeData = nodeIndexToData.get(nodeIndex)
+
+  const processId = nodeData.process_id
+  const processLabel = nodeData.process_label
+  const numInflows = parseInt(nodeData.num_inflows)
+  const numOutflows = parseInt(nodeData.num_outflows)
+  const newGraphNode = {
+    id: processId,
+    name: processId,
+    label: processLabel,
+    category: processId,
+    numInflows: numInflows,
+    numOutflows: numOutflows,
+    value: 0,
+    text: `Process ${processId}`,
+  }
+
+  return newGraphNode
+}
+
+function getGraphEdgeFromEdgeData(edgeIndex, year) {
+  const yearData = globals.yearToData.get(year)
+  const edgeIndexToData = yearData.get("edgeIndexToData")
+  const edgeData = edgeIndexToData.get(edgeIndex)
+
+  const sourceProcessId = edgeData.source_process_id;
+  const targetProcessId = edgeData.target_process_id;
+  const isUnitAbsoluteValue = edgeData.is_unit_absolute_value;
+  const value = edgeData.value;
+  const unit = edgeData.unit;
+
+  const newGraphEdge = {
+    source: sourceProcessId,
+    target: targetProcessId,
+    label: {
+      show: true,
+      position: "middle",
+      formatter: (params) => {
+        return isUnitAbsoluteValue ? "ABS" : "%";
+      },
+    },
+    lineStyle: {
+      color: isUnitAbsoluteValue
+        ? globals.edgeColors[0]
+        : globals.edgeColors[1],
+      // width can be used to change line width
+    },
+
+    // Custom data
+    text: isUnitAbsoluteValue ? "Absolute flow" : "Relative flow",
+    value: `${value} ${unit}`,
+  }
+
+  return newGraphEdge
+}
 
 function buildGraphDataForYear(year) {
   const graphData = {
@@ -133,8 +248,8 @@ function buildGraphDataForYear(year) {
   };
 
   // Data for current year
-  const nodeData = globals.yearToData[year]["node_index_to_data"];
-  const edgeData = globals.yearToData[year]["edge_index_to_data"];
+  const nodeData = globals.originalYearToData[year]["node_index_to_data"];
+  const edgeData = globals.originalYearToData[year]["edge_index_to_data"];
 
   // Build node data
   const nodeIds = [];
@@ -152,7 +267,7 @@ function buildGraphDataForYear(year) {
 
     // If not showing unconnected processes then skip to next iteration
     if(globals.hideUnconnectedProcesses) {
-      if(numInflows == 0 && numOutflows == 0) {
+      if((numInflows == 0) && (numOutflows == 0)) {
         continue
       }
     }
@@ -162,6 +277,7 @@ function buildGraphDataForYear(year) {
     const processLabel = node.process_label ? node.process_label : `Missing label (${processId})`
     let processName = globals.useProcessIdAsLabel ? processId : processLabel
 
+    // Node information for ECharts
     const newNodeData = {
       id: processId,
       name: processName,
@@ -181,34 +297,6 @@ function buildGraphDataForYear(year) {
 
   // Build edge data
   for (const edgeIndex of Object.keys(edgeData)) {
-    const edge = edgeData[edgeIndex];
-    const flowId = edge.flow_id;
-    const sourceProcessId = edge.source_process_id;
-    const targetProcessId = edge.target_process_id;
-    const isUnitAbsoluteValue = edge.is_unit_absolute_value;
-    const value = edge.value;
-    const unit = edge.unit;
-    const newEdgeData = {
-      source: sourceProcessId,
-      target: targetProcessId,
-      label: {
-        show: true,
-        position: "middle",
-        formatter: (params) => {
-          return isUnitAbsoluteValue ? "ABS" : "%";
-        },
-      },
-      lineStyle: {
-        color: isUnitAbsoluteValue
-          ? globals.edgeColors[0]
-          : globals.edgeColors[1],
-        // width can be used to change line width
-      },
-
-      // Custom data
-      text: isUnitAbsoluteValue ? "Absolute flow" : "Relative flow",
-      value: `${value} ${unit}`,
-    };
     graphData.link.push(newEdgeData);
   }
 
@@ -221,14 +309,72 @@ function buildGraphDataForYear(year) {
   }
 
   // Build legend data - ECharts uses automatically node ID with this
-  //graphData.legendData = nodeIds;
   graphData.legendData = visibleNodeIds;
   return graphData;
 }
 
-function buildOption(graphData, updateOptions = { resetViewPosition: true }) {
+function buildGraphDataForYearNew(year, updateOptions = {}) {
+  const graphData = {
+    data: [],
+    link: [],
+    categories: [],
+    legendData: [],
+    processIdToDataIndex: new Map(),
+  };
+
+  // Data for current year
+  const nodeIndexToData = globals.yearToData.get(year).get("nodeIndexToData");
+  for(const [nodeIndex, nodeData] of nodeIndexToData.entries()) {
+    const graphNode = getGraphNodeFromNodeData(nodeIndex, year)
+
+    if(globals.hideUnconnectedProcesses) {
+      const hasNoInflows = graphNode.numInflows === 0
+      const hasNoOutflows = graphNode.numOutflows === 0
+      if(hasNoInflows && hasNoOutflows) {
+        continue
+      }
+    }
+
+    if(globals.useProcessIdAsLabel) {
+      graphNode.name = graphNode.id
+    } else {
+      if(graphNode.label) {
+        graphNode.name = graphNode.label
+      } else {
+        graphNode.name = `Missing label (${graphNode.id})`
+      }
+    }
+
+    graphData.data.push(graphNode)
+  }
+
+  const edgeIndexToData = globals.yearToData.get(year).get("edgeIndexToData");
+  for(const [edgeIndex, edgeData] of edgeIndexToData.entries()) {
+    const graphEdge = getGraphEdgeFromEdgeData(edgeIndex, year)
+    graphData.link.push(graphEdge)
+  }
+
+  for(const node of graphData.data) {
+    const newCategory = {
+      name: node.id
+    }
+    graphData.categories.push(newCategory)
+  }
+
+  visibleNodeIds = []
+  for(const node of graphData.data) {
+    visibleNodeIds.push(node.id)
+  }
+
+  // Build legend data - ECharts uses automatically node ID with this
+  graphData.legendData = visibleNodeIds;
+  return graphData;
+}
+
+
+function buildOptionNew(graphData, updateOptions = { resetView: false }) {
   const center = ["50%", "50%"]
-  if(!updateOptions.resetViewPosition) {
+  if(!updateOptions.resetView) {
     // Use previous center
     const prevOption = chart.getOption()
     const prevCenter = prevOption.series[0].center
@@ -247,7 +393,6 @@ function buildOption(graphData, updateOptions = { resetViewPosition: true }) {
         formatter: function (params) {
           if (params.dataType == "node") {
             return;
-
             // let text = params.data.text
             // return `<div>${text}</div>`
           }
@@ -282,7 +427,7 @@ function buildOption(graphData, updateOptions = { resetViewPosition: true }) {
         {
           name: "Process flows",
           type: "graph",
-          layout: "force",
+          layout: globals.freezeNodePositions ? "none" : "force",
           data: graphData.data,
           links: graphData.link,
           categories: graphData.categories,
@@ -320,17 +465,134 @@ function buildOption(graphData, updateOptions = { resetViewPosition: true }) {
 
 // Initialize data
 function initialize() {
-  globals.years = Object.keys(globals.yearToData);
+  globals.years = Object.keys(globals.originalYearToData);
   globals.currentYear = globals.years[0];
-  update()
+
+  // Create data mapping for each year
+  const yearToData = new Map()
+  for(const year of globals.years) {
+    const yearData = new Map()
+    const nodeData = {...globals.originalYearToData[year]["node_index_to_data"]}
+    const edgeData = {...globals.originalYearToData[year]["edge_index_to_data"]}
+
+    // Map node index to node data
+    const nodeIdToNodeIndex = new Map()
+    const nodeIndexToData = new Map()
+    for (const nodeIndex of Object.keys(nodeData)) {
+      const node = nodeData[nodeIndex]
+      const nodeId = node.process_id
+      nodeIndexToData.set(nodeIndex, node)
+      nodeIdToNodeIndex.set(nodeId, nodeIndex)
+    }
+
+    // Map edge index to edge data
+    const edgeIndexToData = new Map()
+    for (const edgeIndex of Object.keys(edgeData)) {
+      const edge = edgeData[edgeIndex];
+      edgeIndexToData.set(edgeIndex, edge)
+    }
+
+    yearData.set("nodeIndexToData", nodeIndexToData)
+    yearData.set("nodeIdToIndex", nodeIdToNodeIndex)
+    yearData.set("edgeIndexToData", edgeIndexToData)
+    yearToData.set(year, yearData)
+  }
+
+  globals.yearToData = yearToData
+  updateNew({ resetView: true })
 }
 
-function update(updateOptions = { resetViewPosition: true }) {
-  const year = globals.currentYear
-  const graphData = buildGraphDataForYear(year)
-  const option = buildOption(graphData, updateOptions)
+function updateNew(updateOptions = { resetView: false }) {
+  const graphData = buildGraphDataForYearNew(globals.currentYear)
+  const option = buildOptionNew(graphData, updateOptions)
   chart.setOption(option)
   globals.graphData = graphData
+}
+
+function freezeNodePositions() {
+  const option = {...chart.getOption()}
+  const nodeIdToPosition = new Map()
+  const nodeIdToNodeIndex = new Map()
+
+  for(const [nodeIndex, nodePosition] of getNodePositions().entries()) {
+    const nodeId = option.series[0].data[nodeIndex].id
+    nodeIdToPosition.set(nodeId, nodePosition)
+    nodeIdToNodeIndex.set(nodeId, nodeIndex)
+  }
+
+  const nodeIndexToData = globals.yearToData.get(globals.currentYear).get("nodeIndexToData")
+  for(const [nodeId, nodePosition] of nodeIdToPosition.entries()) {
+    const nodeIndex = nodeIdToNodeIndex.get(nodeId)
+
+    // Update visual position data
+    const visualNodeData = option.series[0].data[nodeIndex]
+    visualNodeData.x = nodePosition.x
+    visualNodeData.y = nodePosition.y
+
+    // TODO: Implement storing current position!
+    // Update actual position data
+    //let actualNodeData = nodeIndexToData.get(nodeIndex)
+    // actualNodeData.x = nodePosition.x
+    // actualNodeData.y = nodePosition.y
+  }
+
+  option.series[0].layout = "none"
+  chart.setOption(option)
+}
+
+function unfreezeNodePositions() {
+  // Update all nodes position when unfreezing
+  const option = chart.getOption()
+  for(const [nodeIndex, nodePosition] of getNodePositions().entries()) {
+    option.series[0].data[nodeIndex].x = nodePosition.x
+    option.series[0].data[nodeIndex].y = nodePosition.y
+  }
+  option.series[0].layout = "force"
+  chart.setOption(option)
+
+  // TODO: Implement
+  // // Update yearToData with updated positions
+  // for(const [nodeIndex, nodePosition] of nodePositions.entries()) {
+  //   globals.originalYearToData[globals.currentYear]["node_index_to_data"][nodeIndex].x = nodePosition.x
+  //   globals.originalYearToData[globals.currentYear]["node_index_to_data"][nodeIndex].y = nodePosition.y
+  // }
+
+  // // Update option with updated positions
+  // const option = {...chart.getOption()}
+  // for(const [index, node] of option.series[0].data.entries()) {
+  //   node.x = nodePositions[index].x
+  //   node.y = nodePositions[index].y
+  // }
+}
+
+function updateNodePosition(year, seriesIndex, dataIndex) {
+  const nodes = chart.getModel().getSeriesByIndex(seriesIndex).getData()
+  const layout = nodes.getItemLayout(dataIndex)
+  const x = layout[0]
+  const y = layout[1]
+
+  globals.originalYearToData[year]["node_index_to_data"][dataIndex].x = x
+  globals.originalYearToData[year]["node_index_to_data"][dataIndex].y = y
+
+  // const nodeData = globals.originalYearToData[globals.currentYear]["node_index_to_data"]
+  // for(const nodeIndex of Object.keys(nodeData)) {
+  //   nodeData[nodeIndex].x = option.series[0].data[nodeIndex].x
+  //   nodeData[nodeIndex].y = option.series[0].data[nodeIndex].y
+  // }
+}
+
+function getNodePositions() {
+  // Get list of all node positions and return them as array
+  const nodePositions = []
+  const nodes = chart.getModel().getSeriesByIndex(0).getData()
+  nodes.each(function (index) {
+    const layout = nodes.getItemLayout(index)
+    const x = layout[0]
+    const y = layout[1]
+    nodePositions.push({ x, y })
+  })
+
+  return nodePositions
 }
 
 console.log("Initializing...")
@@ -411,3 +673,4 @@ console.log("Done.")
 //     ],
 //   })
 // })
+
