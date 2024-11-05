@@ -90,4 +90,4 @@ class NetworkGraph(object):
         filename = output_filename
         with open(filename, "w", encoding="utf-8") as fs:
             fs.write(self._html)
-        webbrowser.open("file://" + os.path.realpath(filename))
+        # webbrowser.open("file://" + os.path.realpath(filename))
