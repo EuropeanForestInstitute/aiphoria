@@ -250,7 +250,7 @@ class DynamicStockModel(object):
                         self.sf[m::,m] = scipy.stats.foldnorm.sf(np.arange(0,len(self.t)-m), self.lt['Mean'][m]/self.lt['StdDev'][m], 0, scale=self.lt['StdDev'][m])
                         # NOTE: call this option with the parameters of the normal distribution mu and sigma of curve BEFORE folding,
                         # curve after folding will have different mu and sigma.
-                        
+
             if self.lt['Type'] == 'LogNormal': # lognormal distribution
                 # Here, the mean and stddev of the lognormal curve, 
                 # not those of the underlying normal distribution, need to be specified! conversion of parameters done here:
