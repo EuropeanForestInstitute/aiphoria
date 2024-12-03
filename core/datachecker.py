@@ -773,7 +773,7 @@ class DataChecker(object):
         errors = []
         result_type = True
         print("Checking stock distribution types...")
-        allowed_distribution_types = ["Fixed", "Normal", "LogNormal", "FoldedNormal", "Weibull"]
+        allowed_distribution_types = ["Fixed", "Simple", "Normal", "LogNormal", "FoldedNormal", "Weibull"]
         for process in processes:
             if process.stock_distribution_type not in allowed_distribution_types:
                 msg = "Process {} has invalid stock distribution type '{}' in row {} in sheet '{}'".format(
@@ -805,12 +805,14 @@ class DataChecker(object):
                 errors.append(msg)
                 continue
 
-            # Mean uses StdDev
+            # Fixed uses Mean
+            # Simple uses Mean
             # Normal uses Mean and StdDev
             # FoldedNormal uses Mean and StdDev
             # LogNormal uses Mean and StdDev
             required_params_for_distribution_type = {
                 "Fixed": [""],
+                "Simple": [""],
                 "Normal": ['stddev'],
                 "FoldedNormal": ['stddev'],
                 "LogNormal": ['stddev'],

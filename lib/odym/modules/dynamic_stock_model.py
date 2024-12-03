@@ -223,6 +223,17 @@ class DynamicStockModel(object):
                     self.sf[m::,m] = np.multiply(1, (np.arange(0,len(self.t)-m) < self.lt['Mean'][m])) # converts bool to 0/1
                 # Example: if Lt is 3.5 years fixed, product will still be there after 0, 1, 2, and 3 years, gone after 4 years.
 
+            if self.lt['Type'] == 'Simple':  # Implement simple first-order decay
+                for m in range(0, len(self.t)):  # Loop over each cohort index
+                    mean_lifetime = self.lt['Mean'][m]
+                # Calculate decay constant k based on mean lifetime
+                # k = ln(2) / half-life if half-life is provided; otherwise:
+                    k = 1 / mean_lifetime  # For mean lifetime-based decay constant
+                # Create decay factors for each time step
+                    decay_factors = np.exp(-k * np.arange(0, len(self.t) - m))
+                # Apply the decay factor to each cohort over time
+                    self.sf[m::, m] = decay_factors
+
             if self.lt['Type'] == 'Normal': # normally distributed lifetime with mean and standard deviation. Watch out for nonzero values 
                 # for negative ages, no correction or truncation done here. Cf. note below.
                 for m in range(0, len(self.t)):  # cohort index
@@ -239,7 +250,7 @@ class DynamicStockModel(object):
                         self.sf[m::,m] = scipy.stats.foldnorm.sf(np.arange(0,len(self.t)-m), self.lt['Mean'][m]/self.lt['StdDev'][m], 0, scale=self.lt['StdDev'][m])
                         # NOTE: call this option with the parameters of the normal distribution mu and sigma of curve BEFORE folding,
                         # curve after folding will have different mu and sigma.
-                        
+
             if self.lt['Type'] == 'LogNormal': # lognormal distribution
                 # Here, the mean and stddev of the lognormal curve, 
                 # not those of the underlying normal distribution, need to be specified! conversion of parameters done here:
