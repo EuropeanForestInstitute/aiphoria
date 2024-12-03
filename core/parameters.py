@@ -1,3 +1,6 @@
+# Parameters names are defined in this file
+# and DataProvider file provides the default
+# values for each parameter
 from enum import Enum
 
 
@@ -34,6 +37,8 @@ class ParameterName(str, Enum):
     FillMissingAbsoluteFlows: str = "fill_missing_absolute_flows"
     FillMissingRelativeFlows: str = "fill_missing_relative_flows"
     FillMethod: str = "fill_method"
+
+    SheetNameFlowVariations: str = "sheet_name_flow_variations"
 
 
 class ParameterFillMethod(str, Enum):

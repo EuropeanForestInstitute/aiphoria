@@ -12,10 +12,11 @@ const globals = {
     currentTrace: null,
 
     // Toggle showing small nodes and their immediate links on or off
-    toggleSmallNodes: true, // true = show small nodes, false = hide small nodes
+    // true = show small nodes
+    // false = hide small nodes
+    toggleSmallNodes: true,
 
-    // Nodes that have total inflows or total outflows less than this value will be
-    // hidden
+    // Nodes that have total inflows or total outflows less than this value will be hidden
     smallNodeThreshold: {small_node_threshold},
 
     // Toggle showing window that shows normalized node positions
@@ -52,6 +53,7 @@ function initializeGlobalState() {
             visibleTraceIndex = i
         }
     }
+
     globals.currentTraceIndex = visibleTraceIndex
     globals.currentTrace = globals.graph.data[globals.currentTraceIndex]
 }
@@ -97,7 +99,14 @@ function updateToggleSmallNodes() {
         // Node ID -> { in: inflows[], out: outflows[] }
         const nodeIdToFlows = new Map()
         for(const nodeId of nodeIds) {
-            nodeIdToFlows.set(nodeId, { "in": [], "out": [], "in_values": [], "out_values": [] })
+            const nodeData = {
+                in: [],
+                out: [],
+                valuesIn: [],
+                valuesOut: [],
+            }
+
+            nodeIdToFlows.set(nodeId, nodeData)
         }
 
         // Build inflows and outflows for node IDs
@@ -105,17 +114,27 @@ function updateToggleSmallNodes() {
             const sourceNodeId = trace.link.source[index]
             const targetNodeId = trace.link.target[index]
             const value = trace.link.value[index]
-            nodeIdToFlows.get(sourceNodeId)["out"].push(targetNodeId)
-            nodeIdToFlows.get(sourceNodeId)["out_values"].push(value)
-            nodeIdToFlows.get(targetNodeId)["in"].push(sourceNodeId)
-            nodeIdToFlows.get(targetNodeId)["in_values"].push(value)
+
+            const sourceNodeData = nodeIdToFlows.get(sourceNodeId)
+            sourceNodeData.out.push(targetNodeId)
+            sourceNodeData.valuesOut.push(value)
+
+            const targetNodeData = nodeIdToFlows.get(targetNodeId)
+            targetNodeData.in.push(sourceNodeId)
+            targetNodeData.valuesIn.push(value)
+
+            // nodeIdToFlows.get(sourceNodeId)["out"].push(targetNodeId)
+            // nodeIdToFlows.get(sourceNodeId)["out_values"].push(value)
+
+            // nodeIdToFlows.get(targetNodeId)["in"].push(sourceNodeId)
+            // nodeIdToFlows.get(targetNodeId)["in_values"].push(value)
         }
 
         for(const [nodeId, flows] of nodeIdToFlows.entries()) {
             const numInflows = flows["in"].length
             const numOutflows = flows["out"].length
-            let totalInflows = flows["in_values"].reduce((partialSum, val) => partialSum + val, 0)
-            let totalOutflows = flows["out_values"].reduce((partialSum, val) => partialSum + val, 0)
+            let totalInflows = flows["valuesIn"].reduce((partialSum, val) => partialSum + val, 0)
+            let totalOutflows = flows["valuesOut"].reduce((partialSum, val) => partialSum + val, 0)
             let hide = false
 
             if(numInflows == 0 && totalOutflows < globals.smallNodeThreshold) {
@@ -169,6 +188,8 @@ function updateShowVirtualNodes() {
         // Show all virtual flows
         for(let linkIndex = 0; linkIndex < trace.link.source.length; linkIndex++) {
             if(trace.link.customdata[linkIndex].is_virtual) {
+                console.log(trace.link.customdata[linkIndex])
+
                 trace.link.color[linkIndex] = initialData.link.color[linkIndex]
                 trace.link.customdata[linkIndex].is_visible = true
             }
@@ -496,3 +517,41 @@ function removeNodeInfoWindow() {
         elem.remove()
     }
 }
+
+
+
+
+const buttonStyleText = `
+.button-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: "Open Sans", verdana, arial, sans-serif;
+    //box-shadow: 0px 0px 4px 4px rgba(0, 0, 0, 0.10)
+}
+`
+
+// const buttonStyle = document.createElement('style')
+// buttonStyle.type = 'text/css'
+// buttonStyle.innerHTML = buttonStyleText
+// document.getElementsByTagName('head')[0].appendChild(buttonStyle)
+//
+// const divButtons = document.createElement("div")
+// divButtons.className = 'button-wrapper'
+// divButtons.id = "button-wrapper"
+// divButtons.innerHTML = 'Button text'
+//
+// const body = document.getElementsByTagName("body")[0]
+// body.append(divButtons)
+
+// const buttonCopy = document.createElement('button')
+// buttonCopy.textContent = "Button text"
+// buttonCopy.style = "margin-bottom: 1rem"
+//
+// const elem = document.querySelector("menulayer")
+// elem.appendChild(divButtons)
+// elem.appendChild(buttonCopy)

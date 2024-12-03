@@ -5,14 +5,13 @@ from PIL import Image
 
 
 class DataVisualizer(object):
-    def __init__(self):
+    def __init__(self, mode: str = "network"):
         self._process_name_override_mappings = dict()
         self._button_font_size = 13
         self._fig = None
         self._script = ""
 
     def show(self):
-        #pass
         self._fig.show(renderer="browser", post_script=[self._script], config={'displayModeBar': False})
 
     def build(self, flowsolver: FlowSolver, params: dict):
@@ -80,8 +79,12 @@ class DataVisualizer(object):
                     year_targets.append(target_index)
                     year_link_values.append(flow.evaluated_value)
 
-                    link_color = virtual_flow_color
-                    if not flow.is_virtual:
+                    link_color = ""
+                    if flow.is_virtual:
+                        link_color = virtual_flow_color.lstrip("#")
+                        red, green, blue = tuple(int(link_color[i:i+2], 16) for i in (0, 2, 4))
+                        link_color = "rgba({},{},{},{})".format(red, green, blue, flow_alpha)
+                    else:
                         link_color = process_transformation_stage_colors[process.transformation_stage]
                         link_color = link_color.lstrip("#")
                         red, green, blue = tuple(int(link_color[i:i+2], 16) for i in (0, 2, 4))
@@ -121,7 +124,7 @@ class DataVisualizer(object):
             year_sources = year_data["sources"]
             year_targets = year_data["targets"]
             year_link_values = year_data["values"]
-            colors = year_data["node_colors"]
+            year_node_colors = year_data["node_colors"]
             year_node_customdata = year_data["node_customdata"]
 
             new_trace = go.Sankey(
@@ -199,26 +202,27 @@ class DataVisualizer(object):
         fig.update_layout(
             autosize=True,
             title="Year {}".format(min(year_to_process_to_flows.keys())),
-            font=dict(size=18, color='#000', family="Arial"),
+            font={"size": 18, "color": '#000', "family": "Arial"},
             plot_bgcolor='#ccc',
             paper_bgcolor="#ffffff",
             sliders=sliders,
             updatemenus=[
                 dict(
-                    buttons=list([
-                        dict(
-                            name="buttonToggleSmallNodes",
-                            label="Show all",
-                            args=['toggleSmallNodes', 'true'],
-                            method="restyle"
-                        ),
-                        dict(
-                            name="buttonToggleSmallNodes",
-                            args=['toggleSmallNodes', 'false'],
-                            label="Hide small (<{})  ".format(small_node_threshold),
-                            method="restyle"
-                        ),
-                    ]),
+                    buttons=
+                    [
+                        {
+                            "name": "buttonToggleSmallNodes",
+                            "label": "Show all",
+                            "args": ['toggleSmallNodes', 'true'],
+                            "method": "restyle"
+                        },
+                        {
+                            "name": "buttonToggleSmallNodes",
+                            "args": ['toggleSmallNodes', 'false'],
+                            "label": "Hide small (<{})  ".format(small_node_threshold),
+                            "method": "restyle"
+                        },
+                    ],
                     direction="up",
                     pad={"r": 10, "t": 10},
                     showactive=True,
@@ -226,7 +230,7 @@ class DataVisualizer(object):
                     x=0.0, xanchor="left",
                     y=0.0, yanchor="top",
                     bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
-                    font=dict(size=self._button_font_size)
+                    font=dict(size=self._button_font_size),
                 ),
                 dict(
                     buttons=list([
@@ -247,8 +251,8 @@ class DataVisualizer(object):
                     pad={"r": 10, "t": 10},
                     showactive=True,
                     active=1,
-                    x=0.0, xanchor="left",
-                    y=0.08, yanchor="top",
+                    x=0.1, xanchor="right",
+                    y=0.0, yanchor="top",
                     bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
                     font=dict(size=self._button_font_size)
                 ),
@@ -295,8 +299,14 @@ class DataVisualizer(object):
         # Add JS script that is run after the Plotly has loaded
         visualizer_js = ""
         filename = os.path.join(os.path.abspath("."), "core", "datavisualizer_plotly_post.js")
-        with open(filename, "r") as fs:
-            lines = fs.readlines()
-            visualizer_js = "".join(lines)
+        visualizer_js = ""
+        with open(filename, "r", encoding="utf-8") as fs:
+            visualizer_js = fs.read()
+            # lines = fs.readlines()
+            # visualizer_js = "".join(lines)
 
+        visualizer_js = visualizer_js.replace("{small_node_threshold}", str(small_node_threshold))
         self._script = visualizer_js
+
+
+

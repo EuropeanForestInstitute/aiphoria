@@ -598,3 +598,10 @@ class Stock(ObjectBase):
     @property
     def stock_distribution_params(self):
         return self._process.stock_distribution_params
+
+
+class FlowVariation(ObjectBase):
+    def __init__(self):
+        super().__init__()
+        print("FlowVariation.__init__()")
+

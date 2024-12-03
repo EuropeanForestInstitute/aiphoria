@@ -63,6 +63,12 @@ class DataProvider(object):
              "Fill method if 'fill_missing_flows' values are enabled",
              ParameterFillMethod.Zeros,
              ],
+
+            [ParameterName.SheetNameFlowVariations,
+             str,
+             "Sheet name that contains data for flow variations",
+             "Flow variations"
+             ],
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean"}
@@ -179,6 +185,10 @@ class DataProvider(object):
                 # Use default optional parameter value
                 self._param_name_to_value[param_name] = param_default_value
 
+        # ********************************************
+        # * Read processes and flows from Excel file *
+        # ********************************************
+
         # Create Processes and Flows
         sheet_name_processes = param_name_to_value[ParameterName.SheetNameProcesses]
         sheet_name_flows = param_name_to_value[ParameterName.SheetNameFlows]
@@ -254,6 +264,13 @@ class DataProvider(object):
 
         # Create Stocks from Processes
         self._stocks = self._create_stocks_from_processes(self._processes)
+
+        # ****************************************
+        # * Read flow variations from Excel file *
+        # ****************************************
+        if ParameterName.SheetNameFlowVariations in param_name_to_value:
+            print("IMPLEMENT THIS")
+
 
     def _create_objects_from_rows(self, object_type=None, rows=None, row_start=-1) -> List:
         if rows is None:

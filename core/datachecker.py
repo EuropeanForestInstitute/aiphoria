@@ -39,7 +39,6 @@ class DataChecker(object):
         self._year_start = model_params[ParameterName.StartYear]
         self._year_end = model_params[ParameterName.EndYear]
         use_virtual_flows = model_params[ParameterName.UseVirtualFlows]
-        fill_method = model_params[ParameterName.FillMethod]
 
         # Default optional values
         # The default values are set inside DataProvider but
@@ -139,6 +138,11 @@ class DataChecker(object):
 
         # Check if process has no inflows and only relative outflows:
         if not self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows):
+            raise SystemExit(-1)
+
+        # Check that the sheet ParameterName.SheetNameFlowVariations exists
+        # and that it has properly defined data (source process ID, target process IDs, etc.)
+        if not self._check_flow_variations():
             raise SystemExit(-1)
 
         # Build graph data
@@ -880,3 +884,7 @@ class DataChecker(object):
                 print("")
 
         return not has_errors
+
+    def _check_flow_variations(self):
+        print("Checking flow variations...")
+        return True
