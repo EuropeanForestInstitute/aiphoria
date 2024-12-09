@@ -2,7 +2,7 @@ from typing import List, Union, Any, Dict
 import numpy as np
 import openpyxl
 import pandas as pd
-from core.datastructures import Process, Flow, Stock, FlowVariation, Scenario
+from core.datastructures import Process, Flow, Stock, FlowVariation, ScenarioDefinition
 from core.parameters import ParameterName, ParameterFillMethod
 
 
@@ -13,14 +13,12 @@ class DataProvider(object):
                  sheet_settings_skip_num_rows: int = 5,
                  ):
 
-        # TODO: Use dict instead of named params for settings
-
         self._workbook = None
         self._param_name_to_value = {}
         self._processes = []
         self._flows = []
         self._stocks = []
-        self._alternative_scenarios = []
+        self._scenario_definitions = []
         self._sheet_name_processes = None
         self._sheet_name_flows = None
         self._sheet_name_scenarios = None
@@ -306,7 +304,7 @@ class DataProvider(object):
                 row = self._convert_row_nan_to_none(row)
                 rows_scenarios.append(row)
 
-            self._alternative_scenarios = self._create_alternative_scenarios(rows_scenarios)
+            self._scenario_definitions = self._create_scenario_definitions(rows_scenarios)
 
     def _check_missing_sheet_names(self, required_sheet_names: List[str], sheets: Dict[str, pd.DataFrame]):
         missing_sheet_names = []
@@ -354,7 +352,7 @@ class DataProvider(object):
 
         return result
 
-    def _create_alternative_scenarios(self, rows: List[Any] = None) -> Dict[str, Scenario]:
+    def _create_scenario_definitions(self, rows: List[Any] = None) -> List[ScenarioDefinition]:
         if not rows:
             rows = []
 
@@ -378,10 +376,10 @@ class DataProvider(object):
                     scenario_name_to_flow_variations[scenario_name] = []
                 scenario_name_to_flow_variations[scenario_name].append(flow_variation)
 
+            # Create scenario definitions from mappings
             for scenario_name, scenario_flow_variations in scenario_name_to_flow_variations.items():
-                new_scenario = Scenario(scenario_name, scenario_flow_variations)
-                result.append(new_scenario)
-
+                new_scenario_definition = ScenarioDefinition(scenario_name, scenario_flow_variations)
+                result.append(new_scenario_definition)
         return result
 
     def _is_row_valid(self, row):
@@ -422,8 +420,8 @@ class DataProvider(object):
     def get_stocks(self) -> List[Stock]:
         return self._stocks
 
-    def get_alternative_scenarios(self) -> List[Scenario]:
-        return self._alternative_scenarios
+    def get_scenario_definitions(self) -> List[ScenarioDefinition]:
+        return self._scenario_definitions
 
     def _to_bool(self, value: Any) -> bool:
         """

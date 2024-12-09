@@ -1,5 +1,7 @@
 from builtins import float
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Dict
+import copy
+import pandas as pd
 
 
 class ObjectBase(object):
@@ -600,6 +602,7 @@ class Stock(ObjectBase):
     def stock_distribution_params(self):
         return self._process.stock_distribution_params
 
+
 class FlowVariation(ObjectBase):
     def __init__(self, params: List[any] = None):
         super().__init__()
@@ -621,7 +624,6 @@ class FlowVariation(ObjectBase):
         if all(not elem for elem in params):
             # Invalid FlowVariation: all parameters were None
             return
-
 
         # Alias parameters to more readable form
         param_scenario_name = params[0]
@@ -783,18 +785,247 @@ class FlowVariation(ObjectBase):
         return self._opposite_target_node_ids
 
 
-class Scenario(object):
+class ScenarioData(object):
     """
-    Scenario is wrapper object that contains scenario name and all flow variations that are
-    happening in the scenario
+    Data class for holding Scenario data.
+
+    DataChecker builds ScenarioData-object that can be used for FlowSolver.
     """
-    def __init__(self, name: str = "Default scenario name", flow_variations: List[FlowVariation] = None):
+
+    def __init__(self, years: List[int] = None,
+                 process_id_to_process: Dict[str, Process] = None,
+                 process_id_to_stock: Dict[str, Stock] = None,
+                 year_to_process_flows: pd.DataFrame = None,
+                 year_to_flows: pd.DataFrame = None,
+                 processes: List[Process] = None,
+                 flows: List[Flow] = None,
+                 stocks: List[Stock] = None,
+                 unique_process_id_to_process: Dict[str, Process] = None,
+                 unique_flow_id_to_flow: Dict[str, Flow] = None,
+                 use_virtual_flows: bool = True,
+                 virtual_flows_epsilon: float = 0.1
+                 ):
+
+        if years is None:
+            years = []
+
+        if process_id_to_process is None:
+            process_id_to_process = {}
+
+        if process_id_to_stock is None:
+            process_id_to_stock = {}
+
+        if year_to_process_flows is None:
+            year_to_process_flows = pd.DataFrame()
+
+        if year_to_flows is None:
+            year_to_flows = pd.DataFrame()
+
+        if processes is None:
+            processes = []
+
+        if flows is None:
+            flows = []
+
+        if stocks is None:
+            stocks = []
+
+        if unique_process_id_to_process is None:
+            unique_process_id_to_process = {}
+
+        if unique_flow_id_to_flow is None:
+            unique_flow_id_to_flow = {}
+
+        self._years = years
+        self._year_start = min(self._years)
+        self._year_end = max(self._years)
+        self._process_id_to_process = process_id_to_process
+        self._process_id_to_stock = process_id_to_stock
+        self._year_to_process_flows = year_to_process_flows
+        self._year_to_flows = year_to_flows
+        self._processes = processes
+        self._flows = flows
+        self._stocks = stocks
+        self._unique_process_id_to_process = unique_process_id_to_process
+        self._unique_flow_id_to_flows = unique_flow_id_to_flow
+        self._use_virtual_flows = use_virtual_flows
+        self._virtual_flows_epsilon = virtual_flows_epsilon
+
+    @property
+    def years(self) -> List[int]:
+        """
+        Get list of years
+        :return: List of years
+        """
+        return self._years
+
+    @property
+    def start_year(self) -> int:
+        """
+        Get starting year
+        :return: Starting year
+        """
+        return self._year_start
+
+    @property
+    def end_year(self) -> int:
+        """
+        Get ending year
+        Ending year is included in simulation.
+        :return:
+        """
+        return self._year_end
+
+    @property
+    def process_id_to_process(self) -> Dict[str, Process]:
+        """
+        Get mapping of Process ID to Process.
+
+        :return: Dictionary
+        """
+        return self._process_id_to_process
+
+    @property
+    def process_id_to_stock(self) -> Dict[str, Stock]:
+        """
+        Get mapping of Process ID to Stock
+        :return: Dictionary
+        """
+        return self._process_id_to_stock
+
+    @property
+    def year_to_process_flows(self) -> pd.DataFrame:
+        """
+        Get DataFrame that contains mapping of year to Process Flows
+        :return: DataFrame
+        """
+        return self._year_to_process_flows
+
+    @property
+    def year_to_flows(self) -> pd.DataFrame:
+        """
+        Get DataFrame that contains
+        :return:
+        """
+        return self._year_to_flows
+
+    @property
+    def processes(self) -> List[Process]:
+        """
+        Get list of Processes
+        :return: List of Processes
+        """
+        return self._processes
+
+    @property
+    def flows(self) -> List[Flow]:
+        """
+        Get list of Flows
+        :return: List of Flows
+        """
+        return self._flows
+
+    @property
+    def stocks(self) -> List[Stock]:
+        """
+        Get list of Stocks
+        :return: List of Stocks
+        """
+        return self._stocks
+
+    @property
+    def unique_process_id_to_process(self) -> Dict[str, Process]:
+        """
+        Get mapping of unique Process ID to Process
+        :return: Dictionary
+        """
+        return self._unique_process_id_to_process
+
+    @property
+    def unique_flow_id_to_flows(self) -> Dict[str, Flow]:
+        """
+        Get mapping of unique Flow ID to Flows
+        :return: Dictionary
+        """
+        return self._unique_flow_id_to_flows
+
+    @property
+    def use_virtual_flows(self) -> bool:
+        """
+        Get boolean flag if using virtual flows
+        :return: bool
+        """
+        return self._use_virtual_flows
+
+    @property
+    def virtual_flows_epsilon(self) -> float:
+        """
+        Get maximum allowed difference between input and output flows before creating virtual flows.
+        This is only used if using the virtual flows.
+        :return: Float
+        """
+        return self._virtual_flows_epsilon
+
+
+class ScenarioDefinition(object):
+    """
+    ScenarioDefinition is wrapper object that contains scenario name and all flow variations that are applied
+    for the Scenario.
+
+    Actual building of Scenarios happens inside DataChecker.build_scenarios()
+    """
+    def __init__(self, name: str = None, flow_variations: List[FlowVariation] = None):
+        if name is None:
+            name = "Baseline scenario"
+
+        if flow_variations is None:
+            flow_variations = []
+
         self._name = name
         self._flow_variations = flow_variations
 
     @property
     def name(self) -> str:
+        """
+        Get scenario name.
+        :return: Scenario name
+        """
         return self._name
 
+    @property
     def flow_variations(self) -> List[FlowVariation]:
+        """
+        Get list of FlowVariations.
+        These are the rules that are applied to Scenario.
+        :return: List of FlowVariations
+        """
         return self._flow_variations
+
+
+class Scenario(object):
+    """
+    Scenario is wrapper object that contains scenario name and all flow variations that are
+    happening in the scenario
+    """
+
+    def __init__(self, scenario_definition: ScenarioDefinition = None, scenario_data: ScenarioData = None):
+        if scenario_definition is None:
+            scenario_definition = ScenarioDefinition()
+
+        if scenario_data is None:
+            scenario_data = ScenarioData()
+
+        self._scenario_definition = scenario_definition
+        self._scenario_data = scenario_data
+
+    @property
+    def name(self) -> str:
+        return self._scenario_definition.name
+
+    @property
+    def scenario_definition(self) -> ScenarioDefinition:
+        return self._scenario_definition
+
+    @property
+    def scenario_data(self) -> ScenarioData:
+        return self._scenario_data
