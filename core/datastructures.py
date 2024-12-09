@@ -1,4 +1,5 @@
-from typing import Tuple
+from builtins import float
+from typing import Tuple, List, Union
 
 
 class ObjectBase(object):
@@ -599,9 +600,201 @@ class Stock(ObjectBase):
     def stock_distribution_params(self):
         return self._process.stock_distribution_params
 
-
 class FlowVariation(ObjectBase):
-    def __init__(self):
+    def __init__(self, params: List[any] = None):
         super().__init__()
-        print("FlowVariation.__init__()")
+        self._scenario_name: str = ""
+        self._source_node_id: str = ""
+        self._target_node_id: str = ""
+        self._change_in_value: Union[float, None] = None
+        self._target_value: Union[float, None] = None
+        self._change_type: str = ""
+        self._start_year: int = 0
+        self._end_year: int = 0
+        self._function_type: str = ""
+        self._opposite_target_node_ids = []
 
+        if params is None:
+            # Invalid FlowVariation: no parameters
+            return
+
+        if all(not elem for elem in params):
+            # Invalid FlowVariation: all parameters were None
+            return
+
+
+        # Alias parameters to more readable form
+        param_scenario_name = params[0]
+        param_source_node_id = params[1]
+        param_target_node_id = params[2]
+        param_change_in_value = params[3]
+        param_target_value = params[4]
+        param_change_type = params[5]
+        param_start_year = params[6]
+        param_end_year = params[7]
+        param_function_type = params[8]
+
+        self._scenario_name = self._parse_as(param_scenario_name, str)[0]
+        self._source_node_id = self._parse_as(param_source_node_id, str)[0]
+        self._target_node_id = self._parse_as(param_target_node_id, str)[0]
+
+        # This is the delta change of the value and means that it's error
+        # if target flow has ABS type and the 'change in value' is REL
+        # NOTE: Either of self._change_in_value of self._target_value must be defined
+        if param_change_in_value is not None:
+            self._change_in_value = self._parse_as(param_change_in_value, float)[0]
+
+        if param_target_value is not None:
+            self._target_value = self._parse_as(param_target_value, float)[0]
+
+        self._change_type = self._parse_as(param_change_type, str)[0]
+        self._start_year = self._parse_as(param_start_year, int)[0]
+        self._end_year = self._parse_as(param_end_year, int)[0]
+        self._function_type = self._parse_as(param_function_type, str)[0]
+
+        # Check how many target nodes with opposite effect there is
+        for process_id in list(params[9:]):
+            if process_id is not None:
+                self._opposite_target_node_ids.append(process_id)
+
+    def __str__(self):
+        s = "Flow variation: " \
+            "scenario='{}" \
+            ", source node='{}'" \
+            ", target_node='{}'" \
+            ", change in value='{}'" \
+            ", target value='{}'" \
+            ", change_type='{}'"\
+            ", start year='{}'"\
+            ", end year='{}'"\
+            ", function type='{}'"\
+            .format(
+            self.scenario_name,
+            self.source_node_id,
+            self.target_node_id,
+            self.change_in_value,
+            self.target_value,
+            self.change_type,
+            self.start_year,
+            self.end_year,
+            self.function_type,
+        )
+        return s
+
+    def is_valid(self) -> bool:
+        is_valid = True
+
+        # Scenario name
+        is_valid = is_valid and self.scenario_name != ""
+
+        # Source node ID
+        is_valid = is_valid and self.source_node_id != ""
+
+        # Target node ID
+        is_valid = is_valid and self.target_node_id != ""
+
+        # NOTE: Either of these have to be defined
+        if self.use_change_in_value() and self.use_target_value():
+            # Error, both cannot be True at the same time
+            is_valid = False
+
+        if not self.use_change_in_value() and not self.use_target_value():
+            # Error, both cannot be False at the same time
+            is_valid = False
+
+        # Change type (ABS / rel)
+        is_valid = is_valid and self.change_type != ""
+
+        # Start year
+        is_valid = is_valid and self.start_year != 0
+
+        # End year
+        is_valid = is_valid and self.end_year != 0
+
+        # Function type ("linear", "exponential")
+        is_valid = is_valid and self.function_type != ""
+        return is_valid
+
+    def use_change_in_value(self) -> bool:
+        return self.change_in_value is not None
+
+    def use_target_value(self) -> bool:
+        return self.target_value is not None
+
+    @staticmethod
+    def _parse_as(val: any, target_type: any) -> (bool, any):
+        """
+        Parse variable as type.
+        Returns tuple (bool, value).
+        If parsing fails then value is the original val.
+
+        :param val: Variable
+        :param type: Target type
+        :return: Tuple (bool, value)
+        """
+        ok = True
+        result = val
+        try:
+            result = target_type(val)
+        except ValueError as ex:
+            ok = False
+
+        return result, ok
+
+    @property
+    def scenario_name(self) -> str:
+        return self._scenario_name
+
+    @property
+    def source_node_id(self) -> str:
+        return self._source_node_id
+
+    @property
+    def target_node_id(self) -> str:
+        return self._target_node_id
+
+    @property
+    def change_in_value(self) -> float:
+        return self._change_in_value
+
+    @property
+    def target_value(self) -> float:
+        return self._target_value
+
+    @property
+    def change_type(self) -> str:
+        # 'ABS' or 'REL'
+        return self._change_type
+
+    @property
+    def start_year(self) -> int:
+        return self._start_year
+
+    @property
+    def end_year(self) -> int:
+        return self._end_year
+
+    @property
+    def function_type(self) -> str:
+        return self._function_type
+
+    @property
+    def opposite_target_node_ids(self) -> List[str]:
+        return self._opposite_target_node_ids
+
+
+class Scenario(object):
+    """
+    Scenario is wrapper object that contains scenario name and all flow variations that are
+    happening in the scenario
+    """
+    def __init__(self, name: str = "Default scenario name", flow_variations: List[FlowVariation] = None):
+        self._name = name
+        self._flow_variations = flow_variations
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def flow_variations(self) -> List[FlowVariation]:
+        return self._flow_variations

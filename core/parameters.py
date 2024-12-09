@@ -38,7 +38,10 @@ class ParameterName(str, Enum):
     FillMissingRelativeFlows: str = "fill_missing_relative_flows"
     FillMethod: str = "fill_method"
 
-    SheetNameFlowVariations: str = "sheet_name_flow_variations"
+    # Scenarios related
+    SheetNameScenarios: str = "sheet_name_scenarios"
+    ColumnRangeScenarios: str = "column_range_scenarios"
+    SkipNumRowsScenarios: str = "skip_num_rows_scenarios"
 
 
 class ParameterFillMethod(str, Enum):

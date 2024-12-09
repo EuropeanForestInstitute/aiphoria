@@ -1,8 +1,8 @@
-from typing import List, Union, Any
+from typing import List, Union, Any, Dict
 import numpy as np
 import openpyxl
 import pandas as pd
-from core.datastructures import Process, Flow, Stock
+from core.datastructures import Process, Flow, Stock, FlowVariation, Scenario
 from core.parameters import ParameterName, ParameterFillMethod
 
 
@@ -10,15 +10,20 @@ class DataProvider(object):
     def __init__(self, filename: str = "",
                  sheet_settings_name: str = "Settings",
                  sheet_settings_col_range: Union[str, int] = "B:C",
-                 sheet_settings_skip_num_rows: int = 5
+                 sheet_settings_skip_num_rows: int = 5,
                  ):
+
+        # TODO: Use dict instead of named params for settings
+
         self._workbook = None
         self._param_name_to_value = {}
         self._processes = []
         self._flows = []
         self._stocks = []
+        self._alternative_scenarios = []
         self._sheet_name_processes = None
         self._sheet_name_flows = None
+        self._sheet_name_scenarios = None
 
         # Check that all required keys exists
         required_params = [
@@ -64,10 +69,10 @@ class DataProvider(object):
              ParameterFillMethod.Zeros,
              ],
 
-            [ParameterName.SheetNameFlowVariations,
+            [ParameterName.SheetNameScenarios,
              str,
-             "Sheet name that contains data for flow variations",
-             "Flow variations"
+             "Sheet name that contains data for scenarios (flow variations)",
+             "Scenarios"
              ],
         ]
 
@@ -189,13 +194,20 @@ class DataProvider(object):
         # * Read processes and flows from Excel file *
         # ********************************************
 
+
         # Create Processes and Flows
-        sheet_name_processes = param_name_to_value[ParameterName.SheetNameProcesses]
-        sheet_name_flows = param_name_to_value[ParameterName.SheetNameFlows]
-        col_range_processes = param_name_to_value[ParameterName.ColumnRangeProcesses]
-        col_range_flows = param_name_to_value[ParameterName.ColumnRangeFlows]
-        skip_num_rows_processes = param_name_to_value[ParameterName.SkipNumRowsProcesses]
-        skip_num_rows_flows = param_name_to_value[ParameterName.SkipNumRowsFlows]
+        sheet_name_processes = param_name_to_value.get(ParameterName.SheetNameProcesses, None)
+        col_range_processes = param_name_to_value.get(ParameterName.ColumnRangeProcesses, None)
+        skip_num_rows_processes = param_name_to_value.get(ParameterName.SkipNumRowsProcesses, None)
+
+        sheet_name_flows = param_name_to_value.get(ParameterName.SheetNameFlows, None)
+        col_range_flows = param_name_to_value.get(ParameterName.ColumnRangeFlows, None)
+        skip_num_rows_flows = param_name_to_value.get(ParameterName.SkipNumRowsFlows, None)
+
+        sheet_name_scenarios = param_name_to_value.get(ParameterName.SheetNameScenarios, None)
+        col_range_scenarios = param_name_to_value.get(ParameterName.ColumnRangeScenarios, None)
+        skip_num_rows_scenarios = param_name_to_value.get(ParameterName.SkipNumRowsScenarios, None)
+
 
         # Sheet name to DataFrame
         sheets = {}
@@ -220,29 +232,46 @@ class DataProvider(object):
                 except ValueError:
                     pass
 
+                # Optional
+                try:
+                    sheet_scenarios = pd.read_excel(xls, sheet_name=sheet_name_scenarios,
+                                                    skiprows=skip_num_rows_scenarios,
+                                                    usecols=col_range_scenarios
+                                                    )
+                    sheets[sheet_name_scenarios] = sheet_scenarios
+                except ValueError:
+                    pass
+
         except FileNotFoundError:
             print("DataProvider: file not found (" + filename + ")")
             raise SystemExit(-1)
 
-        # Check that sheets exists
-        required_sheet_names = [
-            sheet_name_processes,
-            sheet_name_flows,
-        ]
-
-        missing_sheet_names = []
-        for key in required_sheet_names:
-            if key not in sheets:
-                missing_sheet_names.append(key)
-
+        # Check that all the required sheets exists
+        required_sheet_names = [sheet_name_processes, sheet_name_flows]
+        missing_sheet_names = self._check_missing_sheet_names(required_sheet_names, sheets)
         if missing_sheet_names:
-            print("DataProvider: file '{}' is missing following sheets:".format(filename))
+            print("DataProvider: file '{}' is missing following required sheets:".format(filename))
             for key in missing_sheet_names:
                 print("\t- {}".format(key))
             raise SystemExit(-1)
 
         self._sheet_name_processes = sheet_name_processes
         self._sheet_name_flows = sheet_name_flows
+
+        # Check that all optional sheets exists (only if optional sheets have been defined)
+        optional_sheet_names = []
+
+        if sheet_name_scenarios:
+            optional_sheet_names.append(sheet_name_scenarios)
+
+        missing_sheet_names = self._check_missing_sheet_names(optional_sheet_names, sheets)
+        if missing_sheet_names:
+            print("DataProvider: file '{}' is missing following optional sheets:".format(filename))
+            for key in missing_sheet_names:
+                print("\t- {}".format(key))
+            raise SystemExit(-1)
+
+        self._sheet_name_scenarios = sheet_name_scenarios
 
         # Create Processes
         rows_processes = []
@@ -251,7 +280,9 @@ class DataProvider(object):
             row = self._convert_row_nan_to_none(row)
             rows_processes.append(row)
 
-        self._processes = self._create_objects_from_rows(Process, rows_processes, row_start=skip_num_rows_processes)
+        self._processes = self._create_objects_from_rows(Process,
+                                                         rows_processes,
+                                                         row_start=skip_num_rows_processes)
 
         # Create Flows
         rows_flows = []
@@ -260,17 +291,30 @@ class DataProvider(object):
             row = self._convert_row_nan_to_none(row)
             rows_flows.append(row)
 
-        self._flows = self._create_objects_from_rows(Flow, rows_flows, row_start=skip_num_rows_flows)
+        self._flows = self._create_objects_from_rows(Flow,
+                                                     rows_flows,
+                                                     row_start=skip_num_rows_flows)
 
         # Create Stocks from Processes
         self._stocks = self._create_stocks_from_processes(self._processes)
 
-        # ****************************************
-        # * Read flow variations from Excel file *
-        # ****************************************
-        if ParameterName.SheetNameFlowVariations in param_name_to_value:
-            print("IMPLEMENT THIS")
+        # Create alternative scenarios (optional)
+        if sheet_name_scenarios:
+            rows_scenarios = []
+            df_scenarios = sheets[self._sheet_name_scenarios]
+            for (row_index, row) in df_scenarios.iterrows():
+                row = self._convert_row_nan_to_none(row)
+                rows_scenarios.append(row)
 
+            self._alternative_scenarios = self._create_alternative_scenarios(rows_scenarios)
+
+    def _check_missing_sheet_names(self, required_sheet_names: List[str], sheets: Dict[str, pd.DataFrame]):
+        missing_sheet_names = []
+        for key in required_sheet_names:
+            if key not in sheets:
+                missing_sheet_names.append(key)
+
+        return missing_sheet_names
 
     def _create_objects_from_rows(self, object_type=None, rows=None, row_start=-1) -> List:
         if rows is None:
@@ -307,6 +351,36 @@ class DataProvider(object):
             new_stock = Stock(process)
             if new_stock.is_valid():
                 result.append(new_stock)
+
+        return result
+
+    def _create_alternative_scenarios(self, rows: List[Any] = None) -> Dict[str, Scenario]:
+        if not rows:
+            rows = []
+
+        flow_variations = []
+        for row in rows:
+            new_flow_variation = FlowVariation(row)
+            if new_flow_variation.is_valid():
+                flow_variations.append(new_flow_variation)
+
+        # Build scenario mappings
+        result = []
+        if not flow_variations:
+            # No alternative scenarios found, create later only the baseline scenario
+            pass
+        else:
+            # Map scenario names to flow variations
+            scenario_name_to_flow_variations = {}
+            for flow_variation in flow_variations:
+                scenario_name = flow_variation.scenario_name
+                if scenario_name not in scenario_name_to_flow_variations:
+                    scenario_name_to_flow_variations[scenario_name] = []
+                scenario_name_to_flow_variations[scenario_name].append(flow_variation)
+
+            for scenario_name, scenario_flow_variations in scenario_name_to_flow_variations.items():
+                new_scenario = Scenario(scenario_name, scenario_flow_variations)
+                result.append(new_scenario)
 
         return result
 
@@ -347,6 +421,9 @@ class DataProvider(object):
 
     def get_stocks(self) -> List[Stock]:
         return self._stocks
+
+    def get_alternative_scenarios(self) -> List[Scenario]:
+        return self._alternative_scenarios
 
     def _to_bool(self, value: Any) -> bool:
         """
