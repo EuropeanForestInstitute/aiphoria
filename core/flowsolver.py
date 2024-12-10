@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import tqdm as tqdm
 from pandas import DataFrame
-from core.datastructures import Process, Flow, Stock, ScenarioData, ScenarioDefinition, Scenario
+from core.datastructures import Process, Flow, Stock, ScenarioData, Scenario
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
 from typing import List, Dict
 
@@ -21,50 +21,30 @@ class FlowSolver(object):
 
     def __init__(self, scenario: Scenario = None):
         self._scenario = scenario
-        self._all_stocks = self._scenario.scenario_data.stocks
-        self._process_id_to_stock = self._scenario.scenario_data.process_id_to_stock
-        self._unique_process_id_to_process = self._scenario.scenario_data.unique_process_id_to_process
-        self._unique_flow_id_to_flow = self._scenario.scenario_data.unique_flow_id_to_flow
 
-        self._use_virtual_flows = self._scenario.scenario_data.use_virtual_flows
-        self._virtual_flows_epsilon = self._scenario.scenario_data.virtual_flows_epsilon
-        self._df_process_to_flows = self._scenario.scenario_data.year_to_process_flows
-        self._df_year_to_flows = self._scenario.scenario_data.year_to_flows
-
+        # Time
         self._year_start = self._scenario.scenario_data.start_year
         self._year_end = self._scenario.scenario_data.end_year
         self._years = self._scenario.scenario_data.years
         self._year_current = self._year_start
         self._year_prev = self._year_current
 
-        # Create year -> process ID -> process
-        self._year_to_process_id_to_process = {}
-        for year in self._df_process_to_flows.index:
-            self._year_to_process_id_to_process[year] = {}
-            for process_id in self._df_process_to_flows.columns:
-                cell = self._df_process_to_flows.at[year, process_id]
-                self._year_to_process_id_to_process[year][process_id] = cell["process"]
+        # Year to Process/Flow/Flow IDs mappings
+        self._year_to_process_id_to_process = scenario.scenario_data.year_to_process_id_to_process
+        self._year_to_process_id_to_flow_ids = scenario.scenario_data.year_to_process_id_to_flow_ids
+        self._year_to_flow_id_to_flow = scenario.scenario_data.year_to_flow_id_to_flow
 
-        # Create year -> process ID -> flow IDs
-        self._year_to_process_id_to_flow_ids = {}
-        for year in self._df_process_to_flows.index:
-            self._year_to_process_id_to_flow_ids[year] = {}
-            for process_id in self._df_process_to_flows.columns:
-                cell = self._df_process_to_flows.at[year, process_id]
-                inflow_ids = [flow.id for flow in cell["flows"]["in"]]
-                outflow_ids = [flow.id for flow in cell["flows"]["out"]]
-                self._year_to_process_id_to_flow_ids[year][process_id] = {"in": inflow_ids, "out": outflow_ids}
+        # Stocks
+        self._all_stocks = self._scenario.scenario_data.stocks
+        self._process_id_to_stock = self._scenario.scenario_data.process_id_to_stock
 
-        # Create year -> flow ID -> flow
-        self._year_to_flow_id_to_flow = {}
-        for year in self._df_year_to_flows.index:
-            self._year_to_flow_id_to_flow[year] = {}
-            for flow_id in self._df_year_to_flows.columns:
-                cell = self._df_year_to_flows.at[year, flow_id]
-                if pd.isnull(cell):
-                    continue
+        # Unique Process IDs and Flow IDs to Process/Flow
+        self._unique_process_id_to_process = self._scenario.scenario_data.unique_process_id_to_process
+        self._unique_flow_id_to_flow = self._scenario.scenario_data.unique_flow_id_to_flow
 
-                self._year_to_flow_id_to_flow[year][flow_id] = cell
+        # Virtual flows
+        self._use_virtual_flows = self._scenario.scenario_data.use_virtual_flows
+        self._virtual_flows_epsilon = self._scenario.scenario_data.virtual_flows_epsilon
 
         # Current timestep data
         self._current_process_id_to_process = self._year_to_process_id_to_process[self._year_current]
@@ -234,14 +214,8 @@ class FlowSolver(object):
 
     def solve_timesteps(self):
         """
-        Solves all timesteps.
-
-        :return: None
+        Solves all time steps.
         """
-
-        # print("Solving flows for years {} - {} (scenario '{}')...".format(self._year_start,
-        #                                                                   self._year_end,
-        #                                                                   self._scenario.name))
         bar = tqdm.tqdm(initial=0)
         self._create_dynamic_stocks()
         for current_year in self._years:
@@ -539,6 +513,16 @@ class FlowSolver(object):
         # Each year evaluate dynamic stock outflows and related outflows as evaluated
         self._evaluate_dynamic_stock_outflows(self._year_current)
 
+        # Mark all absolute flows as evaluated at the start of each timestep
+        for flow_id, flow in self._current_flow_id_to_flow.items():
+            if flow.is_unit_absolute_value:
+                flow.is_evaluated = True
+                flow.evaluated_share = 1.0
+                flow.evaluated_value = flow.value
+            else:
+                flow.is_evaluated = False
+                flow.evaluated_value = 0.0
+
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
         evaluated_process_ids = []
@@ -547,12 +531,6 @@ class FlowSolver(object):
             inflows = self._get_process_inflows(process_id, year=self._year_current)
             if not inflows:
                 unevaluated_process_ids.append(process_id)
-
-        # TODO: all_processes are used to stabilize node positions
-        # for process in self._all_processes:
-        #         inflows = self._get_process_inflows(process.id, year=self._year_current)
-        #     if not inflows:
-        #         unevaluated_process_ids.append(process.id)
 
         # Process flow value propagation until all inflows to processes are calculated
         current_iteration = 0
@@ -859,16 +837,27 @@ class FlowSolver(object):
         return stock_outflow_total[year_index]
 
     def get_solved_scenario_data(self) -> ScenarioData:
-        # Build ScenarioData from results
-        scenario_data = ScenarioData(years=copy.deepcopy(self._years),
-                                     process_id_to_stock=copy.deepcopy(self._process_id_to_stock),
-                                     year_to_process_flows=self._df_process_to_flows.copy(deep=True),
-                                     year_to_flows=self._df_year_to_flows.copy(deep=True),
-                                     stocks=copy.deepcopy(self._all_stocks),
-                                     unique_process_id_to_process=copy.deepcopy(self._unique_process_id_to_process),
-                                     unique_flow_id_to_flow=copy.deepcopy(self._unique_flow_id_to_flow),
-                                     use_virtual_flows=self._use_virtual_flows,
-                                     virtual_flows_epsilon=self._virtual_flows_epsilon
+        # Make deep copies and return ScenarioData containing the data
+        years = copy.deepcopy(self._years)
+        year_to_process_id_to_process = copy.deepcopy(self._year_to_process_id_to_process)
+        year_to_process_id_to_flow_ids = copy.deepcopy(self._year_to_process_id_to_flow_ids)
+        year_to_flow_id_to_flow = copy.deepcopy(self._year_to_flow_id_to_flow)
+        unique_process_id_to_process = copy.deepcopy(self._unique_process_id_to_process)
+        unique_flow_id_to_flow = copy.deepcopy(self._unique_flow_id_to_flow)
+        process_id_to_stock = copy.deepcopy(self._process_id_to_stock)
+        stocks = copy.deepcopy(self._all_stocks)
+        use_virtual_flows = copy.deepcopy(self._use_virtual_flows)
+        virtual_flows_epsilon = copy.deepcopy(self._virtual_flows_epsilon)
+
+        scenario_data = ScenarioData(years=years,
+                                     year_to_process_id_to_process=year_to_process_id_to_process,
+                                     year_to_process_id_to_flow_ids=year_to_process_id_to_flow_ids,
+                                     year_to_flow_id_to_flow=year_to_flow_id_to_flow,
+                                     unique_process_id_to_process=unique_process_id_to_process,
+                                     unique_flow_id_to_flow=unique_flow_id_to_flow,
+                                     process_id_to_stock=process_id_to_stock,
+                                     stocks=stocks,
+                                     use_virtual_flows=use_virtual_flows,
+                                     virtual_flows_epsilon=virtual_flows_epsilon
                                      )
         return scenario_data
-

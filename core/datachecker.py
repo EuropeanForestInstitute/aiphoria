@@ -20,7 +20,7 @@ class DataChecker(object):
         self._year_end = 0
         self._years = []
 
-    def build_scenarios(self, epsilon: float = 0.1) -> Scenario:
+    def build_scenarios(self, epsilon: float = 0.1) -> List[Scenario]:
         """
         Build scenarios to be solved using the FlowSolver.
         First element in the list is always baseline scenario and existence of this is always guaranteed.
@@ -147,25 +147,55 @@ class DataChecker(object):
         if not self.check_scenario_definitions(df_year_to_process_flows):
             raise SystemExit(-1)
 
-        # Build graph data
+        # *************************************
+        # * Unpack DataFrames to dictionaries *
+        # *************************************
+
+        # Create mapping of year -> Process ID -> Process by deep copying entry from DataFrame
+        year_to_process_id_to_process = {}
+        for year in df_year_to_process_flows.index:
+            year_to_process_id_to_process[year] = {}
+            for process_id in df_year_to_process_flows.columns:
+                entry = copy.deepcopy(df_year_to_process_flows.at[year, process_id])
+                process = entry["process"]
+                year_to_process_id_to_process[year][process_id] = process
+
+        # Create mapping of year -> Process ID -> List of incoming Flow IDs and list of outgoing Flow IDs
+        year_to_process_id_to_flow_ids = {}
+        for year in df_year_to_process_flows.index:
+            year_to_process_id_to_flow_ids[year] = {}
+            for process_id in df_year_to_process_flows.columns:
+                entry = copy.deepcopy(df_year_to_process_flows.at[year, process_id])
+                inflow_ids = [flow.id for flow in entry["flows"]["in"]]
+                outflow_ids = [flow.id for flow in entry["flows"]["out"]]
+                year_to_process_id_to_flow_ids[year][process_id] = {"in": inflow_ids, "out": outflow_ids}
+
+        # Create mapping of year -> Flow ID -> Flow by deep copying entry from DataFrame
+        year_to_flow_id_to_flow = {}
+        for year in df_year_to_flows.index:
+            year_to_flow_id_to_flow[year] = {}
+            for flow_id in df_year_to_flows.columns:
+                entry = copy.deepcopy(df_year_to_flows.at[year, flow_id])
+                year_to_flow_id_to_flow[year][flow_id] = entry
+
+        # Process ID to stock mapping
         process_id_to_stock = {}
         for stock in stocks:
             stock_id = stock.id
             process_id_to_stock[stock_id] = stock
 
-        # List of all scenarios
-        # First element in the list is always the baseline scenario
+        # List of all scenarios, first element is always the baseline scenario and always exists even if
+        # any alternative scenarios are not defined
         scenarios = []
-
-        # Create baseline Scenario
         print("Building baseline scenario...")
         baseline_scenario_data = ScenarioData(years=self._years,
-                                              process_id_to_stock=process_id_to_stock,
-                                              year_to_process_flows=df_year_to_process_flows,
-                                              year_to_flows=df_year_to_flows,
-                                              stocks=stocks,
+                                              year_to_process_id_to_process=year_to_process_id_to_process,
+                                              year_to_process_id_to_flow_ids=year_to_process_id_to_flow_ids,
+                                              year_to_flow_id_to_flow=year_to_flow_id_to_flow,
                                               unique_process_id_to_process=unique_process_ids,
                                               unique_flow_id_to_flow=unique_flow_ids,
+                                              process_id_to_stock=process_id_to_stock,
+                                              stocks=stocks,
                                               use_virtual_flows=use_virtual_flows,
                                               virtual_flows_epsilon=virtual_flows_epsilon
                                               )
@@ -178,7 +208,8 @@ class DataChecker(object):
         num_alternative_scenarios = len(self._scenario_definitions)
         print("Building {} alternative scenarios...".format(num_alternative_scenarios))
         for index, scenario_definition in enumerate(self._scenario_definitions):
-            # Alternative Scenarios do not contain any actual data, only the ScenarioDefinition is used
+            # Alternative scenarios do not have ScenarioData at this point, data is filled
+            # from the FlowSolver later
             new_alternative_scenario = Scenario(definition=scenario_definition, data=ScenarioData())
             scenarios.append(new_alternative_scenario)
 
@@ -918,22 +949,25 @@ class DataChecker(object):
                 start_year = flow_variation.start_year
                 end_year = flow_variation.end_year
 
-                # Check rule start year
+                # Check rule for start year
                 if start_year < first_valid_year:
                     print("Scenario '{}': Source node ID '{}' start year ({}) before first year ({})".format(
                         scenario_name, source_node_id, start_year, first_valid_year))
 
-                # Check rule last year
+                # Check rule for last year
                 if end_year > last_valid_year:
                     print("Scenario '{}': Source node ID '{}' end year ({}) after last year ({})".format(
                         scenario_name, source_node_id, end_year, last_valid_year))
 
+                # Check if source node ID exists for the year range
                 years = [year for year in range(flow_variation.start_year, flow_variation.end_year + 1)]
                 for year in years:
                     year_data = df_year_to_process_flows[df_year_to_process_flows.index == year]
                     if source_node_id not in year_data.columns:
                         print("Scenario '{}': Source node ID '{}' not defined for the year {}".format(
                             scenario_name, source_node_id, year))
+
+                # Check if source node ID
 
 
 
