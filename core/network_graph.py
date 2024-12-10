@@ -1,8 +1,7 @@
 import webbrowser
 import os
 import json
-import pandas as pd
-from typing import List, Dict
+from core.datastructures import ScenarioData
 
 
 class NetworkGraph(object):
@@ -19,40 +18,46 @@ class NetworkGraph(object):
         with open("./core/network_graph.js", mode="r", encoding="utf-8") as fs:
             self._visualizer = fs.read()
 
-    def build(self, df_process_to_flows: pd.DataFrame, years_to_check: List[int]) -> None:
+    def build(self, scenario_data: ScenarioData = None) -> None:
         """
         Compile and insert data to HTML file.
 
         :param df_process_to_flows: DataFrame
         :param years_to_check: List of years that are included
         """
+        if scenario_data is None:
+            scenario_data = {}
+
+        year_to_process_id_to_process = scenario_data.year_to_process_id_to_process
+        year_to_process_id_to_flow_ids = scenario_data.year_to_process_id_to_flow_ids
+        year_to_flow_id_to_flow = scenario_data.year_to_flow_id_to_flow
+
         year_to_data = {}
-        for year in years_to_check:
-            rows = df_process_to_flows.loc[year]
+        for year, process_id_to_process in year_to_process_id_to_process.items():
             node_index_to_data = {}
             edge_index_to_data = {}
 
             # Create nodes and edges
             new_node_index = 0
             new_edge_index = 0
-            for row in rows:
-                process = row["process"]
-                inflows = row["flows"]["in"]
-                outflows = row["flows"]["out"]
+            for process_id, process in process_id_to_process.items():
+                inflow_ids = year_to_process_id_to_flow_ids[year][process_id]["in"]
+                outflow_ids = year_to_process_id_to_flow_ids[year][process_id]["out"]
 
                 # Create node data
                 new_node_data = {
                     "process_id": process.id,
                     "process_label": process.label_in_graph,
-                    "num_inflows": len(inflows),
-                    "num_outflows": len(outflows),
+                    "num_inflows": len(inflow_ids),
+                    "num_outflows": len(outflow_ids),
                     "transformation_stage": process.transformation_stage,
                 }
                 node_index_to_data[new_node_index] = new_node_data
                 new_node_index += 1
 
                 # Create edges from nodes (= process outflows)
-                for flow in outflows:
+                for flow_id in outflow_ids:
+                    flow = year_to_flow_id_to_flow[year][flow_id]
                     new_edge_data = {
                         "flow_id": flow.id,
                         "source_process_id": flow.source_process_id,
