@@ -793,12 +793,9 @@ class ScenarioData(object):
     """
 
     def __init__(self, years: List[int] = None,
-                 process_id_to_process: Dict[str, Process] = None,
                  process_id_to_stock: Dict[str, Stock] = None,
                  year_to_process_flows: pd.DataFrame = None,
                  year_to_flows: pd.DataFrame = None,
-                 processes: List[Process] = None,
-                 flows: List[Flow] = None,
                  stocks: List[Stock] = None,
                  unique_process_id_to_process: Dict[str, Process] = None,
                  unique_flow_id_to_flow: Dict[str, Flow] = None,
@@ -809,9 +806,6 @@ class ScenarioData(object):
         if years is None:
             years = []
 
-        if process_id_to_process is None:
-            process_id_to_process = {}
-
         if process_id_to_stock is None:
             process_id_to_stock = {}
 
@@ -820,12 +814,6 @@ class ScenarioData(object):
 
         if year_to_flows is None:
             year_to_flows = pd.DataFrame()
-
-        if processes is None:
-            processes = []
-
-        if flows is None:
-            flows = []
 
         if stocks is None:
             stocks = []
@@ -837,17 +825,19 @@ class ScenarioData(object):
             unique_flow_id_to_flow = {}
 
         self._years = years
-        self._year_start = min(self._years)
-        self._year_end = max(self._years)
-        self._process_id_to_process = process_id_to_process
+        self._year_start = 0
+        self._year_end = 0
+
+        if self._years:
+            self._year_start = min(self._years)
+            self._year_end = max(self._years)
+
         self._process_id_to_stock = process_id_to_stock
         self._year_to_process_flows = year_to_process_flows
         self._year_to_flows = year_to_flows
-        self._processes = processes
-        self._flows = flows
         self._stocks = stocks
         self._unique_process_id_to_process = unique_process_id_to_process
-        self._unique_flow_id_to_flows = unique_flow_id_to_flow
+        self._unique_flow_id_to_flow = unique_flow_id_to_flow
         self._use_virtual_flows = use_virtual_flows
         self._virtual_flows_epsilon = virtual_flows_epsilon
 
@@ -910,22 +900,6 @@ class ScenarioData(object):
         return self._year_to_flows
 
     @property
-    def processes(self) -> List[Process]:
-        """
-        Get list of Processes
-        :return: List of Processes
-        """
-        return self._processes
-
-    @property
-    def flows(self) -> List[Flow]:
-        """
-        Get list of Flows
-        :return: List of Flows
-        """
-        return self._flows
-
-    @property
     def stocks(self) -> List[Stock]:
         """
         Get list of Stocks
@@ -942,12 +916,12 @@ class ScenarioData(object):
         return self._unique_process_id_to_process
 
     @property
-    def unique_flow_id_to_flows(self) -> Dict[str, Flow]:
+    def unique_flow_id_to_flow(self) -> Dict[str, Flow]:
         """
         Get mapping of unique Flow ID to Flows
         :return: Dictionary
         """
-        return self._unique_flow_id_to_flows
+        return self._unique_flow_id_to_flow
 
     @property
     def use_virtual_flows(self) -> bool:
@@ -1008,15 +982,15 @@ class Scenario(object):
     happening in the scenario
     """
 
-    def __init__(self, scenario_definition: ScenarioDefinition = None, scenario_data: ScenarioData = None):
-        if scenario_definition is None:
-            scenario_definition = ScenarioDefinition()
+    def __init__(self, definition: ScenarioDefinition = None, data: ScenarioData = None):
+        if definition is None:
+            definition = ScenarioDefinition()
 
-        if scenario_data is None:
-            scenario_data = ScenarioData()
+        if data is None:
+            data = ScenarioData()
 
-        self._scenario_definition = scenario_definition
-        self._scenario_data = scenario_data
+        self._scenario_definition = definition
+        self._scenario_data = data
 
     @property
     def name(self) -> str:
@@ -1029,3 +1003,20 @@ class Scenario(object):
     @property
     def scenario_data(self) -> ScenarioData:
         return self._scenario_data
+
+    def set_baseline_scenario_data(self, scenario_data: ScenarioData):
+        # TODO: Does this need copy.deepcopy()?
+        self._scenario_data = scenario_data
+
+    def apply_scenario_definitions(self):
+        """
+        Apply flow variations for Scenario.
+        """
+        if not self._scenario_data:
+            print("No ScenarioData!")
+            return
+
+        print("apply_scenario_definitions")
+        pass
+
+

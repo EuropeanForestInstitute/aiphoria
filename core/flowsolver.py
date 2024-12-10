@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import tqdm as tqdm
 from pandas import DataFrame
-from core.datastructures import Process, Flow, Stock
+from core.datastructures import Process, Flow, Stock, ScenarioData, ScenarioDefinition, Scenario
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
 from typing import List, Dict
 
@@ -19,11 +19,23 @@ class FlowSolver(object):
     _max_iterations = 100000
     _virtual_process_transformation_stage = "Virtual"
 
-    def __init__(self, data={}, use_virtual_flows: bool = True, virtual_flows_epsilon: float = 0.1):
-        self._use_virtual_flows = data["use_virtual_flows"]
-        self._virtual_flows_epsilon = data["virtual_flows_epsilon"]
-        self._df_process_to_flows = data["df_process_to_flows"]
-        self._df_flows = data["df_flows"]
+    def __init__(self, scenario: Scenario = None):
+        self._scenario = scenario
+        self._all_stocks = self._scenario.scenario_data.stocks
+        self._process_id_to_stock = self._scenario.scenario_data.process_id_to_stock
+        self._unique_process_id_to_process = self._scenario.scenario_data.unique_process_id_to_process
+        self._unique_flow_id_to_flow = self._scenario.scenario_data.unique_flow_id_to_flow
+
+        self._use_virtual_flows = self._scenario.scenario_data.use_virtual_flows
+        self._virtual_flows_epsilon = self._scenario.scenario_data.virtual_flows_epsilon
+        self._df_process_to_flows = self._scenario.scenario_data.year_to_process_flows
+        self._df_year_to_flows = self._scenario.scenario_data.year_to_flows
+
+        self._year_start = self._scenario.scenario_data.start_year
+        self._year_end = self._scenario.scenario_data.end_year
+        self._years = self._scenario.scenario_data.years
+        self._year_current = self._year_start
+        self._year_prev = self._year_current
 
         # Create year -> process ID -> process
         self._year_to_process_id_to_process = {}
@@ -45,37 +57,19 @@ class FlowSolver(object):
 
         # Create year -> flow ID -> flow
         self._year_to_flow_id_to_flow = {}
-        for year in self._df_flows.index:
+        for year in self._df_year_to_flows.index:
             self._year_to_flow_id_to_flow[year] = {}
-            for flow_id in self._df_flows.columns:
-                cell = self._df_flows.at[year, flow_id]
+            for flow_id in self._df_year_to_flows.columns:
+                cell = self._df_year_to_flows.at[year, flow_id]
                 if pd.isnull(cell):
                     continue
 
                 self._year_to_flow_id_to_flow[year][flow_id] = cell
 
-        self._process_id_to_stock = data["process_id_to_stock"]
-        self._all_processes = data["all_processes"]
-        self._all_flows = data["all_flows"]
-        self._all_stocks = data["all_stocks"]
-        self._unique_processes_id_to_process = data["unique_process_id_to_process"]
-        self._unique_flow_id_to_flow = data["unique_flow_id_to_flow"]
-
-        # Time range
-        self._year_start = data["year_start"]
-        self._year_end = data["year_end"]
-        self._years = data["years"]
-        self._year_current = self._year_start
-        self._year_prev = 0
-
         # Current timestep data
         self._current_process_id_to_process = self._year_to_process_id_to_process[self._year_current]
         self._current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[self._year_current]
         self._current_flow_id_to_flow = self._year_to_flow_id_to_flow[self._year_current]
-
-        # Initialization of FlowSolver data
-        self._year_current = self._year_start
-        self._year_prev = self._year_current
 
         # Convert all relative flow values to [0, 1] range
         # and convert all absolute values to solid wood equivalent values
@@ -95,17 +89,11 @@ class FlowSolver(object):
         self._stock_id_to_dsm_swe = {}
         self._stock_id_to_dsm_carbon = {}
 
-    def get_all_processes(self):
-        return self._all_processes
-
-    def get_all_flows(self):
-        return self._all_flows
-
     def get_all_stocks(self):
         return self._all_stocks
 
     def get_unique_processes(self) -> Dict[str, Process]:
-        return self._unique_processes_id_to_process
+        return self._unique_process_id_to_process
 
     def get_unique_flows(self) -> Dict[str, Flow]:
         return self._unique_flow_id_to_flow
@@ -244,18 +232,20 @@ class FlowSolver(object):
             total += flow.evaluated_value_carbon
         return total
 
-    def solve_timesteps(self) -> None:
+    def solve_timesteps(self):
         """
         Solves all timesteps.
 
         :return: None
         """
 
-        print("Solving flows for years {} - {}...".format(self._year_start, self._year_end))
+        # print("Solving flows for years {} - {} (scenario '{}')...".format(self._year_start,
+        #                                                                   self._year_end,
+        #                                                                   self._scenario.name))
         bar = tqdm.tqdm(initial=0)
         self._create_dynamic_stocks()
         for current_year in self._years:
-            bar.set_description("Solving {}/{}".format(current_year, self._year_end))
+            bar.set_description("Solving flows for year {}/{}".format(current_year, self._year_end))
             self._solve_timestep()
             self._advance_timestep()
             bar.update()
@@ -340,6 +330,41 @@ class FlowSolver(object):
             return process_id in self._year_to_process_id_to_process[year]
 
         return process_id in self._current_process_id_to_process
+
+    def accumulate_dynamic_stock_inflows(self, dsm: DynamicStockModel, total_inflows: float, year: int) -> None:
+        """
+        Update and accumulate inflows to DynamicStockModel.
+
+        :param dsm: Target DynamicStockModel
+        :param total_inflows: Total inflows for the stock (float)
+        :param year: Target year (int)
+        :return: None
+        """
+
+        year_index = self._years.index(year)
+
+        # Resetting some DynamicStockModel properties are needed to make
+        # timestep stock accumulation and other calculations work
+        dsm.i[year_index] = total_inflows
+
+        # Recalculate stock by cohort
+        dsm.s_c = None
+        dsm.compute_s_c_inflow_driven()
+
+        # Recalculate outflow by cohort
+        dsm.o_c = None
+        dsm.compute_o_c_from_s_c()
+
+        # Recalculate stock total
+        dsm.s = None
+        dsm.compute_stock_total()
+
+        # Get stock total
+        dsm.compute_stock_change()
+
+        # Recalculate stock outflow
+        dsm.o = None
+        dsm.compute_outflow_total()
 
     def _get_year_to_process_id_to_process(self) -> Dict[str, Dict[str, Process]]:
         return self._year_to_process_id_to_process
@@ -717,7 +742,7 @@ class FlowSolver(object):
         for v_id, virtual_process in created_virtual_processes.items():
             self._year_to_process_id_to_process[year][v_id] = virtual_process
             self._year_to_process_id_to_flow_ids[year][v_id] = {"in": [], "out": []}
-            self._unique_processes_id_to_process[v_id] = virtual_process
+            self._unique_process_id_to_process[v_id] = virtual_process
 
         for v_flow_id, virtual_flow in created_virtual_flows.items():
             self._year_to_flow_id_to_flow[year][v_flow_id] = virtual_flow
@@ -798,41 +823,6 @@ class FlowSolver(object):
             self._stock_id_to_dsm_swe[stock.id] = new_dsm_swe
             self._stock_id_to_dsm_carbon[stock.id] = new_dsm_carbon
 
-    def accumulate_dynamic_stock_inflows(self, dsm: DynamicStockModel, total_inflows: float, year: int) -> None:
-        """
-        Update and accumulate inflows to DynamicStockModel.
-
-        :param dsm: Target DynamicStockModel
-        :param total_inflows: Total inflows for the stock (float)
-        :param year: Target year (int)
-        :return: None
-        """
-
-        year_index = self._years.index(year)
-
-        # Resetting some DynamicStockModel properties are needed to make
-        # timestep stock accumulation and other calculations work
-        dsm.i[year_index] = total_inflows
-
-        # Recalculate stock by cohort
-        dsm.s_c = None
-        dsm.compute_s_c_inflow_driven()
-
-        # Recalculate outflow by cohort
-        dsm.o_c = None
-        dsm.compute_o_c_from_s_c()
-
-        # Recalculate stock total
-        dsm.s = None
-        dsm.compute_stock_total()
-
-        # Get stock total
-        dsm.compute_stock_change()
-
-        # Recalculate stock outflow
-        dsm.o = None
-        dsm.compute_outflow_total()
-
     def _evaluate_dynamic_stock_outflows(self, year: int) -> None:
         """
         Evaluate dynamic stock outflows and distribute stock outflow among all outflows.
@@ -867,4 +857,18 @@ class FlowSolver(object):
         year_index = self._years.index(year)
         stock_outflow_total = dsm.compute_outflow_total()
         return stock_outflow_total[year_index]
+
+    def get_solved_scenario_data(self) -> ScenarioData:
+        # Build ScenarioData from results
+        scenario_data = ScenarioData(years=copy.deepcopy(self._years),
+                                     process_id_to_stock=copy.deepcopy(self._process_id_to_stock),
+                                     year_to_process_flows=self._df_process_to_flows.copy(deep=True),
+                                     year_to_flows=self._df_year_to_flows.copy(deep=True),
+                                     stocks=copy.deepcopy(self._all_stocks),
+                                     unique_process_id_to_process=copy.deepcopy(self._unique_process_id_to_process),
+                                     unique_flow_id_to_flow=copy.deepcopy(self._unique_flow_id_to_flow),
+                                     use_virtual_flows=self._use_virtual_flows,
+                                     virtual_flows_epsilon=self._virtual_flows_epsilon
+                                     )
+        return scenario_data
 

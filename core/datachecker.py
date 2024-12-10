@@ -1,6 +1,6 @@
 import copy
 from collections import namedtuple
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union
 import numpy as np
 from core.dataprovider import DataProvider
 from core.parameters import ParameterName, ParameterFillMethod
@@ -20,9 +20,10 @@ class DataChecker(object):
         self._year_end = 0
         self._years = []
 
-    def build_baseline_scenario_data(self, epsilon: float = 0.1):
+    def build_scenarios(self, epsilon: float = 0.1) -> Scenario:
         """
-        Build baseline Scenario for FlowSolver.
+        Build scenarios to be solved using the FlowSolver.
+        First element in the list is always baseline scenario and existence of this is always guaranteed.
 
         :param epsilon: Maximum allowed absolute difference in process inputs and outputs.\n
                         Generate warning message in case this happens.
@@ -147,24 +148,21 @@ class DataChecker(object):
             raise SystemExit(-1)
 
         # Build graph data
-        process_id_to_process = {}
         process_id_to_stock = {}
-
-        for process in processes:
-            process_id_to_process[process.id] = process
-
         for stock in stocks:
             stock_id = stock.id
             process_id_to_stock[stock_id] = stock
 
-        # Build ScenarioData for holding baseline scenario data
+        # List of all scenarios
+        # First element in the list is always the baseline scenario
+        scenarios = []
+
+        # Create baseline Scenario
+        print("Building baseline scenario...")
         baseline_scenario_data = ScenarioData(years=self._years,
-                                              process_id_to_process=process_id_to_process,
                                               process_id_to_stock=process_id_to_stock,
                                               year_to_process_flows=df_year_to_process_flows,
                                               year_to_flows=df_year_to_flows,
-                                              processes=processes,
-                                              flows=flows,
                                               stocks=stocks,
                                               unique_process_id_to_process=unique_process_ids,
                                               unique_flow_id_to_flow=unique_flow_ids,
@@ -172,162 +170,19 @@ class DataChecker(object):
                                               virtual_flows_epsilon=virtual_flows_epsilon
                                               )
 
-        return baseline_scenario_data
+        baseline_scenario_definition = ScenarioDefinition(name="Baseline", flow_variations=[])
+        baseline_scenario = Scenario(definition=baseline_scenario_definition, data=baseline_scenario_data)
+        scenarios.append(baseline_scenario)
 
-    def build_flowsolver_data(self, epsilon: float = 0.1):
-        """
-        Build data for FlowSolver.
+        # Create alternative Scenarios
+        num_alternative_scenarios = len(self._scenario_definitions)
+        print("Building {} alternative scenarios...".format(num_alternative_scenarios))
+        for index, scenario_definition in enumerate(self._scenario_definitions):
+            # Alternative Scenarios do not contain any actual data, only the ScenarioDefinition is used
+            new_alternative_scenario = Scenario(definition=scenario_definition, data=ScenarioData())
+            scenarios.append(new_alternative_scenario)
 
-        :param epsilon: Maximum allowed absolute difference in process inputs and outputs.\n
-                        Generate warning message in case this happens.
-                        Default: 0.1
-        :return:        Dictionary with data for FlowSolver.\n
-        """
-
-        # NOTE: All flows must have data for the starting year
-        processes = self._dataprovider.get_processes()
-        flows = self._dataprovider.get_flows()
-        stocks = self._dataprovider.get_stocks()
-
-        model_params = self._dataprovider.get_model_params()
-        detect_year_range = model_params[ParameterName.DetectYearRange]
-        self._year_start = model_params[ParameterName.StartYear]
-        self._year_end = model_params[ParameterName.EndYear]
-        use_virtual_flows = model_params[ParameterName.UseVirtualFlows]
-
-        # Default optional values
-        # The default values are set inside DataProvider but
-        # in this is to ensure that the optional parameters have default
-        # values if they are missing from the settings file
-        virtual_flows_epsilon = 0.1
-        if use_virtual_flows and ParameterName.VirtualFlowsEpsilon in model_params:
-            virtual_flows_epsilon = model_params[ParameterName.VirtualFlowsEpsilon]
-
-        fill_missing_absolute_flows = True
-        if ParameterName.FillMissingAbsoluteFlows in model_params:
-            fill_missing_absolute_flows = model_params[ParameterName.FillMissingAbsoluteFlows]
-
-        fill_missing_relative_flows = True
-        if ParameterName.FillMissingRelativeFlows in model_params:
-            fill_missing_relative_flows = model_params[ParameterName.FillMissingRelativeFlows]
-
-        fill_method = ParameterFillMethod.Zeros
-        if ParameterName.FillMethod in model_params:
-            fill_method = model_params[ParameterName.FillMethod]
-
-        # Checking options
-        epsilon_inflows_outflows_mismatch = 0.1
-
-        if not processes:
-            print("DataChecker: No valid processes!")
-
-        if not flows:
-            print("DataChecker: No valid flows!")
-
-        if not processes or not flows:
-            raise SystemExit("No processes or flows found!")
-
-        if detect_year_range:
-            # Years are converted to int
-            self._year_start, self._year_end = self._detect_year_range(flows)
-        else:
-            self._year_start = model_params[ParameterName.StartYear]
-            self._year_end = model_params[ParameterName.EndYear]
-
-        # Check if start year is after end year and vice versa
-        if self._year_start > self._year_end:
-            print("Start year is greater than end year! (start year: {}, end year: {})".format(
-                self._year_start, self._year_end))
-            print("Stopping execution...")
-            raise SystemExit(-1)
-
-        if self._year_end < self._year_start:
-            print("End year is less than start year! (start year: {}, end year: {})".format(
-                self._year_start, self._year_end))
-            print("Stopping execution...")
-            raise SystemExit(-1)
-
-        # Build array of available years, last year is also included in year range
-        self._years = self._get_year_range()
-
-        # Get all unique Flow IDs and Process IDs that are used in the selected year range as dictionaries
-        # because set does not preserve insertion order
-        # Dictionaries preserve insertion order in Python version >= 3.7
-        unique_flow_ids = self._get_unique_flow_ids_in_year_range(flows, self._years)
-        unique_process_ids = self._get_unique_process_ids_in_year_range(flows, processes, self._years)
-        df_year_to_flows = self._create_year_to_flow_data(unique_flow_ids, flows, self._years)
-
-        # Check that source and target processes for flows are defined
-        if not self._check_flow_sources_and_targets(unique_process_ids, df_year_to_flows):
-            raise SystemExit(-1)
-
-        # Check that there is not multiple definitions for the exact same flow per year
-        # Exact means that source and target processes are the same
-        if not self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows, self._years):
-            raise SystemExit(-1)
-
-        # Check if stock distribution type and parameters are set and valid
-        if not self._check_process_stock_parameters(processes):
-            raise SystemExit(-1)
-
-        # Create and propagate flow data for missing years
-        df_year_to_flows = self._create_flow_data_for_missing_years(
-            df_year_to_flows,
-            fill_missing_absolute_flows=fill_missing_absolute_flows,
-            fill_missing_relative_flows=fill_missing_relative_flows,
-            fill_method=fill_method
-        )
-
-        # Create process to flow mappings
-        df_year_to_process_flows = self._create_process_to_flows(unique_process_ids, df_year_to_flows)
-
-        # Check if process only absolute inflows AND absolute outflows so that
-        # the total inflow matches with the total outflows within certain limit
-        if not self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
-                                                                 epsilon=epsilon_inflows_outflows_mismatch):
-            pass
-
-        # Check that flow type stays the same during the simulation
-        if not self._check_flow_type_changes(df_year_to_flows):
-            raise SystemExit(-1)
-
-        # Check if process has no inflows and only relative outflows:
-        if not self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows):
-            raise SystemExit(-1)
-
-        # Check that the sheet ParameterName.SheetNameFlowVariations exists
-        # and that it has properly defined data (source process ID, target process IDs, etc.)
-        if not self.check_scenario_definitions():
-            raise SystemExit(-1)
-
-        # Build graph data
-        process_id_to_process = {}
-        process_id_to_stock = {}
-
-        for process in processes:
-            process_id_to_process[process.id] = process
-
-        for stock in stocks:
-            stock_id = stock.id
-            process_id_to_stock[stock_id] = stock
-
-        flowsolver_data = {
-            "year_start": self._year_start,
-            "year_end": self._year_end,
-            "years": self._years,
-            "process_id_to_process": process_id_to_process,
-            "process_id_to_stock": process_id_to_stock,
-            "df_process_to_flows": df_year_to_process_flows,
-            "df_flows": df_year_to_flows,
-            "all_processes": processes,
-            "all_flows": flows,
-            "all_stocks": stocks,
-            "unique_process_id_to_process": unique_process_ids,
-            "unique_flow_id_to_flow": unique_flow_ids,
-            "use_virtual_flows": use_virtual_flows,
-            "virtual_flows_epsilon": virtual_flows_epsilon,
-        }
-        return flowsolver_data
+        return scenarios
 
     def check_processes_integrity(self):
         # Check that there is only processes with unique ids
@@ -1046,29 +901,40 @@ class DataChecker(object):
         print("Checking scenario definitions...")
         scenario_definitions = self._scenario_definitions
         valid_years = list(df_year_to_process_flows.index)
+        first_valid_year = min(valid_years)
+        last_valid_year = max(valid_years)
 
         for scenario_definition in scenario_definitions:
             scenario_name = scenario_definition.name
             flow_variations = scenario_definition.flow_variations
-            # TODO: Validity checks
-            # for flow_variation in flow_variations:
-            #     # Check that all required node IDs are valid during the defined time range
-            #     source_node_id = flow_variation.source_node_id
-            #     target_node_id = flow_variation.target_node_id
-            #     opposite_target_node_ids = flow_variation.opposite_target_node_ids
-            #
-            #     # Is the flow variation in valid year range?
-            #     start_year = flow_variation.start_year
-            #     end_year = flow_variation.end_year
-            #     if start_year < min(valid_years):
-            #         print("Scenario '{}': Source node ID '{}' start year ({}) before first year ({})".format(
-            #             scenario_name, source_node_id, year))
-            #
-            #     years = [year for year in range(flow_variation.start_year, flow_variation.end_year + 1)]
-            #     for year in years:
-            #         year_data = df_year_to_process_flows[df_year_to_process_flows.index == year]
-            #         if source_node_id not in year_data.columns:
-            #             print("Scenario '{}': Source node ID '{}' not defined for the year {}".format(
-            #                 scenario_name, source_node_id, year))
+            # TODO: Check that all required Processes exists
+            for flow_variation in flow_variations:
+                # Check that all required node IDs are valid during the defined time range
+                source_node_id = flow_variation.source_node_id
+                target_node_id = flow_variation.target_node_id
+                opposite_target_node_ids = flow_variation.opposite_target_node_ids
+
+                # Is the flow variation in valid year range?
+                start_year = flow_variation.start_year
+                end_year = flow_variation.end_year
+
+                # Check rule start year
+                if start_year < first_valid_year:
+                    print("Scenario '{}': Source node ID '{}' start year ({}) before first year ({})".format(
+                        scenario_name, source_node_id, start_year, first_valid_year))
+
+                # Check rule last year
+                if end_year > last_valid_year:
+                    print("Scenario '{}': Source node ID '{}' end year ({}) after last year ({})".format(
+                        scenario_name, source_node_id, end_year, last_valid_year))
+
+                years = [year for year in range(flow_variation.start_year, flow_variation.end_year + 1)]
+                for year in years:
+                    year_data = df_year_to_process_flows[df_year_to_process_flows.index == year]
+                    if source_node_id not in year_data.columns:
+                        print("Scenario '{}': Source node ID '{}' not defined for the year {}".format(
+                            scenario_name, source_node_id, year))
+
+
 
         return True
