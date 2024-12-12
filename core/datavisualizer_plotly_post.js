@@ -168,6 +168,7 @@ function updateToggleSmallNodes() {
         nodes: globals.currentTrace.node,
         links: globals.currentTrace.link,
     }
+
     Plotly.restyle(globals.graph, data, {})
 }
 
@@ -226,9 +227,9 @@ globals.graph.on("plotly_sliderchange", function(eventdata) {
     //console.log(eventdata.slider.name)
     // Update visual state of the selected trace
     updateToggleSmallNodes()
-
-    hideNodeInfoWindow()
-    createNodeInfoWindow()
+    removeNodeInfoWindow()
+    //hideNodeInfoWindow()
+    //createNodeInfoWindow()
 })
 
 globals.graph.on('plotly_hover', function(eventdata) {
@@ -417,7 +418,6 @@ function createNodeInfoWindow() {
     trHeader.appendChild(thHeaderName)
     thHeaderName.style = "user-select: none"
 
-
     thHeaderPosX = document.createElement('th')
     thHeaderPosX.appendChild(document.createTextNode('X'))
     trHeader.appendChild(thHeaderPosX)
@@ -519,8 +519,6 @@ function removeNodeInfoWindow() {
 }
 
 
-
-
 const buttonStyleText = `
 .button-wrapper {
     position: absolute;
@@ -555,3 +553,5 @@ const buttonStyleText = `
 // const elem = document.querySelector("menulayer")
 // elem.appendChild(divButtons)
 // elem.appendChild(buttonCopy)
+
+console.log(globals)

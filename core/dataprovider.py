@@ -2,7 +2,7 @@ from typing import List, Union, Any, Dict
 import numpy as np
 import openpyxl
 import pandas as pd
-from core.datastructures import Process, Flow, Stock, FlowVariation, ScenarioDefinition
+from core.datastructures import Process, Flow, Stock, FlowModifier, ScenarioDefinition
 from core.parameters import ParameterName, ParameterFillMethod
 
 
@@ -69,7 +69,7 @@ class DataProvider(object):
 
             [ParameterName.SheetNameScenarios,
              str,
-             "Sheet name that contains data for scenarios (flow variations)",
+             "Sheet name that contains data for scenarios (flow modifiers and constraints)",
              "Scenarios"
              ],
         ]
@@ -356,29 +356,29 @@ class DataProvider(object):
         if not rows:
             rows = []
 
-        flow_variations = []
+        flow_modifiers = []
         for row in rows:
-            new_flow_variation = FlowVariation(row)
-            if new_flow_variation.is_valid():
-                flow_variations.append(new_flow_variation)
+            new_flow_modifier = FlowModifier(row)
+            if new_flow_modifier.is_valid():
+                flow_modifiers.append(new_flow_modifier)
 
         # Build scenario mappings
         result = []
-        if not flow_variations:
+        if not flow_modifiers:
             # No alternative scenarios found, create later only the baseline scenario
             pass
         else:
-            # Map scenario names to flow variations
-            scenario_name_to_flow_variations = {}
-            for flow_variation in flow_variations:
-                scenario_name = flow_variation.scenario_name
-                if scenario_name not in scenario_name_to_flow_variations:
-                    scenario_name_to_flow_variations[scenario_name] = []
-                scenario_name_to_flow_variations[scenario_name].append(flow_variation)
+            # Map scenario names to flow modifiers
+            scenario_name_to_flow_modifiers = {}
+            for flow_modifier in flow_modifiers:
+                scenario_name = flow_modifier.scenario_name
+                if scenario_name not in scenario_name_to_flow_modifiers:
+                    scenario_name_to_flow_modifiers[scenario_name] = []
+                scenario_name_to_flow_modifiers[scenario_name].append(flow_modifier)
 
             # Create scenario definitions from mappings
-            for scenario_name, scenario_flow_variations in scenario_name_to_flow_variations.items():
-                new_scenario_definition = ScenarioDefinition(scenario_name, scenario_flow_variations)
+            for scenario_name, scenario_flow_modifiers in scenario_name_to_flow_modifiers.items():
+                new_scenario_definition = ScenarioDefinition(scenario_name, scenario_flow_modifiers)
                 result.append(new_scenario_definition)
         return result
 

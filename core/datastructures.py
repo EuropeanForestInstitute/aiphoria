@@ -1,7 +1,7 @@
 from builtins import float
-from typing import Tuple, List, Union, Dict, Any
+from typing import Tuple, List, Union, Dict
 import copy
-import pandas as pd
+from core.types import FunctionType, ChangeType
 
 
 class ObjectBase(object):
@@ -603,7 +603,7 @@ class Stock(ObjectBase):
         return self._process.stock_distribution_params
 
 
-class FlowVariation(ObjectBase):
+class FlowModifier(ObjectBase):
     def __init__(self, params: List[any] = None):
         super().__init__()
         self._scenario_name: str = ""
@@ -618,11 +618,11 @@ class FlowVariation(ObjectBase):
         self._opposite_target_node_ids = []
 
         if params is None:
-            # Invalid FlowVariation: no parameters
+            # Invalid: no parameters
             return
 
         if all(not elem for elem in params):
-            # Invalid FlowVariation: all parameters were None
+            # Invalid: all parameters None
             return
 
         # Alias parameters to more readable form
@@ -649,29 +649,31 @@ class FlowVariation(ObjectBase):
         if param_target_value is not None:
             self._target_value = self._parse_as(param_target_value, float)[0]
 
-        self._change_type = self._parse_as(param_change_type, str)[0]
+        # Change type
+        if self._parse_as(param_change_type, str)[0].lower() == ChangeType.Absolute.lower():
+            self._change_type = ChangeType.Absolute
+
+        if self._parse_as(param_change_type, str)[0].lower() == ChangeType.Relative.lower():
+            self._change_type = ChangeType.Relative
+
         self._start_year = self._parse_as(param_start_year, int)[0]
         self._end_year = self._parse_as(param_end_year, int)[0]
-        self._function_type = self._parse_as(param_function_type, str)[0]
+
+        # Function type
+        if self._parse_as(param_function_type, str)[0].lower() == FunctionType.Linear.lower():
+            self._function_type = FunctionType.Linear
+
+        if self._parse_as(param_function_type, str)[0].lower() == FunctionType.Exponential.lower():
+            self._function_type = FunctionType.Exponential
 
         # Check how many target nodes with opposite effect there is
         for process_id in list(params[9:]):
             if process_id is not None:
                 self._opposite_target_node_ids.append(process_id)
 
-
     def __str__(self):
-        s = "Flow variation: " \
-            "scenario_name='{}'" \
-            ", source_node_id='{}'" \
-            ", target_node_id='{}'" \
-            ", change_in_value='{}'" \
-            ", target_value='{}'" \
-            ", change_type='{}'"\
-            ", start_year='{}'"\
-            ", end_year='{}'"\
-            ", function_type='{}'"\
-            .format(
+        s = "Flow modifier: scenario_name='{}', source_node_id='{}', target_node_id='{}', change_in_value='{}', " \
+            "target_value='{}', change_type='{}', start_year='{}', end_year='{}', function_type='{}'".format(
             self.scenario_name,
             self.source_node_id,
             self.target_node_id,
@@ -784,7 +786,7 @@ class FlowVariation(ObjectBase):
         return self._end_year
 
     @property
-    def function_type(self) -> str:
+    def function_type(self) -> FunctionType:
         return self._function_type
 
     @property
@@ -879,15 +881,6 @@ class ScenarioData(object):
         return self._year_to_flow_id_to_flow
 
     @property
-    def process_id_to_process(self) -> Dict[str, Process]:
-        """
-        Get mapping of Process ID to Process.
-
-        :return: Dictionary
-        """
-        return self._process_id_to_process
-
-    @property
     def stocks(self) -> List[Stock]:
         """
         Get list of Stocks
@@ -956,20 +949,20 @@ class ScenarioData(object):
 
 class ScenarioDefinition(object):
     """
-    ScenarioDefinition is wrapper object that contains scenario name and all flow variations that are applied
+    ScenarioDefinition is wrapper object that contains scenario name and all flow modifiers that are applied
     for the Scenario.
 
     Actual building of Scenarios happens inside DataChecker.build_scenarios()
     """
-    def __init__(self, name: str = None, flow_variations: List[FlowVariation] = None):
+    def __init__(self, name: str = None, flow_modifiers: List[FlowModifier] = None):
         if name is None:
             name = "Baseline scenario"
 
-        if flow_variations is None:
-            flow_variations = []
+        if flow_modifiers is None:
+            flow_modifiers = []
 
         self._name = name
-        self._flow_variations = flow_variations
+        self._flow_modifiers = flow_modifiers
 
     @property
     def name(self) -> str:
@@ -980,18 +973,18 @@ class ScenarioDefinition(object):
         return self._name
 
     @property
-    def flow_variations(self) -> List[FlowVariation]:
+    def flow_modifiers(self) -> List[FlowModifier]:
         """
-        Get list of FlowVariations.
+        Get list of FlowModifiers.
         These are the rules that are applied to Scenario.
-        :return: List of FlowVariations
+        :return: List of FlowModify-objects
         """
-        return self._flow_variations
+        return self._flow_modifiers
 
 
 class Scenario(object):
     """
-    Scenario is wrapper object that contains scenario name and all flow variations that are
+    Scenario is wrapper object that contains scenario name and all flow modifiers that are
     happening in the scenario
     """
 
@@ -1004,6 +997,8 @@ class Scenario(object):
 
         self._scenario_definition = definition
         self._scenario_data = data
+        self._flow_solver = None
+        self._odym_data = None
 
     @property
     def name(self) -> str:
@@ -1017,45 +1012,19 @@ class Scenario(object):
     def scenario_data(self) -> ScenarioData:
         return self._scenario_data
 
-    def set_baseline_scenario_data(self, scenario_data: ScenarioData):
+    # Flow solver
+    @property
+    def flow_solver(self):
+        return self._flow_solver
+
+    @flow_solver.setter
+    def flow_solver(self, flow_solver):
+        self._flow_solver = flow_solver
+
+    def copy_from_baseline_scenario_data(self, scenario_data: ScenarioData):
+        """
+        Copy ScenarioData from baseline Scenario.
+
+        :param scenario_data: ScenarioData from baseline FlowSolver.
+        """
         self._scenario_data = copy.deepcopy(scenario_data)
-
-    def apply_scenario_definitions(self):
-        """
-        Apply flow variations for Scenario
-        """
-        if not self._scenario_data:
-            print("No ScenarioData!")
-            return
-
-        year_to_flow_id_to_flow = self.scenario_data.year_to_flow_id_to_flow
-        for flow_variation in self.scenario_definition.flow_variations:
-            year_range = [year for year in range(flow_variation.start_year, flow_variation.end_year + 1)]
-            target_node_id = flow_variation.target_node_id
-            source_node_id = flow_variation.source_node_id
-            source_to_target_flow_id = "{} {}".format(source_node_id, target_node_id)
-            for year in year_range:
-                # Apply flow variation between source and target nodes
-                flow = year_to_flow_id_to_flow[year][source_to_target_flow_id]
-                if flow_variation.use_change_in_value:
-                    # TODO: Check that the flow type matches (e.g. ABS with only ABS, REL with only REL)
-                    if flow_variation.is_change_type_absolute:
-                        # Absolute change
-                        flow.value += flow_variation.change_in_value
-                    else:
-                        # Relative change, now Excel uses percentage
-                        flow.value += flow.value * (flow_variation.change_in_value / 100.0)
-
-                # Apply the opposite between the source node ID and opposite target node ID
-                for opposite_target_node_id in flow_variation.opposite_target_node_ids:
-                    source_to_opposite_node_id = "{} {}".format(source_node_id, opposite_target_node_id)
-                    opposite_flow = year_to_flow_id_to_flow[year][source_to_opposite_node_id]
-                    # TODO: Check that the flow type matches (e.g. ABS with only ABS, REL with only REL)
-                    if flow_variation.use_change_in_value:
-                        # Absolute opposite change
-                        opposite_flow.value -= flow_variation.change_in_value
-                    else:
-                        # Relative opposite change, now Excel uses percentage
-                        opposite_flow.value -= opposite_flow.value * (flow_variation.change_in_value / 100.0)
-
-

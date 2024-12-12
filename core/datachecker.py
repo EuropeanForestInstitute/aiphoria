@@ -142,7 +142,7 @@ class DataChecker(object):
         if not self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows):
             raise SystemExit(-1)
 
-        # Check that the sheet ParameterName.SheetNameFlowVariations exists
+        # Check that the sheet ParameterName.SheetNameScenarios exists
         # and that it has properly defined data (source process ID, target process IDs, etc.)
         if not self.check_scenario_definitions(df_year_to_process_flows):
             raise SystemExit(-1)
@@ -200,7 +200,7 @@ class DataChecker(object):
                                               virtual_flows_epsilon=virtual_flows_epsilon
                                               )
 
-        baseline_scenario_definition = ScenarioDefinition(name="Baseline", flow_variations=[])
+        baseline_scenario_definition = ScenarioDefinition(name="Baseline", flow_modifiers=[])
         baseline_scenario = Scenario(definition=baseline_scenario_definition, data=baseline_scenario_data)
         scenarios.append(baseline_scenario)
 
@@ -208,8 +208,7 @@ class DataChecker(object):
         num_alternative_scenarios = len(self._scenario_definitions)
         print("Building {} alternative scenarios...".format(num_alternative_scenarios))
         for index, scenario_definition in enumerate(self._scenario_definitions):
-            # Alternative scenarios do not have ScenarioData at this point, data is filled
-            # from the FlowSolver later
+            # Alternative scenarios do not have ScenarioData at this point, data is filled from the FlowSolver later
             new_alternative_scenario = Scenario(definition=scenario_definition, data=ScenarioData())
             scenarios.append(new_alternative_scenario)
 
@@ -937,17 +936,17 @@ class DataChecker(object):
 
         for scenario_definition in scenario_definitions:
             scenario_name = scenario_definition.name
-            flow_variations = scenario_definition.flow_variations
+            flow_modifiers = scenario_definition.flow_modifiers
             # TODO: Check that all required Processes exists
-            for flow_variation in flow_variations:
+            for flow_modifier in flow_modifiers:
                 # Check that all required node IDs are valid during the defined time range
-                source_node_id = flow_variation.source_node_id
-                target_node_id = flow_variation.target_node_id
-                opposite_target_node_ids = flow_variation.opposite_target_node_ids
+                source_node_id = flow_modifier.source_node_id
+                target_node_id = flow_modifier.target_node_id
+                opposite_target_node_ids = flow_modifier.opposite_target_node_ids
 
-                # Is the flow variation in valid year range?
-                start_year = flow_variation.start_year
-                end_year = flow_variation.end_year
+                # Is the flow modifier in valid year range?
+                start_year = flow_modifier.start_year
+                end_year = flow_modifier.end_year
 
                 # Check rule for start year
                 if start_year < first_valid_year:
@@ -960,7 +959,7 @@ class DataChecker(object):
                         scenario_name, source_node_id, end_year, last_valid_year))
 
                 # Check if source node ID exists for the year range
-                years = [year for year in range(flow_variation.start_year, flow_variation.end_year + 1)]
+                years = [year for year in range(flow_modifier.start_year, flow_modifier.end_year + 1)]
                 for year in years:
                     year_data = df_year_to_process_flows[df_year_to_process_flows.index == year]
                     if source_node_id not in year_data.columns:

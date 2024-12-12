@@ -218,6 +218,7 @@ class FlowSolver(object):
         """
         bar = tqdm.tqdm(initial=0)
         self._create_dynamic_stocks()
+        self._apply_flow_modifiers()
         for current_year in self._years:
             bar.set_description("Solving flows for year {}/{}".format(current_year, self._year_end))
             self._solve_timestep()
@@ -227,27 +228,24 @@ class FlowSolver(object):
 
     def get_year_to_process_to_flows(self):
         year_to_process_to_flows = {}
-        for year, current_process_id_to_process in self._year_to_process_id_to_process.items():
+        for year, process_id_to_process in self._year_to_process_id_to_process.items():
             year_to_process_to_flows[year] = {}
-            current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[year]
-            current_flow_id_to_flow = self._year_to_flow_id_to_flow[year]
-            for process_id, process in current_process_id_to_process.items():
-                flow_ids = current_process_id_to_flow_ids[process_id]
-                inflow_ids = flow_ids["in"]
-                outflow_ids = flow_ids["out"]
+            for process_id, process in process_id_to_process.items():
+                flow_ids = self._year_to_process_id_to_flow_ids[year][process_id]
 
-                process_flows = {"in": [], "out": []}
-                for flow_id in inflow_ids:
-                    process_flows["in"].append(current_flow_id_to_flow[flow_id])
+                flows_in = []
+                for flow_id in flow_ids["in"]:
+                    flows_in.append(self._year_to_flow_id_to_flow[year][flow_id])
 
-                for flow_id in outflow_ids:
-                    process_flows["out"].append(current_flow_id_to_flow[flow_id])
+                flows_out = []
+                for flow_id in flow_ids["out"]:
+                    flows_out.append(self._year_to_flow_id_to_flow[year][flow_id])
 
-                year_to_process_to_flows[year][process] = process_flows
+                year_to_process_to_flows[year][process] = {"in": flows_in, "out": flows_out}
 
         return year_to_process_to_flows
 
-    def get_process_flows(self, process_id: str, year: int) -> Dict[str, Flow]:
+    def get_process_flows(self, process_id: str, year: int) -> Dict[str, List[Flow]]:
         process_inflows = self._get_process_inflows(process_id, year)
         process_outflows = self._get_process_outflows(process_id, year)
         return {"Inflows": process_inflows, "Outflows": process_outflows}
@@ -509,6 +507,9 @@ class FlowSolver(object):
     def _solve_timestep(self) -> None:
         self._current_flow_id_to_flow = self._year_to_flow_id_to_flow[self._year_current]
         self._current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[self._year_current]
+
+        # Check if any flow constraints should be applied at the start of each timestep
+        self._apply_flow_constraints()
 
         # Each year evaluate dynamic stock outflows and related outflows as evaluated
         self._evaluate_dynamic_stock_outflows(self._year_current)
@@ -861,3 +862,49 @@ class FlowSolver(object):
                                      virtual_flows_epsilon=virtual_flows_epsilon
                                      )
         return scenario_data
+
+    def _apply_flow_modifiers(self):
+        """
+        Apply flow modifiers if Scenario has those defined.
+        Baseline scenario does not have those so return immediately
+        if there isn't anything to process.
+        """
+        if not self._scenario.scenario_definition.flow_modifiers:
+            print("*** No flow modifiers for scenario '{}' ***".format(self._scenario.name))
+            return
+
+        print("*** Applying flow modifiers for scenario '{}' ***".format(self._scenario.name))
+        flow_modifiers = self._scenario.scenario_definition.flow_modifiers
+        for flow_modifier in flow_modifiers:
+            year_range = [year for year in range(flow_modifier.start_year, flow_modifier.end_year + 1)]
+            target_node_id = flow_modifier.target_node_id
+            source_node_id = flow_modifier.source_node_id
+            source_to_target_flow_id = "{} {}".format(source_node_id, target_node_id)
+            for year in year_range:
+                # Apply flow modifier between source and target nodes
+                flow = self._year_to_flow_id_to_flow[year][source_to_target_flow_id]
+                if flow_modifier.use_change_in_value:
+                    # TODO: Check that the flow type matches (e.g. ABS with only ABS, REL with only REL)
+                    if flow_modifier.is_change_type_absolute:
+                        # Absolute change
+                        flow.value += flow_modifier.change_in_value
+                    else:
+                        # Relative change, now Excel uses percentage
+                        flow.value += flow.value * (flow_modifier.change_in_value / 100.0)
+
+                # Apply the opposite between the source node ID and opposite target node ID
+                for opposite_target_node_id in flow_modifier.opposite_target_node_ids:
+                    source_to_opposite_node_id = "{} {}".format(source_node_id, opposite_target_node_id)
+                    opposite_flow = self._year_to_flow_id_to_flow[year][source_to_opposite_node_id]
+                    # TODO: Check that the flow type matches (e.g. ABS with only ABS, REL with only REL)
+                    if flow_modifier.use_change_in_value:
+                        # Absolute opposite change
+                        opposite_flow.value -= flow_modifier.change_in_value
+                    else:
+                        # Relative opposite change, now Excel uses percentage
+                        opposite_flow.value -= opposite_flow.value * (flow_modifier.change_in_value / 100.0)
+
+    def _apply_flow_constraints(self):
+        # TODO: Implement flow constraint processing
+        return
+

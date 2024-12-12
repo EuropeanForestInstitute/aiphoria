@@ -1,5 +1,5 @@
 import os
-from core.flowsolver import FlowSolver
+from core.datastructures import Scenario
 import plotly.graph_objects as go
 from PIL import Image
 
@@ -14,7 +14,9 @@ class DataVisualizer(object):
     def show(self):
         self._fig.show(renderer="browser", post_script=[self._script], config={'displayModeBar': False})
 
-    def build(self, flowsolver: FlowSolver, params: dict):
+    def build(self, scenario: Scenario, params: dict):
+        flow_solver = scenario.flow_solver
+
         small_node_threshold = params["small_node_threshold"]
         process_transformation_stage_colors = params["process_transformation_stage_colors"]
         virtual_process_graph_labels = params["virtual_process_graph_labels"]
@@ -23,7 +25,7 @@ class DataVisualizer(object):
         virtual_flow_color = params["virtual_flow_color"]
 
         year_to_data = {}
-        year_to_process_to_flows = flowsolver.get_year_to_process_to_flows()
+        year_to_process_to_flows = flow_solver.get_year_to_process_to_flows()
         for year, process_to_flows in year_to_process_to_flows.items():
             year_to_data[year] = {}
 
@@ -201,7 +203,13 @@ class DataVisualizer(object):
         # Show dropdown for showing normalized position or not
         fig.update_layout(
             autosize=True,
-            title="Year {}".format(min(year_to_process_to_flows.keys())),
+            title=dict(
+                text="Year {}".format(min(year_to_process_to_flows.keys())),
+                subtitle=dict(
+                    text="Scenario: {}".format(scenario.name),
+                    font=dict(color='#000', size=15)
+                )
+            ),
             font={"size": 18, "color": '#000', "family": "Arial"},
             plot_bgcolor='#ccc',
             paper_bgcolor="#ffffff",
@@ -283,7 +291,7 @@ class DataVisualizer(object):
             ],
         )
 
-        # Add logo watermark
+        # Add aiphoria logo watermark
         logo = Image.open("docs/images/aiphoria-logo.png")
         fig.add_layout_image(
             dict(source=logo,
@@ -297,13 +305,11 @@ class DataVisualizer(object):
         self._fig = fig
 
         # Add JS script that is run after the Plotly has loaded
-        visualizer_js = ""
         filename = os.path.join(os.path.abspath("."), "core", "datavisualizer_plotly_post.js")
+
         visualizer_js = ""
         with open(filename, "r", encoding="utf-8") as fs:
             visualizer_js = fs.read()
-            # lines = fs.readlines()
-            # visualizer_js = "".join(lines)
 
         visualizer_js = visualizer_js.replace("{small_node_threshold}", str(small_node_threshold))
         self._script = visualizer_js
