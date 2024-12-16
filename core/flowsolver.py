@@ -4,6 +4,7 @@ import pandas as pd
 import tqdm as tqdm
 from pandas import DataFrame
 from core.datastructures import Process, Flow, Stock, ScenarioData, Scenario
+from core.types import ChangeType, FunctionType
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
 from typing import List, Dict
 
@@ -451,6 +452,8 @@ class FlowSolver(object):
             # Subtract absolute outflows from total inflows
             # and distribute the remaining total between all relative flows
             if process_id in self._stock_id_to_dsm_swe:
+                # All inflows are evaluated but process has stocks
+
                 # Update DSM SWE
                 dsm_swe = self._stock_id_to_dsm_swe[process_id]
                 self.accumulate_dynamic_stock_inflows(dsm_swe, total_inflows, year)
@@ -484,10 +487,35 @@ class FlowSolver(object):
                     flow.evaluated_value = flow.evaluated_share * total_outflows_rel
 
             else:
-                # Process has no stocks
+                # All inflows are evaluated but the current process does not have stocks
                 outflows_abs = self._get_process_outflows_abs(process_id, year)
                 outflows_rel = self._get_process_outflows_rel(process_id, year)
                 total_outflows_abs = np.sum([flow.evaluated_value for flow in outflows_abs])
+
+                # Ignore root and leaf processes because those have zero inflows and zero outflows
+                is_root = self.is_root_process(process_id)
+                is_leaf = self.is_leaf_process(process_id)
+                if not is_root and not is_leaf and total_inflows < total_outflows_abs:
+                    if self._use_virtual_flows:
+                        # TODO: Show error message if inflows are not able to satisfy the defined outflow
+                        print("{}: Create virtual inflow".format(year))
+                        diff = total_inflows - total_outflows_abs
+                        process = self.get_process(process_id, year)
+                        v_process = self._create_virtual_process_ex(process)
+                        v_flow = self._create_virtual_flow_ex(v_process, process, abs(diff))
+
+                        # Create virtual Flows and Processes to current year data
+                        self._year_to_process_id_to_process[year][v_process.id] = v_process
+                        self._year_to_process_id_to_flow_ids[year][v_process.id] = {"in": [], "out": []}
+                        self._unique_process_id_to_process[v_process.id] = v_process
+
+                        self._year_to_flow_id_to_flow[year][v_flow.id] = v_flow
+                        self._year_to_process_id_to_flow_ids[year][v_flow.target_process_id]["in"].append(v_flow.id)
+                        self._year_to_process_id_to_flow_ids[year][v_flow.source_process_id]["out"].append(v_flow.id)
+                        self._unique_flow_id_to_flow[v_flow] = v_flow
+
+                        # Recalculate total_inflows again
+                        total_inflows = self.get_process_inflows_total(process_id)
 
                 # Remaining outflows to be distributed between all relative outflows
                 total_outflows_rel = total_inflows - total_outflows_abs
@@ -522,7 +550,10 @@ class FlowSolver(object):
                 flow.evaluated_value = flow.value
             else:
                 flow.is_evaluated = False
+                flow.evaluated_share = flow.value / 100.0
                 flow.evaluated_value = 0.0
+                # print("Inside solve_timestep: ", id(flow), flow)
+
 
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
@@ -549,6 +580,7 @@ class FlowSolver(object):
                     target_process_id = flow.target_process_id
                     if target_process_id not in unevaluated_process_ids:
                         unevaluated_process_ids.insert(0, target_process_id)
+
             else:
                 # Check all outflow target process ids
                 for flow in outflows:
@@ -618,6 +650,15 @@ class FlowSolver(object):
         self._year_prev = self._year_current
         self._year_current += 1
 
+    def _create_virtual_process_id(self, process: Process):
+        return self._virtual_process_id_prefix + process.id
+
+    def _create_virtual_process_name(self, process: Process):
+        return self._virtual_process_id_prefix + process.name
+
+    def _create_virtual_process_transformation_stage(self):
+        return self._virtual_process_transformation_stage
+
     def _create_virtual_process(self, process_id: str, process_name: str, transformation_stage: str) -> Process:
         new_virtual_process = Process()
         new_virtual_process.id = process_id
@@ -628,7 +669,14 @@ class FlowSolver(object):
         new_virtual_process.is_virtual = True
         return new_virtual_process
 
-    def _create_virtual_flow(self, source_process_id, target_process_id, value, unit) -> Flow:
+    def _create_virtual_process_ex(self, process: Process) -> Process:
+        v_id = self._create_virtual_process_id(process)
+        v_name = self._create_virtual_process_name(process)
+        v_ts = self._create_virtual_process_transformation_stage()
+        v_process = self._create_virtual_process(v_id, v_name, v_ts)
+        return v_process
+
+    def _create_virtual_flow(self, source_process_id: str, target_process_id: str, value: float, unit: str) -> Flow:
         new_virtual_flow = Flow()
         new_virtual_flow.source_process_id = source_process_id
         new_virtual_flow.target_process_id = target_process_id
@@ -638,6 +686,10 @@ class FlowSolver(object):
         new_virtual_flow.unit = unit
         new_virtual_flow.is_virtual = True
         return new_virtual_flow
+
+    def _create_virtual_flow_ex(self, source_process: Process, target_process: Process, value: float) -> Flow:
+        v_flow = self._create_virtual_flow(source_process.id, target_process.id, value, "")
+        return v_flow
 
     def _create_virtual_flows(self, year: int, epsilon: float = 0.1) -> None:
         # Virtual outflow is unreported flow of process
@@ -657,6 +709,8 @@ class FlowSolver(object):
 
             inflows_total = self.get_process_inflows_total(process_id, year)
             outflows_total = self.get_process_outflows_total(process_id, year)
+
+            #print(inflows_total, outflows_total)
 
             # If process has stock then consider only the stock outflows
             if process_id in self._process_id_to_stock:
@@ -687,14 +741,11 @@ class FlowSolver(object):
 
             if need_virtual_inflow:
                 # Create new virtual Process
-                v_id = self._virtual_process_id_prefix + process_id
-                v_name = self._virtual_process_id_prefix + process.name
-                v_ts = self._virtual_process_transformation_stage
-                v_process = self._create_virtual_process(v_id, v_name, v_ts)
+                v_process = self._create_virtual_process_ex(process)
                 created_virtual_processes[v_process.id] = v_process
 
                 # Create new virtual inflow
-                source_process_id = v_id
+                source_process_id = v_process.id
                 target_process_id = process_id
                 value = process_mass_balance * -1.0
                 unit = ""
@@ -703,15 +754,12 @@ class FlowSolver(object):
 
             if need_virtual_outflow:
                 # Create new virtual Process
-                v_id = self._virtual_process_id_prefix + process_id
-                v_name = self._virtual_process_id_prefix + process.name
-                v_ts = self._virtual_process_transformation_stage
-                v_process = self._create_virtual_process(v_id, v_name, v_ts)
+                v_process = self._create_virtual_process_ex(process)
                 created_virtual_processes[v_process.id] = v_process
 
                 # Create new virtual outflow
                 source_process_id = process_id
-                target_process_id = v_id
+                target_process_id = v_process.id
                 value = process_mass_balance
                 unit = ""
                 new_virtual_flow = self._create_virtual_flow(source_process_id, target_process_id, value, unit)
@@ -870,7 +918,7 @@ class FlowSolver(object):
         if there isn't anything to process.
         """
         if not self._scenario.scenario_definition.flow_modifiers:
-            print("*** No flow modifiers for scenario '{}' ***".format(self._scenario.name))
+            # This is the case when dealing with baseline scenario, do nothing and just return
             return
 
         print("*** Applying flow modifiers for scenario '{}' ***".format(self._scenario.name))
@@ -880,31 +928,123 @@ class FlowSolver(object):
             target_node_id = flow_modifier.target_node_id
             source_node_id = flow_modifier.source_node_id
             source_to_target_flow_id = "{} {}".format(source_node_id, target_node_id)
-            for year in year_range:
-                # Apply flow modifier between source and target nodes
-                flow = self._year_to_flow_id_to_flow[year][source_to_target_flow_id]
-                if flow_modifier.use_change_in_value:
-                    # TODO: Check that the flow type matches (e.g. ABS with only ABS, REL with only REL)
-                    if flow_modifier.is_change_type_absolute:
-                        # Absolute change
-                        flow.value += flow_modifier.change_in_value
-                    else:
-                        # Relative change, now Excel uses percentage
-                        flow.value += flow.value * (flow_modifier.change_in_value / 100.0)
 
-                # Apply the opposite between the source node ID and opposite target node ID
-                for opposite_target_node_id in flow_modifier.opposite_target_node_ids:
-                    source_to_opposite_node_id = "{} {}".format(source_node_id, opposite_target_node_id)
-                    opposite_flow = self._year_to_flow_id_to_flow[year][source_to_opposite_node_id]
-                    # TODO: Check that the flow type matches (e.g. ABS with only ABS, REL with only REL)
-                    if flow_modifier.use_change_in_value:
-                        # Absolute opposite change
-                        opposite_flow.value -= flow_modifier.change_in_value
+            # TODO: Not caring about the actual end year of the simulation now, check that later
+            new_values = []
+            if flow_modifier.function_type == FunctionType.Constant:
+                # Replace the values during for the year range
+                new_values = [flow_modifier.change_in_value for year in year_range]
+
+            if flow_modifier.function_type == FunctionType.Linear:
+                new_values = np.linspace(start=0, stop=flow_modifier.change_in_value, num=len(year_range))
+
+            if flow_modifier.function_type == FunctionType.Exponential:
+                new_values = np.logspace(start=0, stop=1, num=len(year_range))
+
+            if flow_modifier.function_type == FunctionType.Sigmoid:
+                new_values = np.linspace(start=-flow_modifier.change_in_value,
+                                           stop=flow_modifier.change_in_value,
+                                           num=len(year_range))
+
+                new_values = flow_modifier.change_in_value / (1.0 + np.exp(-new_values))
+
+            for year_index, year in enumerate(year_range):
+                source_to_target_flow = self._year_to_flow_id_to_flow[year][source_to_target_flow_id]
+
+                # Replace the value for the flow value for the year instead of adding the change
+                # Using the Constant-function: replace the value for the year and ignore all the
+                # opposite target nodes
+                if flow_modifier.function_type == FunctionType.Constant:
+                    source_to_target_flow.value = new_values[year_index]
+                    #print("CONSTANT: ", source_to_target_flow, id(source_to_target_flow))
+                    continue
+
+                # Apply change in value (either absolute or relative) for the flow
+                # and also to target opposite flows
+                if flow_modifier.use_change_in_value:
+                    if flow_modifier.is_change_type_absolute:
+                        self._apply_absolute_change_to_flow(source_to_target_flow, new_values[year_index])
+
+                    if flow_modifier.is_change_type_relative:
+                        self._apply_relative_change_to_flow(new_values[year_index])
+
+                    # Clamp flow values:
+                    if source_to_target_flow.is_unit_absolute_value:
+                        # TODO: Prevent absolute flow values < 0.0?
+                        #self._clamp_flow_value(source_to_target_flow, 0.0, None)
+                        pass
                     else:
-                        # Relative opposite change, now Excel uses percentage
-                        opposite_flow.value -= opposite_flow.value * (flow_modifier.change_in_value / 100.0)
+                        # NOTE: Clamp relative flow value between [0, 100] % (here flow value = flow share)
+                        self._clamp_flow_value(source_to_target_flow, 0.0, 100.0)
+
+                # if flow_modifier.has_opposite_targets:
+                #     print("Apply changes only to opposite target nodes")
+                #     for opposite_target_node_id in flow_modifier.opposite_target_node_ids:
+                #         source_to_opposite_node_id = "{} {}".format(source_node_id, opposite_target_node_id)
+                #         opposite_flow = self._year_to_flow_id_to_flow[year][source_to_opposite_node_id]
+                #
+                #         # TODO: Check that the flow type matches (e.g. ABS with only ABS, REL with only REL)
+                #         if flow_modifier.use_change_in_value:
+                #             opposite_flow.value -= flow_modifier.change_in_value
+                #         else:
+                #             opposite_flow.value -= opposite_flow.value * (flow_modifier.change_in_value / 100.0)
+                # else:
+                #     # Apply change to all same type outflows as flow_modifier
+                #     print("Apply change to all same type outflows")
+
+
+
+    def _apply_absolute_change_to_flow(self, flow: Flow, value: float):
+        """
+        Apply absolute change to Flow.
+
+        :param flow: Target Flow
+        :param value: Value
+        """
+        flow.value += value
+
+    def _apply_relative_change_to_flow(self, flow: Flow, value: float):
+        """
+        Apply relative (= percentual) change to Flow.
+        Value should not be normalized.
+
+        :param flow: Target Flow
+        :param value: Value (not normalized)
+        """
+        flow.value += flow.value * (value / 100.0)
+
+    def _clamp_flow_value(self, flow: Flow, mini: float = 0.0, maxi: float = 100.0):
+        """
+        Clamp Flow value to range [mini, maxi].
+        Mini and maxi are both included in the range.
+        Default range is [0.0, 100.0].
+
+        If mini is None then do not check for lower bound.
+        If maxi is None then do not check for upper bound
+
+        :param flow: Target Flow
+        :param mini: Lower bound value
+        :param maxi: Upper bound value
+        """
+        has_mini = mini is not None
+        has_maxi = maxi is not None
+        apply_both_bounds = has_mini and has_maxi
+        apply_only_lower_bound = has_mini and not has_maxi
+        apply_only_higher_bound = not has_mini and has_maxi
+        if apply_both_bounds:
+            flow.value = np.clip(flow.value, mini, maxi)
+            return
+
+        if apply_only_lower_bound:
+            if flow.value < mini:
+                flow.value = mini
+            return
+
+        if apply_only_higher_bound:
+            if flow.value > maxi:
+                flow.value = maxi
+            return
 
     def _apply_flow_constraints(self):
-        # TODO: Implement flow constraint processing
-        return
-
+        # TODO:
+        pass

@@ -7,6 +7,8 @@ from core.parameters import ParameterName, ParameterFillMethod
 from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData
 import pandas as pd
 
+from core.types import FunctionType
+
 
 class DataChecker(object):
     def __init__(self, dataprovider: DataProvider = None):
@@ -968,6 +970,10 @@ class DataChecker(object):
 
                 # Check if source node ID
 
+                # Check that function type is valid
+                print(flow_modifier.function_type)
 
+                if flow_modifier.function_type not in FunctionType:
+                    print("Flow modifier has invalid function type: '{}'".format(flow_modifier.function_type))
 
         return True

@@ -330,8 +330,6 @@ class Flow(ObjectBase):
         self._evaluated_share = 0.0
         self._evaluated_value = 0.0
 
-        self._flow_share = 0.0
-        self._flow_value = 0.0
         self._indicators = {}
 
         if params is None:
@@ -384,9 +382,12 @@ class Flow(ObjectBase):
         self._row_number = row_number  # Track Excel file row number, last element in list
 
     def __str__(self):
-        s = "Flow '{}' -> '{}': Value={} Unit={}, is_evaluated={}, evaluated_share={}, evaluated_value={}, year={}".format(
+        s = "Flow '{}' -> '{}': Value={} Unit={}," \
+            "is_evaluated={}, evaluated_share={}, evaluated_value={}," \
+            "year={}, is_virtual={}".format(
             self.source_process_id, self.target_process_id, self.value, self.unit,
-            self.is_evaluated, self.evaluated_share, self.evaluated_value, self.year)
+            self.is_evaluated, self.evaluated_share, self.evaluated_value, self.year,
+            self.is_virtual)
         return s
 
     def __hash__(self):
@@ -660,11 +661,15 @@ class FlowModifier(ObjectBase):
         self._end_year = self._parse_as(param_end_year, int)[0]
 
         # Function type
-        if self._parse_as(param_function_type, str)[0].lower() == FunctionType.Linear.lower():
-            self._function_type = FunctionType.Linear
-
-        if self._parse_as(param_function_type, str)[0].lower() == FunctionType.Exponential.lower():
-            self._function_type = FunctionType.Exponential
+        # Convert function type to valid FunctionType enum if found
+        # Otherwise leave it empty
+        for function_type in FunctionType:
+            print(function_type)
+            if self._parse_as(param_function_type, str)[0].lower() == function_type:
+                self._function_type = function_type
+            else:
+                # TODO: Print error message that function name is not valid?
+                pass
 
         # Check how many target nodes with opposite effect there is
         for process_id in list(params[9:]):
@@ -696,7 +701,8 @@ class FlowModifier(ObjectBase):
         is_valid = is_valid and self.source_node_id != ""
 
         # Target node ID
-        is_valid = is_valid and self.target_node_id != ""
+        # NOTE: This might be empty when applying changes to all outflows from source process
+        #is_valid = is_valid and self.target_node_id != ""
 
         # NOTE: Either of these have to be defined
         if self.use_change_in_value and self.use_target_value:
@@ -707,7 +713,7 @@ class FlowModifier(ObjectBase):
             # Error, both cannot be False at the same time
             is_valid = False
 
-        # Change type (ABS / rel)
+        # Change type (Absolute / percentage)
         is_valid = is_valid and self.change_type != ""
 
         # Start year
@@ -730,7 +736,28 @@ class FlowModifier(ObjectBase):
 
     @property
     def is_change_type_absolute(self) -> bool:
-        return self.change_type == "ABS"
+        return self.change_type == ChangeType.Absolute
+
+    @property
+    def is_change_type_relative(self) -> bool:
+        return self.change_type == ChangeType.Relative
+
+    @property
+    def has_target(self) -> bool:
+        """
+        Does flow modifier target any flow?
+        :return: Bool
+        """
+        return self.target_node_id != ""
+
+    @property
+    def has_opposite_targets(self) -> bool:
+        """
+        Does flow modifier have opposite targets?
+        :return: Bool
+        """
+        return len(self.opposite_target_node_ids) > 0
+
 
     @staticmethod
     def _parse_as(val: any, target_type: any) -> (bool, any):
@@ -774,7 +801,6 @@ class FlowModifier(ObjectBase):
 
     @property
     def change_type(self) -> str:
-        # 'ABS' or 'REL'
         return self._change_type
 
     @property
@@ -1024,6 +1050,7 @@ class Scenario(object):
     def copy_from_baseline_scenario_data(self, scenario_data: ScenarioData):
         """
         Copy ScenarioData from baseline Scenario.
+        Data is deep copied and is not referencing to original data anymore.
 
         :param scenario_data: ScenarioData from baseline FlowSolver.
         """
