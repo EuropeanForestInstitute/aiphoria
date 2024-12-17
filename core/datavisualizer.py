@@ -215,79 +215,79 @@ class DataVisualizer(object):
             paper_bgcolor="#ffffff",
             sliders=sliders,
             updatemenus=[
-                dict(
-                    buttons=
-                    [
-                        {
-                            "name": "buttonToggleSmallNodes",
-                            "label": "Show all",
-                            "args": ['toggleSmallNodes', 'true'],
-                            "method": "restyle"
-                        },
-                        {
-                            "name": "buttonToggleSmallNodes",
-                            "args": ['toggleSmallNodes', 'false'],
-                            "label": "Hide small (<{})  ".format(small_node_threshold),
-                            "method": "restyle"
-                        },
-                    ],
-                    direction="up",
-                    pad={"r": 10, "t": 10},
-                    showactive=True,
-                    active=0,
-                    x=0.0, xanchor="left",
-                    y=0.0, yanchor="top",
-                    bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
-                    font=dict(size=self._button_font_size),
-                ),
-                dict(
-                    buttons=list([
-                        dict(
-                            name="buttonShowNodeInfo",
-                            label="Show node info",
-                            args=['showNodeInfo', 'true'],
-                            method="restyle"
-                        ),
-                        dict(
-                            name="buttonShowNodeInfo",
-                            label="Hide node info",
-                            args=['showNodeInfo', 'false'],
-                            method="restyle"
-                        ),
-                    ]),
-                    direction="up",
-                    pad={"r": 10, "t": 10},
-                    showactive=True,
-                    active=1,
-                    x=0.1, xanchor="right",
-                    y=0.0, yanchor="top",
-                    bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
-                    font=dict(size=self._button_font_size)
-                ),
-                dict(
-                    buttons=list([
-                        dict(
-                            name="buttonShowVirtualNodes",
-                            label="Show virtual nodes",
-                            args=['showVirtualNodes', 'true'],
-                            method="restyle"
-                        ),
-                        dict(
-                            name="buttonShowVirtualNodes",
-                            label="Hide virtual nodes",
-                            args=['showVirtualNodes', 'false'],
-                            method="restyle"
-                        ),
-                    ]),
-                    direction="up",
-                    pad={"r": 10, "t": 10},
-                    showactive=True,
-                    active=0,
-                    x=0.0, xanchor="left",
-                    y=0.16, yanchor="top",
-                    bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
-                    font=dict(size=self._button_font_size)
-                )
+                # dict(
+                #     buttons=
+                #     [
+                #         {
+                #             "name": "buttonToggleSmallNodes",
+                #             "label": "Show all",
+                #             "args": ['toggleSmallNodes', 'true'],
+                #             "method": "restyle"
+                #         },
+                #         {
+                #             "name": "buttonToggleSmallNodes",
+                #             "args": ['toggleSmallNodes', 'false'],
+                #             "label": "Hide small (<{})  ".format(small_node_threshold),
+                #             "method": "restyle"
+                #         },
+                #     ],
+                #     direction="up",
+                #     pad={"r": 10, "t": 10},
+                #     showactive=True,
+                #     active=0,
+                #     x=0.0, xanchor="left",
+                #     y=0.0, yanchor="top",
+                #     bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
+                #     font=dict(size=self._button_font_size),
+                # ),
+                # dict(
+                #     buttons=list([
+                #         dict(
+                #             name="buttonShowNodeInfo",
+                #             label="Show node info",
+                #             args=['showNodeInfo', 'true'],
+                #             method="restyle"
+                #         ),
+                #         dict(
+                #             name="buttonShowNodeInfo",
+                #             label="Hide node info",
+                #             args=['showNodeInfo', 'false'],
+                #             method="restyle"
+                #         ),
+                #     ]),
+                #     direction="up",
+                #     pad={"r": 10, "t": 10},
+                #     showactive=True,
+                #     active=1,
+                #     x=0.2, xanchor="right",
+                #     y=0.0, yanchor="top",
+                #     bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
+                #     font=dict(size=self._button_font_size)
+                # ),
+                # dict(
+                #     buttons=list([
+                #         dict(
+                #             name="buttonShowVirtualNodes",
+                #             label="Show virtual nodes",
+                #             args=['showVirtualNodes', 'true'],
+                #             method="restyle"
+                #         ),
+                #         dict(
+                #             name="buttonShowVirtualNodes",
+                #             label="Hide virtual nodes",
+                #             args=['showVirtualNodes', 'false'],
+                #             method="restyle"
+                #         ),
+                #     ]),
+                #     direction="up",
+                #     pad={"r": 10, "t": 10},
+                #     showactive=True,
+                #     active=0,
+                #     x=0.25, xanchor="left",
+                #     y=0.0, yanchor="top",
+                #     bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
+                #     font=dict(size=self._button_font_size)
+                # )
             ],
         )
 
@@ -305,7 +305,7 @@ class DataVisualizer(object):
         self._fig = fig
 
         # Add JS script that is run after the Plotly has loaded
-        filename = os.path.join(os.path.abspath("."), "core", "datavisualizer_plotly_post.js")
+        filename = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/datavisualizer_plotly_post.js")
 
         visualizer_js = ""
         with open(filename, "r", encoding="utf-8") as fs:

@@ -11,17 +11,20 @@ class NetworkGraph(object):
         self._html = ""
 
         # Load ECharts from file
-        with open("./core/echarts_min.js", mode="r", encoding="utf-8") as fs:
+        path_echarts = os.path.join(os.path.abspath("."), "core", "network_graph_data", "echarts_min.js")
+        with open(path_echarts, mode="r", encoding="utf-8") as fs:
             self._echarts = fs.read()
 
         # Load visualizer script from file
-        with open("./core/network_graph.js", mode="r", encoding="utf-8") as fs:
+        path_network_graph = os.path.join(os.path.abspath("."), "core", "network_graph_data", "network_graph.js")
+        with open(path_network_graph, mode="r", encoding="utf-8") as fs:
             self._visualizer = fs.read()
 
     def build(self, scenario_data: ScenarioData = None) -> None:
         """
         Compile and insert data to HTML file.
 
+        :param scenario_data: ScenarioData object
         :param df_process_to_flows: DataFrame
         :param years_to_check: List of years that are included
         """
@@ -79,14 +82,15 @@ class NetworkGraph(object):
         script = script.replace("{year_to_data}", json.dumps(year_to_data))
         self._visualizer = script
 
-        with open("./core/network_graph.html", "r", encoding="utf-8") as fs:
+        path_network_graph = os.path.join(os.path.abspath("."), "core", "network_graph_data", "network_graph.html")
+        with open(path_network_graph, "r", encoding="utf-8") as fs:
             self._html = fs.read()
 
         # Replace 'echarts_content' and 'visualizer
         self._html = self._html.replace("{echarts_content}", self._echarts)
         self._html = self._html.replace("{visualizer_content}", self._visualizer)
 
-    def show(self, output_filename: str = "network_graph.html") -> None:
+    def show(self, output_filename: str = "network_graph_data.html") -> None:
         """
         Build HTML file and open it in browser.
 

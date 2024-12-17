@@ -43,6 +43,10 @@ class ParameterName(str, Enum):
     ColumnRangeScenarios: str = "column_range_scenarios"
     SkipNumRowsScenarios: str = "skip_num_rows_scenarios"
 
+    # Network graph
+    CreateNetworkGraphs: str = "create_network_graphs"
+    CreateSankeyCharts: str = "create_sankey_charts"
+
 
 class ParameterFillMethod(str, Enum):
     """

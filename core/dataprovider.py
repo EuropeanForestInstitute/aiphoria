@@ -72,6 +72,16 @@ class DataProvider(object):
              "Sheet name that contains data for scenarios (flow modifiers and constraints)",
              "Scenarios"
              ],
+            [ParameterName.CreateNetworkGraphs,
+             bool,
+             "Create network graphs to visualize process connections for each scenario",
+             False
+             ],
+            [ParameterName.CreateSankeyCharts,
+             bool,
+             "Create Sankey charts for each scenario",
+             True
+            ],
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean"}
