@@ -10,8 +10,8 @@ class FunctionType(str, Enum):
 
 
 class ChangeType(str, Enum):
-    Absolute: str = "ABS"
-    Relative: str = "%"
+    Value: str = "Value"
+    Proportional: str = "%"
 
 
 class FlowType(str, Enum):

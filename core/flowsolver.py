@@ -6,7 +6,7 @@ from pandas import DataFrame
 from core.datastructures import Process, Flow, Stock, ScenarioData, Scenario
 from core.types import ChangeType, FunctionType
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
-from typing import List, Dict
+from typing import List, Dict, Tuple, Union
 
 
 # Solves flows to absolute values
@@ -255,7 +255,7 @@ class FlowSolver(object):
         return self._get_process_inflows(process_id, year)
 
     def get_process_outflows(self, process_id: str, year: int) -> List[Flow]:
-        return self._get_process_inflows(process_id, year)
+        return self._get_process_outflows(process_id, year)
 
     def is_root_process(self, process_id: str, year: int = -1) -> bool:
         """
@@ -925,14 +925,14 @@ class FlowSolver(object):
         flow_modifiers = self._scenario.scenario_definition.flow_modifiers
         for flow_modifier in flow_modifiers:
             year_range = [year for year in range(flow_modifier.start_year, flow_modifier.end_year + 1)]
-            target_node_id = flow_modifier.target_node_id
-            source_node_id = flow_modifier.source_node_id
-            source_to_target_flow_id = "{} {}".format(source_node_id, target_node_id)
+            source_process_id = flow_modifier.source_process_id
+            target_process_id = flow_modifier.target_process_id
+            source_to_target_flow_id = "{} {}".format(source_process_id, target_process_id)
 
-            # TODO: Not caring about the actual end year of the simulation now, check that later
             new_values = []
             if flow_modifier.function_type == FunctionType.Constant:
                 # Replace the values during for the year range
+                # TODO: Use target value for CONSTANT?
                 new_values = [flow_modifier.change_in_value for year in year_range]
 
             if flow_modifier.function_type == FunctionType.Linear:
@@ -949,71 +949,110 @@ class FlowSolver(object):
                 new_values = flow_modifier.change_in_value / (1.0 + np.exp(-new_values))
 
             for year_index, year in enumerate(year_range):
-                source_to_target_flow = self._year_to_flow_id_to_flow[year][source_to_target_flow_id]
+                source_to_target_flow = self.get_flow(source_to_target_flow_id, year)
+                value_old = 0.0
+                value_new = 0.0
 
                 # Replace the value for the flow value for the year instead of adding the change
                 # Using the Constant-function: replace the value for the year and ignore all the
                 # opposite target nodes
                 if flow_modifier.function_type == FunctionType.Constant:
+                    # NOTE: Using CONSTANT will ignore the opposite target process IDs
                     source_to_target_flow.value = new_values[year_index]
-                    #print("CONSTANT: ", source_to_target_flow, id(source_to_target_flow))
                     continue
 
                 # Apply change in value (either absolute or relative) for the flow
                 # and also to target opposite flows
                 if flow_modifier.use_change_in_value:
-                    if flow_modifier.is_change_type_absolute:
-                        self._apply_absolute_change_to_flow(source_to_target_flow, new_values[year_index])
+                    if flow_modifier.is_change_type_value:
+                        value_old, value_new = self._apply_absolute_change_to_flow(
+                            source_to_target_flow, new_values[year_index])
 
-                    if flow_modifier.is_change_type_relative:
-                        self._apply_relative_change_to_flow(new_values[year_index])
+                    if flow_modifier.is_change_type_proportional:
+                        value_old, value_new = self._apply_relative_change_to_flow(
+                            source_to_target_flow, new_values[year_index])
 
                     # Clamp flow values:
                     if source_to_target_flow.is_unit_absolute_value:
-                        # TODO: Prevent absolute flow values < 0.0?
-                        #self._clamp_flow_value(source_to_target_flow, 0.0, None)
-                        pass
+                        # NOTE: Clamp only lower bound [0.0, no limits] to prevent absolute becoming negative
+                        value_new = self._clamp_flow_value(source_to_target_flow, 0.0, None)
                     else:
                         # NOTE: Clamp relative flow value between [0, 100] % (here flow value = flow share)
-                        self._clamp_flow_value(source_to_target_flow, 0.0, 100.0)
+                        value_new = self._clamp_flow_value(source_to_target_flow, 0.0, 100.0)
 
-                # if flow_modifier.has_opposite_targets:
-                #     print("Apply changes only to opposite target nodes")
-                #     for opposite_target_node_id in flow_modifier.opposite_target_node_ids:
-                #         source_to_opposite_node_id = "{} {}".format(source_node_id, opposite_target_node_id)
-                #         opposite_flow = self._year_to_flow_id_to_flow[year][source_to_opposite_node_id]
-                #
-                #         # TODO: Check that the flow type matches (e.g. ABS with only ABS, REL with only REL)
-                #         if flow_modifier.use_change_in_value:
-                #             opposite_flow.value -= flow_modifier.change_in_value
-                #         else:
-                #             opposite_flow.value -= opposite_flow.value * (flow_modifier.change_in_value / 100.0)
-                # else:
-                #     # Apply change to all same type outflows as flow_modifier
-                #     print("Apply change to all same type outflows")
+                value_diff = value_new - value_old
+                if flow_modifier.has_opposite_targets:
+                    # NOTE: Apply changes to all opposite targets equally
+                    opposite_target_flow_share = 1.0 / len(flow_modifier.opposite_target_process_ids)
+                    for opposite_target_process_id in flow_modifier.opposite_target_process_ids:
+                        opposite_flow_id = "{} {}".format(source_process_id, opposite_target_process_id)
+                        opposite_flow = self.get_flow(opposite_flow_id, year)
+                        if flow_modifier.is_change_type_value:
+                            opposite_value = -value_diff
+                            opposite_value *= opposite_target_flow_share
+                            self._apply_absolute_change_to_flow(opposite_flow, opposite_value)
 
+                        if flow_modifier.is_change_type_proportional:
+                            opposite_value = -(value_diff / opposite_flow.value) * 100.0
+                            opposite_value *= opposite_target_flow_share
+                            self._apply_relative_change_to_flow(opposite_flow, opposite_value)
 
+                else:
+                    # Apply change to all same type outflows as flow_modifier
+                    # NOTE: Apply changes to all opposite targets equally
+                    is_source_flow_abs = source_to_target_flow.is_unit_absolute_value
+                    flows_out = self.get_process_outflows(source_process_id, year)
 
-    def _apply_absolute_change_to_flow(self, flow: Flow, value: float):
+                    # Get list of same type flows as the source to target Process flow
+                    target_flows = [flow for flow in flows_out if flow.is_unit_absolute_value == is_source_flow_abs
+                                    and flow.target_process_id != target_process_id]
+
+                    for target_flow in target_flows:
+                        target_flow_share = 1.0 / len(target_flows)
+                        if flow_modifier.is_change_type_value:
+                            opposite_value = -value_diff
+                            opposite_value *= target_flow_share
+                            self._apply_absolute_change_to_flow(target_flow, opposite_value)
+
+                        if flow_modifier.is_change_type_proportional:
+                            opposite_value = -(value_diff / target_flow.value) * 100.0
+                            opposite_value *= target_flow_share
+                            self._apply_relative_change_to_flow(target_flow, opposite_value)
+
+        # if self._scenario.name == "Virtual inflow":
+        #     raise SystemExit(-1)
+
+    def _apply_absolute_change_to_flow(self, flow: Flow, value: float) -> Tuple[float, float]:
         """
         Apply absolute change to Flow.
 
         :param flow: Target Flow
-        :param value: Value
+        :param value: Value,
+        :return Tuple (float: old value, float: new value)
         """
+        value_old = flow.value
         flow.value += value
+        value_new = flow.value
+        return value_old, value_new
 
-    def _apply_relative_change_to_flow(self, flow: Flow, value: float):
+    def _apply_relative_change_to_flow(self, flow: Flow, value: float) -> Tuple[float, float]:
         """
         Apply relative (= percentual) change to Flow.
         Value should not be normalized.
 
         :param flow: Target Flow
         :param value: Value (not normalized)
+        :return Tuple (float: Old value, float: new value)
         """
+        value_old = flow.value
         flow.value += flow.value * (value / 100.0)
+        value_new = flow.value
+        return value_old, value_new
 
-    def _clamp_flow_value(self, flow: Flow, mini: float = 0.0, maxi: float = 100.0):
+    def _clamp_flow_value(self,
+                          flow: Flow,
+                          mini: Union[float, None] = 0.0,
+                          maxi: Union[float, None] = 100.0) -> float:
         """
         Clamp Flow value to range [mini, maxi].
         Mini and maxi are both included in the range.
@@ -1025,6 +1064,7 @@ class FlowSolver(object):
         :param flow: Target Flow
         :param mini: Lower bound value
         :param maxi: Upper bound value
+        :return Clamped value
         """
         has_mini = mini is not None
         has_maxi = maxi is not None
@@ -1033,17 +1073,16 @@ class FlowSolver(object):
         apply_only_higher_bound = not has_mini and has_maxi
         if apply_both_bounds:
             flow.value = np.clip(flow.value, mini, maxi)
-            return
 
         if apply_only_lower_bound:
             if flow.value < mini:
                 flow.value = mini
-            return
 
         if apply_only_higher_bound:
             if flow.value > maxi:
                 flow.value = maxi
-            return
+
+        return flow.value
 
     def _apply_flow_constraints(self):
         # TODO:

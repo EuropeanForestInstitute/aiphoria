@@ -5,9 +5,8 @@ import numpy as np
 from core.dataprovider import DataProvider
 from core.parameters import ParameterName, ParameterFillMethod
 from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData
+from core.types import FunctionType, ChangeType
 import pandas as pd
-
-from core.types import FunctionType
 
 
 class DataChecker(object):
@@ -107,12 +106,20 @@ class DataChecker(object):
         df_year_to_flows = self._create_year_to_flow_data(unique_flow_ids, flows, self._years)
 
         # Check that source and target processes for flows are defined
-        if not self._check_flow_sources_and_targets(unique_process_ids, df_year_to_flows):
+        ok, errors = self._check_flow_sources_and_targets(unique_process_ids, df_year_to_flows)
+        if not ok:
+            print("Found following errors checking flow sources and targets:")
+            for error in errors:
+                print("\t{}".format(error))
             raise SystemExit(-1)
 
         # Check that there is not multiple definitions for the exact same flow per year
         # Exact means that source and target processes are the same
-        if not self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows, self._years):
+        ok, errors = self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows, self._years)
+        if not ok:
+            print("Found following errors checking multiple flow definitions for same year:")
+            for error in errors:
+                print("\t{}".format(error))
             raise SystemExit(-1)
 
         # Check if stock distribution type and parameters are set and valid
@@ -132,12 +139,17 @@ class DataChecker(object):
 
         # Check if process only absolute inflows AND absolute outflows so that
         # the total inflow matches with the total outflows within certain limit
+        print("Checking process total inflows and total outflows mismatches...")
         if not self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
                                                                  epsilon=epsilon_inflows_outflows_mismatch):
             pass
 
         # Check that flow type stays the same during the simulation
-        if not self._check_flow_type_changes(df_year_to_flows):
+        print("Checking flow type changes...")
+        ok, errors = self._check_flow_type_changes(df_year_to_flows)
+        if not ok:
+            for error in errors:
+                print(error)
             raise SystemExit(-1)
 
         # Check if process has no inflows and only relative outflows:
@@ -146,7 +158,10 @@ class DataChecker(object):
 
         # Check that the sheet ParameterName.SheetNameScenarios exists
         # and that it has properly defined data (source process ID, target process IDs, etc.)
-        if not self.check_scenario_definitions(df_year_to_process_flows):
+        ok, errors = self.check_scenario_definitions(df_year_to_process_flows)
+        if not ok:
+            for error in errors:
+                print(error)
             raise SystemExit(-1)
 
         # *************************************
@@ -376,15 +391,15 @@ class DataChecker(object):
 
     def _check_flow_sources_and_targets(self,
                                         unique_process_ids: dict[str, Process],
-                                        df_year_to_flows: pd.DataFrame) -> bool:
+                                        df_year_to_flows: pd.DataFrame) -> [bool, List[str]]:
         """
         Check that all Flow sources and target Processes exists.
 
         :param unique_process_ids:
         :param df_year_to_flows: DataFrame
-        :return: True if successful, False otherwise
+        :return: Tuple (True, list of errors)
         """
-        result = True
+        errors = []
         sheet_name_flows = self._dataprovider.sheet_name_flows
         for year in df_year_to_flows.index:
             for flow_id in df_year_to_flows.columns:
@@ -393,19 +408,16 @@ class DataChecker(object):
                     continue
 
                 if flow.source_process_id not in unique_process_ids:
-                    print("No source process {} for flow {} (row number {}) in year {} (in Excel sheet {}) ".format(
-                        flow.source_process_id, flow_id, flow.row_number, year, sheet_name_flows))
-                    result = False
+                    s = "No source process {} for flow {} (row number {}) in year {} (in Excel sheet {}) ".format(
+                        flow.source_process_id, flow_id, flow.row_number, year, sheet_name_flows)
+                    errors.append(s)
 
                 if flow.target_process_id not in unique_process_ids:
-                    print("No target process {} for flow {} (row number {}) in year {} (sheet {})".format(
-                        flow.target_process_id, flow_id, flow.row_number, year, sheet_name_flows))
-                    result = False
+                    s = "No target process {} for flow {} (row number {}) in year {} (sheet {})".format(
+                        flow.target_process_id, flow_id, flow.row_number, year, sheet_name_flows)
+                    errors.append(s)
 
-        if not result:
-            print("Some or all processes are missing definitions in Excel sheet {}".format(sheet_name_flows))
-
-        return result
+        return not errors, errors
 
     def _get_unique_flow_ids(self, flows: List[Flow]) -> Dict[str, Flow]:
         unique_flow_id_to_flow = {}
@@ -513,7 +525,7 @@ class DataChecker(object):
                                                   unique_flow_ids: Dict[str, Flow],
                                                   flows: List[Flow],
                                                   years: list[int]
-                                                  ) -> bool:
+                                                  ) -> Tuple[bool, List[str]]:
         """
         Check that there is only one Flow definition per year.
 
@@ -522,7 +534,7 @@ class DataChecker(object):
         :param years: List of years
         :return: True if successful, False otherwise
         """
-        result = True
+        errors = []
         sheet_name_flows = self._dataprovider.sheet_name_flows
         df = pd.DataFrame(index=years, columns=unique_flow_ids)
         for flow in flows:
@@ -544,17 +556,20 @@ class DataChecker(object):
 
                 if len(existing_flows) > 1:
                     target_flow = existing_flows[0]
-                    print("Multiple definitions for the same flow '{}' in year {} in sheet named '{}':".format(
-                        target_flow.id, target_flow.year, sheet_name_flows))
+                    s = "Multiple definitions for the same flow '{}' in year {} in sheet named '{}':".format(
+                        target_flow.id, target_flow.year, sheet_name_flows)
+                    errors.append(s)
+
                     for duplicate_flow in existing_flows:
-                        print("- in row {}".format(duplicate_flow.row_number))
-                    result = False
+                        s = "- in row {}".format(duplicate_flow.row_number)
+                        errors.append(s)
 
-        return result
+        return not errors, errors
 
-    def _check_process_inflows_and_outflows_mismatch(self, df_process_to_flows: pd.DataFrame, epsilon: float = 0.1):
-        print("Checking process total inflows and total outflows mismatches...")
-        result = True
+    def _check_process_inflows_and_outflows_mismatch(self,
+                                                     df_process_to_flows: pd.DataFrame,
+                                                     epsilon: float = 0.1) -> Tuple[bool, List[str]]:
+        errors = []
         sheet_name_flows = self._dataprovider.sheet_name_flows
         for year in df_process_to_flows.index:
             for process_id in df_process_to_flows.columns:
@@ -575,30 +590,37 @@ class DataChecker(object):
                     outflows_total = np.sum([flow.value for flow in outflows])
                     diff_abs = np.abs(inflows_total) - np.abs(outflows_total)
                     if diff_abs > epsilon:
-                        print("Total inflows and total outflows for process '{}' does not match.".format(process_id))
-                        print("Absolute difference of total inflows and total outflows was {}".format(diff_abs))
-                        print("Check following inflows in Excel sheet '{}':".format(sheet_name_flows))
+                        s = "Total inflows and total outflows for process '{}' does not match.".format(process_id)
+                        errors.append(s)
+
+                        s = "Absolute difference of total inflows and total outflows was {}".format(diff_abs)
+                        errors.append(s)
+
+                        s = "Check following inflows in Excel sheet '{}':".format(sheet_name_flows)
+                        errors.append(s)
                         for flow in inflows:
-                            print("- flow '{}' in row {}".format(flow.id, flow.row_number))
+                            s = "- flow '{}' in row {}".format(flow.id, flow.row_number)
+                            errors.append(s)
 
                         print("Check following outflows:")
                         for flow in outflows:
-                            print("- flow '{}' in row {}".format(flow.id, flow.row_number))
+                            s = "- flow '{}' in row {}".format(flow.id, flow.row_number)
+                            errors.append(s)
 
-                        print("")
+                        s = ""
+                        errors.append(s)
                         result = False
 
-        return result
+        return not errors, errors
 
-    def _check_flow_type_changes(self, df_year_to_flows: pd.DataFrame) -> bool:
+    def _check_flow_type_changes(self, df_year_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
         """
         Check that flows do not change the type during the simulation.
 
         :param df_year_to_flows: DataFrame
-        :return: True if flows do not change the types during the simulation, False otherwise.
+        :return: Tuple (bool, list of errors)
         """
-        print("Checking flow type changes...")
-        result = True
+        errors = []
         for flow_id in df_year_to_flows.columns:
             is_flow_abs_entry = []
             flow_data = df_year_to_flows[flow_id]
@@ -611,16 +633,15 @@ class DataChecker(object):
             initial_entry = is_flow_abs_entry[0]
             is_same_as_initial_state = [entry[0] == initial_entry[0] for entry in is_flow_abs_entry]
             if not all(is_same_as_initial_state):
-                print("Found following errors:")
                 source_type_name = "absolute" if initial_entry[0] else "relative"
                 target_type_name = "relative" if initial_entry[0] else "absolute"
                 for entry in is_flow_abs_entry:
                     if entry[0] != initial_entry[0]:
-                        print("\t- Flow '{}' was defined initially as {} in year {} but changed to {} in year {}".format(
-                            flow_id, source_type_name, initial_entry[1], target_type_name, entry[1]))
-                    result = False
+                        s = "\t- Flow '{}' was defined initially as {} in year {} but changed to {} in year {}".format(
+                            flow_id, source_type_name, initial_entry[1], target_type_name, entry[1])
+                        errors.append(s)
 
-        return result
+        return not errors, errors
 
     def _create_flow_id_has_data_mapping(self, df_flows) -> pd.DataFrame:
         df = df_flows.copy()
@@ -931,49 +952,101 @@ class DataChecker(object):
 
     def check_scenario_definitions(self, df_year_to_process_flows: pd.DataFrame):
         print("Checking scenario definitions...")
+        errors = []
         scenario_definitions = self._scenario_definitions
         valid_years = list(df_year_to_process_flows.index)
         first_valid_year = min(valid_years)
         last_valid_year = max(valid_years)
-
         for scenario_definition in scenario_definitions:
             scenario_name = scenario_definition.name
             flow_modifiers = scenario_definition.flow_modifiers
+
             # TODO: Check that all required Processes exists
             for flow_modifier in flow_modifiers:
                 # Check that all required node IDs are valid during the defined time range
-                source_node_id = flow_modifier.source_node_id
-                target_node_id = flow_modifier.target_node_id
-                opposite_target_node_ids = flow_modifier.opposite_target_node_ids
+                source_process_id = flow_modifier.source_process_id
+                target_process_id = flow_modifier.target_process_id
+                opposite_target_process_ids = flow_modifier.opposite_target_process_ids
 
                 # Is the flow modifier in valid year range?
                 start_year = flow_modifier.start_year
                 end_year = flow_modifier.end_year
+                years = [year for year in range(flow_modifier.start_year, flow_modifier.end_year + 1)]
 
                 # Check rule for start year
                 if start_year < first_valid_year:
-                    print("Scenario '{}': Source node ID '{}' start year ({}) before first year ({})".format(
-                        scenario_name, source_node_id, start_year, first_valid_year))
+                    s = "Scenario '{}': Source Process ID '{}' start year ({}) before first year ({})".format(
+                        scenario_name, source_process_id, start_year, first_valid_year)
+                    errors.append(s)
 
                 # Check rule for last year
                 if end_year > last_valid_year:
-                    print("Scenario '{}': Source node ID '{}' end year ({}) after last year ({})".format(
-                        scenario_name, source_node_id, end_year, last_valid_year))
+                    s = "Scenario '{}': Source Process ID '{}' end year ({}) after last year ({})".format(
+                        scenario_name, source_process_id, end_year, last_valid_year)
+                    errors.append(s)
 
-                # Check if source node ID exists for the year range
-                years = [year for year in range(flow_modifier.start_year, flow_modifier.end_year + 1)]
+                # Check if source Process ID exists for the defined year range
                 for year in years:
                     year_data = df_year_to_process_flows[df_year_to_process_flows.index == year]
-                    if source_node_id not in year_data.columns:
-                        print("Scenario '{}': Source node ID '{}' not defined for the year {}".format(
-                            scenario_name, source_node_id, year))
+                    if source_process_id not in year_data.columns:
+                        s = "Scenario '{}': Source Process ID '{}' not defined for the year {}".format(
+                            scenario_name, source_process_id, year)
+                        errors.append(s)
 
-                # Check if source node ID
+                    # Check if target Process ID exists for the defined year range
+                    if target_process_id not in year_data.columns:
+                        s = "Scenario '{}': Target Process ID '{}' not defined for the year {}".format(
+                            scenario_name, source_process_id, year)
+                        errors.append(s)
 
-                # Check that function type is valid
-                print(flow_modifier.function_type)
+                    entry = year_data.at[year, source_process_id]
+                    process = entry["process"]
+                    flows_out = entry["flows"]["out"]
+                    target_process_id_to_flow = {flow.target_process_id: flow for flow in flows_out}
+                    source_to_target_flow = target_process_id_to_flow.get(target_process_id, None)
 
-                if flow_modifier.function_type not in FunctionType:
-                    print("Flow modifier has invalid function type: '{}'".format(flow_modifier.function_type))
+                    # Check that source Process ID is connected to target Process ID
+                    if source_to_target_flow is None:
+                        s = "Scenario '{}': Source Process ID '{}' does not have outflow to target Process ID {}".format(
+                            scenario_name, source_process_id, target_process_id
+                        )
+                        s = errors.append(s)
+                        continue
 
-        return True
+                    # Check that the flows from source Process ID to opposite target Process ID exists
+                    for opposite_target_process_id in opposite_target_process_ids:
+                        source_to_opposite_target_flow = target_process_id_to_flow.get(opposite_target_process_id, None)
+                        if source_to_opposite_target_flow is None:
+                            s = "Scenario '{}': Source Process ID '{}' does not have outflow to opposite target Process ID {}"\
+                                .format(scenario_name, source_process_id, opposite_target_process_id)
+                            errors.append(s)
+                            continue
+
+                        # Check that the flow from source Process to opposite target Process has the same type (absolute
+                        # or relative) as the flow from source Process to target Process
+                        is_source_to_target_flow_abs = source_to_target_flow.is_unit_absolute_value
+                        is_source_to_opposite_target_flow_abs = source_to_opposite_target_flow.is_unit_absolute_value
+                        if is_source_to_target_flow_abs != is_source_to_opposite_target_flow_abs:
+                            source_to_target_flow_type = "absolute" if is_source_to_target_flow_abs else "relative"
+                            source_to_opposite_flow_type = "absolute" if is_source_to_opposite_target_flow_abs else "relative"
+                            s = "Scenario '{}': Flow from source Process ID {} to target Process ID {} is {} flow"
+                            s += " but flow from source Process ID {} to opposite target Process ID {} is {} flow"
+                            s = s.format(
+                                scenario_name, source_process_id, target_process_id, source_to_target_flow_type,
+                                source_process_id, opposite_target_process_id, source_to_opposite_flow_type
+                            )
+                            errors.append(s)
+
+                change_type_names = [change_type.value for change_type in ChangeType]
+                function_type_names = [function_type.value for function_type in FunctionType]
+                if flow_modifier.change_type not in change_type_names:
+                    s = "Scenario '{}': Flow modifier has invalid change type '{}'".format(
+                        scenario_name, flow_modifier.change_type)
+                    errors.append(s)
+
+                if flow_modifier.function_type not in function_type_names:
+                    s = "Scenario '{}': Flow modifier has invalid function type: '{}'".format(
+                        scenario_name, flow_modifier.function_type)
+                    errors.append(s)
+
+        return not errors, errors
