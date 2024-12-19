@@ -63,7 +63,7 @@ class DataProvider(object):
 
             [ParameterName.FillMethod,
              str,
-             "Fill method if 'fill_missing_flows' values are enabled",
+             "Fill method if either fill_missing_absolute_flows or fill_missing_relative_flows is enabled",
              ParameterFillMethod.Zeros,
              ],
 

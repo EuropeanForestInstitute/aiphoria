@@ -1,7 +1,7 @@
 // ****************
 // * Global state *
 // ****************
-const globals = {
+globals = {
     // Reference to the Plotly div
     graph: null,
 
@@ -31,6 +31,9 @@ const globals = {
 
     // Current node data
     nodeDataCache: [],
+
+    // Year to data
+    yearToData: {year_to_data}
 }
 
 
@@ -233,6 +236,7 @@ globals.graph.on("plotly_sliderchange", function(eventdata) {
 })
 
 globals.graph.on('plotly_hover', function(eventdata) {
+    // TODO: This causes the flicker, can node and link hovertemplate be built upfront?
     // Hovering over grouped
     if(eventdata.points[0].group) {
         return

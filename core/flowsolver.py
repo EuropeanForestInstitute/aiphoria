@@ -558,7 +558,7 @@ class FlowSolver(object):
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
         evaluated_process_ids = []
-        current_year_process_ids = list(self._year_to_process_id_to_process[self._year_current].keys())
+        current_year_process_ids = list(self._current_process_id_to_process.keys())
         for process_id in current_year_process_ids:
             inflows = self._get_process_inflows(process_id, year=self._year_current)
             if not inflows:
@@ -879,7 +879,7 @@ class FlowSolver(object):
 
         :param dsm: Target DynamicStockModel
         :param year: Target year
-        :return: Total stock outflow  (float)
+        :return: Total stock outflow (float)
         """
         year_index = self._years.index(year)
         stock_outflow_total = dsm.compute_outflow_total()
@@ -931,22 +931,42 @@ class FlowSolver(object):
 
             new_values = []
             if flow_modifier.function_type == FunctionType.Constant:
-                # Replace the values during for the year range
-                # TODO: Use target value for CONSTANT?
-                new_values = [flow_modifier.change_in_value for year in year_range]
+                # NOTE: Constant replaces the values during the year range
+                new_values = [flow_modifier.target_value for year in year_range]
 
-            if flow_modifier.function_type == FunctionType.Linear:
-                new_values = np.linspace(start=0, stop=flow_modifier.change_in_value, num=len(year_range))
+            # Change in value (delta)
+            if flow_modifier.use_change_in_value:
+                if flow_modifier.function_type == FunctionType.Linear:
+                    new_values = np.linspace(start=0, stop=flow_modifier.change_in_value, num=len(year_range))
 
-            if flow_modifier.function_type == FunctionType.Exponential:
-                new_values = np.logspace(start=0, stop=1, num=len(year_range))
+                if flow_modifier.function_type == FunctionType.Exponential:
+                    new_values = np.logspace(start=0, stop=1, num=len(year_range))
 
-            if flow_modifier.function_type == FunctionType.Sigmoid:
-                new_values = np.linspace(start=-flow_modifier.change_in_value,
-                                           stop=flow_modifier.change_in_value,
-                                           num=len(year_range))
+                if flow_modifier.function_type == FunctionType.Sigmoid:
+                    new_values = np.linspace(start=-flow_modifier.change_in_value,
+                                               stop=flow_modifier.change_in_value,
+                                               num=len(year_range))
 
-                new_values = flow_modifier.change_in_value / (1.0 + np.exp(-new_values))
+                    new_values = flow_modifier.change_in_value / (1.0 + np.exp(-new_values))
+
+            # Target value (current to target)
+            if flow_modifier.use_target_value:
+                source_to_target_flow = self.get_flow(source_to_target_flow_id, year_range[0])
+                value_start = source_to_target_flow.value
+                if flow_modifier.function_type == FunctionType.Linear:
+                    new_values = np.linspace(start=value_start, stop=flow_modifier.target_value, num=len(year_range))
+
+                if flow_modifier.function_type == FunctionType.Exponential:
+                    # TODO: Is this function working properly with target value?
+                    new_values = np.logspace(start=0, stop=1, num=len(year_range))
+
+                if flow_modifier.function_type == FunctionType.Sigmoid:
+                    # TODO: Is this function working properly with target value?
+                    new_values = np.linspace(start=-flow_modifier.change_in_value,
+                                             stop=flow_modifier.change_in_value,
+                                             num=len(year_range))
+
+                    new_values = flow_modifier.change_in_value / (1.0 + np.exp(-new_values))
 
             for year_index, year in enumerate(year_range):
                 source_to_target_flow = self.get_flow(source_to_target_flow_id, year)
@@ -971,6 +991,18 @@ class FlowSolver(object):
                     if flow_modifier.is_change_type_proportional:
                         value_old, value_new = self._apply_relative_change_to_flow(
                             source_to_target_flow, new_values[year_index])
+
+                    # Clamp flow values:
+                    if source_to_target_flow.is_unit_absolute_value:
+                        # NOTE: Clamp only lower bound [0.0, no limits] to prevent absolute becoming negative
+                        value_new = self._clamp_flow_value(source_to_target_flow, 0.0, None)
+                    else:
+                        # NOTE: Clamp relative flow value between [0, 100] % (here flow value = flow share)
+                        value_new = self._clamp_flow_value(source_to_target_flow, 0.0, 100.0)
+
+                # Apply target value to the flow
+                if flow_modifier.use_target_value:
+                    value_old, value_new = self._apply_target_value_to_flow(source_to_target_flow, new_values[year_index])
 
                     # Clamp flow values:
                     if source_to_target_flow.is_unit_absolute_value:
@@ -1019,16 +1051,13 @@ class FlowSolver(object):
                             opposite_value *= target_flow_share
                             self._apply_relative_change_to_flow(target_flow, opposite_value)
 
-        # if self._scenario.name == "Virtual inflow":
-        #     raise SystemExit(-1)
-
     def _apply_absolute_change_to_flow(self, flow: Flow, value: float) -> Tuple[float, float]:
         """
         Apply absolute change to Flow.
 
         :param flow: Target Flow
         :param value: Value,
-        :return Tuple (float: old value, float: new value)
+        :return Tuple (old value: float, new value: float)
         """
         value_old = flow.value
         flow.value += value
@@ -1042,12 +1071,27 @@ class FlowSolver(object):
 
         :param flow: Target Flow
         :param value: Value (not normalized)
-        :return Tuple (float: Old value, float: new value)
+        :return Tuple (old value: float, new value: float)
         """
         value_old = flow.value
         flow.value += flow.value * (value / 100.0)
         value_new = flow.value
         return value_old, value_new
+
+    def _apply_target_value_to_flow(self, flow: Flow, value: float) -> Tuple[float, float]:
+        """
+        Appy target value to Flow.
+        Value should not be normalized.
+
+        :param flow:
+        :param value:
+        :return: Tuple (old value: float, new value: float)
+        """
+        value_old = flow.value
+        flow.value = value
+        value_new = flow.value
+        return value_old, value_new
+
 
     def _clamp_flow_value(self,
                           flow: Flow,

@@ -688,36 +688,7 @@ class FlowModifier(ObjectBase):
         return s
 
     def is_valid(self) -> bool:
-        is_valid = True
-
-        # Scenario name
-        is_valid = is_valid and self.scenario_name != ""
-
-        # Source node ID
-        is_valid = is_valid and self.source_process_id != ""
-
-        # NOTE: Either of these have to be defined
-        if self.use_change_in_value and self.use_target_value:
-            # Error, both cannot be True at the same time
-            is_valid = False
-
-        if not self.use_change_in_value and not self.use_target_value:
-            # Error, both cannot be False at the same time
-            is_valid = False
-
-        # Change type (Absolute / percentage)
-        is_valid = is_valid and self.change_type != ""
-
-        # Start year
-        is_valid = is_valid and self.start_year != 0
-
-        # End year
-        is_valid = is_valid and self.end_year != 0
-
-        # Function type (constant, linear, exponential, or sigmoid)
-        is_valid = is_valid and self.function_type != ""
-
-        return is_valid
+        return True
 
     @property
     def use_change_in_value(self) -> bool:

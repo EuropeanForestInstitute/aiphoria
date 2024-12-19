@@ -1054,11 +1054,37 @@ class DataChecker(object):
                     s += "Invalid function type: '{}'".format(flow_modifier.function_type)
                     errors.append(s)
 
-                # FunctionType.Constant has to have value in target_value, otherwise this is error
-                if flow_modifier.function_type == FunctionType.Constant:
-                    if flow_modifier.target_value is None:
+                if flow_modifier.function_type is FunctionType.Constant:
+                    if not flow_modifier.use_target_value:
                         s = "" + error_message_prefix
-                        s += "No target value set for Constant function type"
+                        s += "No target value set"
+                        errors.append(s)
+                else:
+                    if not flow_modifier.use_change_in_value and not flow_modifier.use_target_value:
+                        s = "" + error_message_prefix
+                        s += "No change in value or target value set"
+                        errors.append(s)
+
+                if flow_modifier.use_target_value:
+                    # Target flow type must match with the change type
+                    # Flow type must match with the ChangeType:
+                    # - Absolute flows must have change_type == ChangeType.Value
+                    # - Relative flows must have change_type == ChangeType.Proportional
+                    is_flow_abs = source_to_target_flow.is_unit_absolute_value
+                    is_flow_rel = not is_flow_abs
+                    if is_flow_abs and flow_modifier.change_type is not ChangeType.Value:
+                        s = "" + error_message_prefix
+                        s += "Target value change type must be Value for absolute flow"
+                        errors.append(s)
+
+                    if is_flow_rel and flow_modifier.change_type is not ChangeType.Proportional:
+                        s = "" + error_message_prefix
+                        s += "Target value change type must be % for relative flow"
+                        errors.append(s)
+
+                    if flow_modifier.target_value is not None and flow_modifier.target_value < 0.0:
+                        s = "" + error_message_prefix
+                        s += "Target value must be > 0.0"
                         errors.append(s)
 
         return not errors, errors
