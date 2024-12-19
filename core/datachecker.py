@@ -961,8 +961,10 @@ class DataChecker(object):
             scenario_name = scenario_definition.name
             flow_modifiers = scenario_definition.flow_modifiers
 
-            # TODO: Check that all required Processes exists
             for flow_modifier in flow_modifiers:
+                error_message_prefix = "Error in flow modifier in row {} (scenario '{}'): ".format(
+                    flow_modifier.row_number, scenario_name)
+
                 # Check that all required node IDs are valid during the defined time range
                 source_process_id = flow_modifier.source_process_id
                 target_process_id = flow_modifier.target_process_id
@@ -975,28 +977,30 @@ class DataChecker(object):
 
                 # Check rule for start year
                 if start_year < first_valid_year:
-                    s = "Scenario '{}': Source Process ID '{}' start year ({}) before first year ({})".format(
-                        scenario_name, source_process_id, start_year, first_valid_year)
+                    s = "" + error_message_prefix
+                    s += "Source Process ID '{}' start year ({}) is before first year of simulation ({})".format(
+                        source_process_id, start_year, first_valid_year)
                     errors.append(s)
 
                 # Check rule for last year
                 if end_year > last_valid_year:
-                    s = "Scenario '{}': Source Process ID '{}' end year ({}) after last year ({})".format(
-                        scenario_name, source_process_id, end_year, last_valid_year)
+                    s = "" + error_message_prefix
+                    s += "Source Process ID '{}' end year ({}) is after last year of simulation ({})".format(
+                        source_process_id, end_year, last_valid_year)
                     errors.append(s)
 
                 # Check if source Process ID exists for the defined year range
                 for year in years:
                     year_data = df_year_to_process_flows[df_year_to_process_flows.index == year]
                     if source_process_id not in year_data.columns:
-                        s = "Scenario '{}': Source Process ID '{}' not defined for the year {}".format(
-                            scenario_name, source_process_id, year)
+                        s = "" + error_message_prefix
+                        s += "Source Process ID '{}' not defined for the year {}".format(source_process_id, year)
                         errors.append(s)
 
                     # Check if target Process ID exists for the defined year range
                     if target_process_id not in year_data.columns:
-                        s = "Scenario '{}': Target Process ID '{}' not defined for the year {}".format(
-                            scenario_name, source_process_id, year)
+                        s = "" + error_message_prefix
+                        s += "Target Process ID '{}' not defined for the year {}".format(source_process_id, year)
                         errors.append(s)
 
                     entry = year_data.at[year, source_process_id]
@@ -1007,18 +1011,19 @@ class DataChecker(object):
 
                     # Check that source Process ID is connected to target Process ID
                     if source_to_target_flow is None:
-                        s = "Scenario '{}': Source Process ID '{}' does not have outflow to target Process ID {}".format(
-                            scenario_name, source_process_id, target_process_id
-                        )
-                        s = errors.append(s)
+                        s = "" + error_message_prefix
+                        s += "Source Process ID '{}' does not have outflow to target Process ID {}".format(
+                            source_process_id, target_process_id)
+                        errors.append(s)
                         continue
 
                     # Check that the flows from source Process ID to opposite target Process ID exists
                     for opposite_target_process_id in opposite_target_process_ids:
                         source_to_opposite_target_flow = target_process_id_to_flow.get(opposite_target_process_id, None)
                         if source_to_opposite_target_flow is None:
-                            s = "Scenario '{}': Source Process ID '{}' does not have outflow to opposite target Process ID {}"\
-                                .format(scenario_name, source_process_id, opposite_target_process_id)
+                            s = "" + error_message_prefix
+                            s += "Process ID '{}' does not have outflow to opposite target Process ID {}".format(
+                                source_process_id, opposite_target_process_id)
                             errors.append(s)
                             continue
 
@@ -1029,24 +1034,31 @@ class DataChecker(object):
                         if is_source_to_target_flow_abs != is_source_to_opposite_target_flow_abs:
                             source_to_target_flow_type = "absolute" if is_source_to_target_flow_abs else "relative"
                             source_to_opposite_flow_type = "absolute" if is_source_to_opposite_target_flow_abs else "relative"
-                            s = "Scenario '{}': Flow from source Process ID {} to target Process ID {} is {} flow"
-                            s += " but flow from source Process ID {} to opposite target Process ID {} is {} flow"
-                            s = s.format(
-                                scenario_name, source_process_id, target_process_id, source_to_target_flow_type,
-                                source_process_id, opposite_target_process_id, source_to_opposite_flow_type
-                            )
+                            s = "" + error_message_prefix
+                            s += "Source Process ID {} to target Process ID {} is {} flow".format(
+                                source_process_id, target_process_id, source_to_target_flow_type)
+
+                            s += " but flow from source Process ID {} to opposite target Process ID {} is {} flow".format(
+                                source_process_id, opposite_target_process_id, source_to_opposite_flow_type)
                             errors.append(s)
 
                 change_type_names = [change_type.value for change_type in ChangeType]
                 function_type_names = [function_type.value for function_type in FunctionType]
                 if flow_modifier.change_type not in change_type_names:
-                    s = "Scenario '{}': Flow modifier has invalid change type '{}'".format(
-                        scenario_name, flow_modifier.change_type)
+                    s = "" + error_message_prefix
+                    s += "Invalid change type '{}'".format(flow_modifier.change_type)
                     errors.append(s)
 
                 if flow_modifier.function_type not in function_type_names:
-                    s = "Scenario '{}': Flow modifier has invalid function type: '{}'".format(
-                        scenario_name, flow_modifier.function_type)
+                    s = "" + error_message_prefix
+                    s += "Invalid function type: '{}'".format(flow_modifier.function_type)
                     errors.append(s)
+
+                # FunctionType.Constant has to have value in target_value, otherwise this is error
+                if flow_modifier.function_type == FunctionType.Constant:
+                    if flow_modifier.target_value is None:
+                        s = "" + error_message_prefix
+                        s += "No target value set for Constant function type"
+                        errors.append(s)
 
         return not errors, errors

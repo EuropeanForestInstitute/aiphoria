@@ -367,8 +367,9 @@ class DataProvider(object):
             rows = []
 
         flow_modifiers = []
-        for row in rows:
+        for row_index, row in enumerate(rows):
             new_flow_modifier = FlowModifier(row)
+            new_flow_modifier.row_number = row_index + 2  # Header = row 1
             if new_flow_modifier.is_valid():
                 flow_modifiers.append(new_flow_modifier)
 
