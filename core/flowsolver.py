@@ -539,9 +539,6 @@ class FlowSolver(object):
         # Check if any flow constraints should be applied at the start of each timestep
         self._apply_flow_constraints()
 
-        # Each year evaluate dynamic stock outflows and related outflows as evaluated
-        self._evaluate_dynamic_stock_outflows(self._year_current)
-
         # Mark all absolute flows as evaluated at the start of each timestep
         for flow_id, flow in self._current_flow_id_to_flow.items():
             if flow.is_unit_absolute_value:
@@ -554,6 +551,8 @@ class FlowSolver(object):
                 flow.evaluated_value = 0.0
                 # print("Inside solve_timestep: ", id(flow), flow)
 
+        # Each year evaluate dynamic stock outflows and related outflows as evaluated
+        self._evaluate_dynamic_stock_outflows(self._year_current)
 
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
