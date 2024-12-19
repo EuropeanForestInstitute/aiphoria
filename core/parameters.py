@@ -47,6 +47,9 @@ class ParameterName(str, Enum):
     CreateNetworkGraphs: str = "create_network_graphs"
     CreateSankeyCharts: str = "create_sankey_charts"
 
+    # Output path
+    OutputPath: str = "output_path"
+
 
 class ParameterFillMethod(str, Enum):
     """

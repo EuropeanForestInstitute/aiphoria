@@ -981,6 +981,7 @@ class DataChecker(object):
                     s += "Source Process ID '{}' start year ({}) is before first year of simulation ({})".format(
                         source_process_id, start_year, first_valid_year)
                     errors.append(s)
+                    continue
 
                 # Check rule for last year
                 if end_year > last_valid_year:
@@ -988,6 +989,7 @@ class DataChecker(object):
                     s += "Source Process ID '{}' end year ({}) is after last year of simulation ({})".format(
                         source_process_id, end_year, last_valid_year)
                     errors.append(s)
+                    continue
 
                 # Check if source Process ID exists for the defined year range
                 for year in years:

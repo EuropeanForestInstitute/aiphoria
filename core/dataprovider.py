@@ -1,3 +1,5 @@
+import sys
+import os
 from typing import List, Union, Any, Dict
 import numpy as np
 import openpyxl
@@ -82,6 +84,11 @@ class DataProvider(object):
              "Create Sankey charts for each scenario",
              True
             ],
+            [ParameterName.OutputPath,
+             str,
+             "Path to directory where all output is created (relative to running script)",
+             "output"
+             ],
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean"}
@@ -198,10 +205,16 @@ class DataProvider(object):
                 # Use default optional parameter value
                 self._param_name_to_value[param_name] = param_default_value
 
+        # Update the output path to absolute form
+        # TODO: This might not work after compiling to exe, should use __file__?
+        abs_path_to_running_script = os.path.dirname(sys.argv[0])
+        rel_path_to_output = self._param_name_to_value[ParameterName.OutputPath]
+        abs_output_path = os.path.abspath(os.path.join(abs_path_to_running_script, rel_path_to_output))
+        self._param_name_to_value[ParameterName.OutputPath] = abs_output_path
+
         # ********************************************
         # * Read processes and flows from Excel file *
         # ********************************************
-
 
         # Create Processes and Flows
         sheet_name_processes = param_name_to_value.get(ParameterName.SheetNameProcesses, None)
@@ -215,7 +228,6 @@ class DataProvider(object):
         sheet_name_scenarios = param_name_to_value.get(ParameterName.SheetNameScenarios, None)
         col_range_scenarios = param_name_to_value.get(ParameterName.ColumnRangeScenarios, None)
         skip_num_rows_scenarios = param_name_to_value.get(ParameterName.SkipNumRowsScenarios, None)
-
 
         # Sheet name to DataFrame
         sheets = {}
