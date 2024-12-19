@@ -217,31 +217,31 @@ class DataVisualizer(object):
             paper_bgcolor="#ffffff",
             sliders=sliders,
             updatemenus=[
-                # dict(
-                #     buttons=
-                #     [
-                #         {
-                #             "name": "buttonToggleSmallNodes",
-                #             "label": "Show all",
-                #             "args": ['toggleSmallNodes', 'true'],
-                #             "method": "restyle"
-                #         },
-                #         {
-                #             "name": "buttonToggleSmallNodes",
-                #             "args": ['toggleSmallNodes', 'false'],
-                #             "label": "Hide small (<{})  ".format(small_node_threshold),
-                #             "method": "restyle"
-                #         },
-                #     ],
-                #     direction="up",
-                #     pad={"r": 10, "t": 10},
-                #     showactive=True,
-                #     active=0,
-                #     x=0.0, xanchor="left",
-                #     y=0.0, yanchor="top",
-                #     bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
-                #     font=dict(size=self._button_font_size),
-                # ),
+                dict(
+                    buttons=
+                    [
+                        {
+                            "name": "buttonToggleSmallNodes",
+                            "label": "Show all",
+                            "args": ['toggleSmallNodes', 'true'],
+                            "method": "restyle"
+                        },
+                        {
+                            "name": "buttonToggleSmallNodes",
+                            "args": ['toggleSmallNodes', 'false'],
+                            "label": "Hide small (<{})  ".format(small_node_threshold),
+                            "method": "restyle"
+                        },
+                    ],
+                    direction="up",
+                    pad={"r": 10, "t": 10},
+                    showactive=True,
+                    active=0,
+                    x=0.0, xanchor="left",
+                    y=0.0, yanchor="top",
+                    bgcolor="rgba(0.7, 0.7, 0.7, 0.9)",
+                    font=dict(size=self._button_font_size),
+                ),
                 # dict(
                 #     buttons=list([
                 #         dict(
@@ -528,16 +528,27 @@ class DataVisualizer(object):
             autosize=True,
             title=dict(
                 text="Year {}".format(list(year_to_data.keys())[0]),
-                subtitle=dict(
-                    text="Scenario: {}".format(scenario_name),
-                    font=dict(color='#000', size=15)
-                )
             ),
             font={"size": 18, "color": '#000', "family": "Arial"},
             plot_bgcolor='#ccc',
             paper_bgcolor="#ffffff",
             sliders=sliders,
         )
+        # # Show dropdown for showing normalized position or not
+        # fig.update_layout(
+        #     autosize=True,
+        #     title=dict(
+        #         text="Year {}".format(list(year_to_data.keys())[0]),
+        #         subtitle=dict(
+        #             text="Scenario: {}".format(scenario_name),
+        #             font=dict(color='#000', size=15)
+        #         )
+        #     ),
+        #     font={"size": 18, "color": '#000', "family": "Arial"},
+        #     plot_bgcolor='#ccc',
+        #     paper_bgcolor="#ffffff",
+        #     sliders=sliders,
+        # )
 
         # Add aiphoria logo watermark
         logo = Image.open("docs/images/aiphoria-logo.png")
