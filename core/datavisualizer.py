@@ -5,6 +5,8 @@ from core.datastructures import Scenario
 import plotly.graph_objects as go
 from PIL import Image
 
+from core.parameters import ParameterName
+
 
 class DataVisualizer(object):
     def __init__(self, mode: str = "network"):
@@ -316,24 +318,47 @@ class DataVisualizer(object):
         visualizer_js = visualizer_js.replace("{small_node_threshold}", str(small_node_threshold))
         self._script = visualizer_js
 
-    def build_and_show(self, scenarios: List[Scenario], params: dict, combine_to_one_file: bool = False):
+    def build_and_show(self, scenarios: List[Scenario],
+                       visualizer_params: dict,
+                       model_params: dict,
+                       combine_to_one_file: bool = False):
         scenario_name_to_data = {}
         for scenario in scenarios:
-            scenario_data = self._build_scenario_data(scenario, params)
+            scenario_data = self._build_scenario_data(scenario, visualizer_params)
             scenario_name_to_data[scenario.name] = scenario_data
 
         if combine_to_one_file:
-            # Build combined file with all the scenarios included
-            fig, script = self._build_plotly_data_combine(scenario_name_to_data, params)
-            #fig.show(renderer="browser", post_script=[script], config={'displayModeBar': False})
-            fig.write_html(file="test.html", post_script=[script], config={'displayModeBar': False}, full_html=True,
-                           auto_open=True)
+            # # TODO: Implement this
+            # # Build combined file with all the scenarios included
+            # fig, script = self._build_plotly_data_combine(scenario_name_to_data, visualizer_params)
+            #
+            # output_path = os.path.join(model_params[ParameterName.OutputPath], scenario_name)
+            # filename = "{}_sankey.html".format(scenario_name)
+            # abs_path_to_file = os.path.join(output_path, filename)
+            #
+            # # Write results to file and open the file in browser
+            # fig.write_html(file=abs_path_to_file, post_script=[script], config={'displayModeBar': False},
+            #                full_html=True, auto_open=True)
+            #
+            # # Open directly in browser
+            # #fig.show(renderer="browser", post_script=[script], config={'displayModeBar': False})
+            print("Not implemented yet")
 
         else:
             # Build separate files for each scenario
             for scenario_name, year_to_data in scenario_name_to_data.items():
-                fig, script = self._build_plotly_data_seperate(scenario_name, year_to_data, params)
-                fig.show(renderer="browser", post_script=[script], config={'displayModeBar': False})
+                fig, script = self._build_plotly_data_seperate(scenario_name, year_to_data, visualizer_params)
+
+                output_path = os.path.join(model_params[ParameterName.OutputPath], scenario_name)
+                filename = "{}_sankey.html".format(scenario_name)
+                abs_path_to_file = os.path.join(output_path, filename)
+
+                # Write results to file and open the file in browser
+                fig.write_html(file=abs_path_to_file, post_script=[script], config={'displayModeBar': False},
+                               full_html=True, auto_open=True)
+
+                # Open directly in browser
+                #fig.show(renderer="browser", post_script=[script], config={'displayModeBar': False})
 
     def _build_scenario_data(self, scenario: Scenario, params: Dict):
         flow_solver = scenario.flow_solver
