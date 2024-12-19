@@ -205,13 +205,6 @@ class DataProvider(object):
                 # Use default optional parameter value
                 self._param_name_to_value[param_name] = param_default_value
 
-        # Update the output path to absolute form
-        # TODO: This might not work after compiling to exe, should use __file__?
-        abs_path_to_running_script = os.path.dirname(sys.argv[0])
-        rel_path_to_output = self._param_name_to_value[ParameterName.OutputPath]
-        abs_output_path = os.path.abspath(os.path.join(abs_path_to_running_script, rel_path_to_output))
-        self._param_name_to_value[ParameterName.OutputPath] = abs_output_path
-
         # ********************************************
         # * Read processes and flows from Excel file *
         # ********************************************
