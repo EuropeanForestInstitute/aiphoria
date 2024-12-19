@@ -138,3 +138,6 @@ ui-tests/playwright-report
 .pnp.*
 ui-tests/.yarn/*
 ui-tests/.pnp.*
+
+# Ignore all SVG output files
+data/*.svg
