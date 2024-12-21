@@ -21,7 +21,7 @@ class DataChecker(object):
         self._year_end = 0
         self._years = []
 
-    def build_scenarios(self, epsilon: float = 0.1) -> List[Scenario]:
+    def build_scenarios(self) -> List[Scenario]:
         """
         Build scenarios to be solved using the FlowSolver.
         First element in the list is always baseline scenario and existence of this is always guaranteed.
@@ -111,6 +111,7 @@ class DataChecker(object):
             print("Found following errors checking flow sources and targets:")
             for error in errors:
                 print("\t{}".format(error))
+            print("Stopping execution...")
             raise SystemExit(-1)
 
         # Check that there is not multiple definitions for the exact same flow per year
@@ -120,10 +121,12 @@ class DataChecker(object):
             print("Found following errors checking multiple flow definitions for same year:")
             for error in errors:
                 print("\t{}".format(error))
+            print("Stopping execution...")
             raise SystemExit(-1)
 
         # Check if stock distribution type and parameters are set and valid
         if not self._check_process_stock_parameters(processes):
+            print("Stopping execution...")
             raise SystemExit(-1)
 
         # Create and propagate flow data for missing years
@@ -148,12 +151,23 @@ class DataChecker(object):
         print("Checking flow type changes...")
         ok, errors = self._check_flow_type_changes(df_year_to_flows)
         if not ok:
+            print("Found following errors checking flow type changes:")
             for error in errors:
-                print(error)
+                print("\t{}".format(error))
+            print("Stopping execution...")
+            raise SystemExit(-1)
+
+        ok, errors = self._check_relative_flow_errors(df_year_to_flows)
+        if not ok:
+            print("Found following errors checking relative flow errors:")
+            for error in errors:
+                print("\t{}".format(error))
+            print("Stopping execution...")
             raise SystemExit(-1)
 
         # Check if process has no inflows and only relative outflows:
         if not self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows):
+            print("Stopping execution...")
             raise SystemExit(-1)
 
         # Check that the sheet ParameterName.SheetNameScenarios exists
@@ -161,7 +175,8 @@ class DataChecker(object):
         ok, errors = self.check_scenario_definitions(df_year_to_process_flows)
         if not ok:
             for error in errors:
-                print(error)
+                print("\t{}".format(error))
+            print("Stopping execution...")
             raise SystemExit(-1)
 
         # *************************************
@@ -643,6 +658,27 @@ class DataChecker(object):
 
         return not errors, errors
 
+    def _check_relative_flow_errors(self, df_year_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
+        """
+        Check that relative flows do not go over 100%.
+
+        :param df_year_to_flows: DataFrame
+        :return: Tuple (bool, list of errors)
+        """
+        errors = []
+        for flow_id in df_year_to_flows.columns:
+            flow_data = df_year_to_flows[flow_id]
+            for year, flow in flow_data.items():
+                if flow.value > 100.0:
+                    # TODO: Row number is shown wrong
+                    s = "Flow {} has value over 100% for year {} in row {} in sheet '{}'".format(
+                        flow.id, flow.year, flow.row_number, self._dataprovider.sheet_name_flows
+                    )
+                    errors.append(s)
+                    return not errors, errors
+
+        return not errors, errors
+
     def _create_flow_id_has_data_mapping(self, df_flows) -> pd.DataFrame:
         df = df_flows.copy()
         for flow_id in df.columns:
@@ -998,12 +1034,14 @@ class DataChecker(object):
                         s = "" + error_message_prefix
                         s += "Source Process ID '{}' not defined for the year {}".format(source_process_id, year)
                         errors.append(s)
+                        continue
 
                     # Check if target Process ID exists for the defined year range
                     if target_process_id not in year_data.columns:
                         s = "" + error_message_prefix
                         s += "Target Process ID '{}' not defined for the year {}".format(source_process_id, year)
                         errors.append(s)
+                        continue
 
                     entry = year_data.at[year, source_process_id]
                     process = entry["process"]
@@ -1072,6 +1110,18 @@ class DataChecker(object):
                     # Flow type must match with the ChangeType:
                     # - Absolute flows must have change_type == ChangeType.Value
                     # - Relative flows must have change_type == ChangeType.Proportional
+                    source_to_target_id = "{} {}".format(flow_modifier.source_process_id, flow_modifier.target_process_id)
+
+                    start_year_processes = df_year_to_process_flows.loc[flow_modifier.start_year]
+                    if source_to_target_id not in start_year_processes.keys():
+                        s = "" + error_message_prefix
+                        s += "Source Process ID '{}' does not have outflow to target Process 'ID' {}".format(
+                            source_process_id, target_process_id)
+                        errors.append(s)
+                        continue
+
+                    source_to_target_flow = df_year_to_process_flows.at[flow_modifier.start_year, source_to_target_id]
+
                     is_flow_abs = source_to_target_flow.is_unit_absolute_value
                     is_flow_rel = not is_flow_abs
                     if is_flow_abs and flow_modifier.change_type is not ChangeType.Value:

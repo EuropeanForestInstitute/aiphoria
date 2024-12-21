@@ -34,7 +34,7 @@ class DataProvider(object):
             # Flow related
             [ParameterName.SheetNameFlows, str, "Sheet name that contains data for Flows (e.g. Flows)"],
             [ParameterName.ColumnRangeFlows, str, "Start and end column names separated by colon (e.g. B:R) that contain data for Flows"],
-            [ParameterName.SkipNumRowsFlows, int, "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!"],
+            [ParameterName.SkipNumRowsFlows, int, "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!",],
 
             # Model related
             [ParameterName.StartYear, int, "Starting year of the model"],
@@ -337,7 +337,7 @@ class DataProvider(object):
         if not object_type:
             return result
 
-        row_number = row_start
+        row_number = row_start + 2
         for row in rows:
             if not self._is_row_valid(row):
                 row_number += 1

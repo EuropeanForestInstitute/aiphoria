@@ -379,7 +379,7 @@ class Flow(ObjectBase):
             indicator_value = 1 if indicator_value is None else indicator_value
             self._indicators[indicator_name] = indicator_value
 
-        self._row_number = row_number  # Track Excel file row number, last element in list
+        self._row_number = row_number  # Track Excel file row number
 
     def __str__(self):
         s = "Flow '{}' -> '{}': Value={} Unit={}," \
