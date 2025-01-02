@@ -16,9 +16,6 @@ version: str = "latest"  # required by the version switcher
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-
-master_doc = "index"
-
 root_doc = "index"
 html_static_path = ["_static"]
 templates_path = ["_templates"]
