@@ -8,3 +8,4 @@ matplotlib
 xlrd
 xlwt
 tqdm
+myst-parser
