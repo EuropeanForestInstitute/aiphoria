@@ -1,4 +1,4 @@
-![aiphoria logo](docs/images/aiphoria-logo.png)
+![aiphoria logo](docs/_static/aiphoria-logo.png)
 
 ## Python library for assessing and visualizing dynamic wood material flows
 
