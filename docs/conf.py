@@ -23,9 +23,3 @@ root_doc = "index"
 html_static_path = ["_static"]
 templates_path = ["_templates"]
 exclude_patterns = ["_build"]
-
-extensions = [
-    # Your existing extensions
-    ...,
-    "myst_parser",
-]
