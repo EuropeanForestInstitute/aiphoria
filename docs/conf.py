@@ -32,6 +32,7 @@ extensions = [
     "sphinx.ext.inheritance_diagram",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
+    "sphinx_rtd_theme",
     # Markdown support
     "myst_parser",
 ]
@@ -44,7 +45,16 @@ source_suffix = {
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 html_logo = "aiphoria-logo.png"
+html_favicon = "favicon.ico" 
 html_theme_options = {
     'logo_only': True,
     'display_version': False,
 }
+
+html_logo = "aiphoria-logo.png
+html_theme = "sphinx_rtd_theme"
+html_theme_options = {
+    "logo_only": True,  # Displays only the logo, hides the project name
+    "style_nav_header_background": "#343131",  # Customize the header background color
+}
+
