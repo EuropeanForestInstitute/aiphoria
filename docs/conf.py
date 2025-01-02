@@ -23,9 +23,4 @@ root_doc = "index"
 html_static_path = ["_static"]
 templates_path = ["_templates"]
 exclude_patterns = ["_build"]
-html_theme = "pydata_sphinx_theme"
-
-suppress_warnings = [
-    "myst.header"  # suppress warnings of the kind "WARNING: Non-consecutive header level increase; H1 to H3"
-]
 
