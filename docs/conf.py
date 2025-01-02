@@ -49,12 +49,5 @@ html_favicon = "favicon.ico"
 html_theme_options = {
     'logo_only': True,
     'display_version': False,
+style_nav_header_background": "#1D5905",
 }
-
-html_logo = "aiphoria-logo.png"
-html_theme = "sphinx_rtd_theme"
-html_theme_options = {
-    "logo_only": True,  # Displays only the logo, hides the project name
-    "style_nav_header_background": "#343131",  # Customize the header background color
-}
-
