@@ -37,14 +37,4 @@ extensions = [
     "sphinx.ext.napoleon",
     # Markdown support
     # 'myst_parser', # do not enable separately if using myst_nb, compare: https://github.com/executablebooks/MyST-NB/issues/421#issuecomment-1164427544
-    # responsive web component support
-    "sphinx_design",
-    # custom 404 page
-    "notfound.extension",
-    # custom favicons
-    "sphinx_favicon",
-    # copy button on code blocks
-    "sphinx_copybutton",
-    # carousels
-    "sphinx_carousel.carousel",
 ]
