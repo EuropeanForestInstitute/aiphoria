@@ -1,4 +1,10 @@
-![aiphoria logo](docs/_static/aiphoria-logo.png)
+
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/aiphoria-logo.png" height="50">
+    <img alt="aiphoria logo" src="docs/_static/aiphoria-logo.png" height="160">
+  </picture>
+</h1>
 
 ## Python library for assessing and visualizing dynamic wood material flows
 
