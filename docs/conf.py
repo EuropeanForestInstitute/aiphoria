@@ -48,6 +48,6 @@ html_logo = "aiphoria-logo.png"
 html_favicon = "favicon.ico" 
 html_theme_options = {
     'logo_only': True,
-    'display_version': False,
-"style_nav_header_background": "#E8E8E8",
+    'display_version': True,
+"style_nav_header_background": "#7F70A1",
 }
