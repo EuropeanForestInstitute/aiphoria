@@ -6,9 +6,9 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'aiphoria'
+project = 'aiphoria dMFA'
 copyright = '2025, Cleo Orfanidou'
-author = 'Cleo Orfanidou'
+author = 'aiphoria developers'
 release = 'v0.4'
 
 # -- General configuration ---------------------------------------------------
