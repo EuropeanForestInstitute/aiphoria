@@ -35,9 +35,6 @@ extensions = [
     "sphinx.ext.inheritance_diagram",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
-    # iPython extensions
-    "IPython.sphinxext.ipython_directive",
-    "IPython.sphinxext.ipython_console_highlighting",
     # Markdown support
     # 'myst_parser', # do not enable separately if using myst_nb, compare: https://github.com/executablebooks/MyST-NB/issues/421#issuecomment-1164427544
     # Jupyter Notebook support
