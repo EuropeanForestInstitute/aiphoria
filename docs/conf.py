@@ -37,8 +37,6 @@ extensions = [
     "sphinx.ext.napoleon",
     # Markdown support
     # 'myst_parser', # do not enable separately if using myst_nb, compare: https://github.com/executablebooks/MyST-NB/issues/421#issuecomment-1164427544
-    # Jupyter Notebook support
-    "myst_nb",
     # mermaid support
     "sphinxcontrib.mermaid",
     # API documentation support
