@@ -51,7 +51,7 @@ html_theme_options = {
     'display_version': False,
 }
 
-html_logo = "aiphoria-logo.png
+html_logo = "aiphoria-logo.png"
 html_theme = "sphinx_rtd_theme"
 html_theme_options = {
     "logo_only": True,  # Displays only the logo, hides the project name
