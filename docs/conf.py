@@ -37,8 +37,6 @@ extensions = [
     "sphinx.ext.napoleon",
     # Markdown support
     # 'myst_parser', # do not enable separately if using myst_nb, compare: https://github.com/executablebooks/MyST-NB/issues/421#issuecomment-1164427544
-    # API documentation support
-    "autoapi",
     # responsive web component support
     "sphinx_design",
     # custom 404 page
