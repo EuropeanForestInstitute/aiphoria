@@ -8,3 +8,5 @@ matplotlib
 xlrd
 xlwt
 tqdm
+myst-parser
+sphinx-rtd-theme
