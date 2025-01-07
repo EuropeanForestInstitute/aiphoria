@@ -296,7 +296,7 @@ class DataVisualizer(object):
         )
 
         # Add aiphoria logo watermark
-        logo = Image.open("docs/images/aiphoria-logo.png")
+        logo = Image.open("docs/_static/aiphoria-logo.png")
         fig.add_layout_image(
             dict(source=logo,
                 xref="paper", yref="paper",
@@ -576,7 +576,7 @@ class DataVisualizer(object):
         # )
 
         # Add aiphoria logo watermark
-        logo = Image.open("docs/images/aiphoria-logo.png")
+        logo = Image.open("docs/_static/aiphoria-logo.png")
         fig.add_layout_image(
             dict(source=logo,
                 xref="paper", yref="paper",
@@ -821,7 +821,7 @@ class DataVisualizer(object):
         )
 
         # Add aiphoria logo watermark
-        logo = Image.open("docs/images/aiphoria-logo.png")
+        logo = Image.open("docs/_static/aiphoria-logo.png")
         fig.add_layout_image(
             dict(source=logo,
                 xref="paper", yref="paper",
