@@ -17,3 +17,4 @@ class ChangeType(str, Enum):
 class FlowType(str, Enum):
     Absolute: str = "ABS"
     Relative: str = "REL"
+
