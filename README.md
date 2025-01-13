@@ -16,7 +16,7 @@ This is a Python library that facilitates the assessment of wood materials flows
 `aiphoria` allows you to:
 
 - **Solve flows** provided both in absolute and relative (%) values, for example semi-finished wood product statistics (absolute values) to end-uses (relative values)
-- **Conduct dynamic MFA and temporary carbon accounting**
+- **Conduct dynamic MFA as well as temporary carbon storage assessment**
 - **Visualize material flows** through a Sankey diagram and provided timestep.
 
 ## Use cases:
