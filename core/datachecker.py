@@ -151,7 +151,7 @@ class DataChecker(object):
         print("Checking flow type changes...")
         ok, errors = self._check_flow_type_changes(df_year_to_flows)
         if not ok:
-            print("Found following errors checking flow type changes:")
+            print("Found following errors while checking flow type changes:")
             for error in errors:
                 print("\t{}".format(error))
             print("Stopping execution...")
@@ -159,11 +159,20 @@ class DataChecker(object):
 
         ok, errors = self._check_relative_flow_errors(df_year_to_flows)
         if not ok:
-            print("Found following errors checking relative flow errors:")
+            print("Found following errors while checking relative flow errors:")
             for error in errors:
                 print("\t{}".format(error))
             print("Stopping execution...")
             raise SystemExit(-1)
+
+
+        # ok, errors = self._check_process_relative_outflows(df_year_to_process_flows)
+        # if not ok:
+        #     print("Found following errors while checking relative flow errors:")
+        #     for error in errors:
+        #         print("\t{}".format(error))
+        #     print("Stopping execution...")
+        #     raise SystemExit(-1)
 
         # Check if process has no inflows and only relative outflows:
         if not self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows):
@@ -670,12 +679,41 @@ class DataChecker(object):
             flow_data = df_year_to_flows[flow_id]
             for year, flow in flow_data.items():
                 if flow.value > 100.0:
-                    # TODO: Row number is shown wrong
                     s = "Flow {} has value over 100% for year {} in row {} in sheet '{}'".format(
                         flow.id, flow.year, flow.row_number, self._dataprovider.sheet_name_flows
                     )
                     errors.append(s)
                     return not errors, errors
+
+        # Check if total relative outflows from process are >100%
+        for year in df_year_to_flows.index:
+            process_id_to_rel_outflows = {}
+            for flow_id in df_year_to_flows.columns:
+                flow = df_year_to_flows.at[year, flow_id]
+                if flow.is_unit_absolute_value:
+                    continue
+
+                # Gather relative outflows to source process ID
+                outflows = process_id_to_rel_outflows.get(flow.source_process_id, [])
+                outflows.append(flow)
+                process_id_to_rel_outflows[flow.source_process_id] = outflows
+
+            # Check if total outflows of the process are > 100%
+            for process_id, outflows in process_id_to_rel_outflows.items():
+                total_share = np.sum([flow.value for flow in outflows])
+                if total_share > 100.0:
+                    s = "Process {} has total relative outflows over 100%".format(process_id)
+                    s += " (total={}%) for year {} in sheet '{}'".format(
+                        total_share, year, self._dataprovider.sheet_name_flows)
+                    s.format(process_id)
+                    errors.append(s)
+
+                    s = "Check following flows:"
+                    errors.append(s)
+                    for flow in outflows:
+                        s = "\t{} (row {})".format(flow, flow.row_number)
+                        errors.append(s)
+                    errors.append("")
 
         return not errors, errors
 
