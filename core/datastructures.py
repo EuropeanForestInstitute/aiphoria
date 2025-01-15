@@ -6,25 +6,21 @@ from core.types import FunctionType, ChangeType
 
 class ObjectBase(object):
     def __init__(self):
-        self._id = -1
-        self._row_number = -1
-        self._is_valid = False
-        self._is_virtual = False
+        self._id: Union[str, any] = -1
+        self._row_number: int = -1
+        self._is_valid: bool = False
+        self._is_virtual: bool = False
 
     @property
     def is_valid(self) -> bool:
         return False
 
     @property
-    def is_valid(self) -> bool:
-        return False
-
-    @property
-    def id(self) -> str:
+    def id(self) -> Union[str, any]:
         return self._id
 
     @id.setter
-    def id(self, new_id) -> str:
+    def id(self, new_id: str):
         self._id = new_id
 
     @property
@@ -385,9 +381,9 @@ class Flow(ObjectBase):
         s = "Flow '{}' -> '{}': Value={} Unit={}," \
             "is_evaluated={}, evaluated_share={}, evaluated_value={}," \
             "year={}, is_virtual={}".format(
-            self.source_process_id, self.target_process_id, self.value, self.unit,
-            self.is_evaluated, self.evaluated_share, self.evaluated_value, self.year,
-            self.is_virtual)
+                self.source_process_id, self.target_process_id, self.value, self.unit,
+                self.is_evaluated, self.evaluated_share, self.evaluated_value, self.year,
+                self.is_virtual)
         return s
 
     def __hash__(self):

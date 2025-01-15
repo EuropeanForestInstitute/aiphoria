@@ -546,6 +546,7 @@ class FlowSolver(object):
                 flow.evaluated_share = 1.0
                 flow.evaluated_value = flow.value
             else:
+                # Convert flow value from 0 - 100 % range to 0 - 1 range
                 flow.is_evaluated = False
                 flow.evaluated_share = flow.value / 100.0
                 flow.evaluated_value = 0.0
@@ -711,8 +712,6 @@ class FlowSolver(object):
             inflows_total = self.get_process_inflows_total(process_id, year)
             outflows_total = self.get_process_outflows_total(process_id, year)
 
-            #print(inflows_total, outflows_total)
-
             # If process has stock then consider only the stock outflows
             if process_id in self._process_id_to_stock:
                 # Distribute SWE total outflow values
@@ -792,10 +791,9 @@ class FlowSolver(object):
 
             print("")
 
-    def _create_dynamic_stocks(self) -> None:
+    def _create_dynamic_stocks(self):
         """
         Convert Stocks to ODYM DynamicStockModels.
-        :return: None
         """
 
         # Create DynamicStockModels for Processes that contain Stock
@@ -851,7 +849,7 @@ class FlowSolver(object):
             self._stock_id_to_dsm_swe[stock.id] = new_dsm_swe
             self._stock_id_to_dsm_carbon[stock.id] = new_dsm_carbon
 
-    def _evaluate_dynamic_stock_outflows(self, year: int) -> None:
+    def _evaluate_dynamic_stock_outflows(self, year: int):
         """
         Evaluate dynamic stock outflows and distribute stock outflow among all outflows.
         Marks stock outflows as evaluated.
@@ -859,7 +857,6 @@ class FlowSolver(object):
         This method must be called at the beginning of every timestep before starting evaluating Processes.
 
         :param year: Year
-        :return: None
         """
         # Get stock outflow for year, distribute that to outflows and mark those Flows as evaluated
         year_index = self._years.index(year)
@@ -954,6 +951,7 @@ class FlowSolver(object):
             if flow_modifier.use_target_value:
                 source_to_target_flow = self.get_flow(source_to_target_flow_id, year_range[0])
                 value_start = source_to_target_flow.value
+
                 if flow_modifier.function_type == FunctionType.Linear:
                     new_values = np.linspace(start=value_start, stop=flow_modifier.target_value, num=len(year_range))
 
@@ -1020,6 +1018,7 @@ class FlowSolver(object):
                     for opposite_target_process_id in flow_modifier.opposite_target_process_ids:
                         opposite_flow_id = "{} {}".format(source_process_id, opposite_target_process_id)
                         opposite_flow = self.get_flow(opposite_flow_id, year)
+
                         if flow_modifier.is_change_type_value:
                             opposite_value = -value_diff
                             opposite_value *= opposite_target_flow_share
@@ -1042,6 +1041,7 @@ class FlowSolver(object):
 
                     for target_flow in target_flows:
                         target_flow_share = 1.0 / len(target_flows)
+
                         if flow_modifier.is_change_type_value:
                             opposite_value = -value_diff
                             opposite_value *= target_flow_share
