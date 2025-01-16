@@ -553,6 +553,10 @@ class DataVisualizer(object):
             autosize=True,
             title=dict(
                 text="Year {}".format(list(year_to_data.keys())[0]),
+                subtitle={
+                    "text": "Scenario: {}".format(scenario_name)
+                }
+
             ),
             font={"size": 18, "color": '#000', "family": "Arial"},
             plot_bgcolor='#ccc',
