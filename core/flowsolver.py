@@ -124,12 +124,26 @@ class FlowSolver(object):
         return df_flow_values
 
     def get_process(self, process_id: str, year=-1) -> Process:
+        """
+        Get Process by ID and year.
+
+        :param process_id: Process ID
+        :param year: Target yeawr
+        :return: Process
+        """
         if year >= 0:
             return self._year_to_process_id_to_process[year][process_id]
 
-        return self._current_process_id_to_flow_ids[process_id]
+        return self._current_process_id_to_process[process_id]
 
     def get_flow(self, flow_id: str, year=-1) -> Flow:
+        """
+        Get Flow by ID and year.
+
+        :param flow_id: Flow ID
+        :param year: Target year
+        :return: Flow
+        """
         if year >= 0:
             return self._year_to_flow_id_to_flow[year][flow_id]
 
@@ -495,8 +509,13 @@ class FlowSolver(object):
                 # Ignore root and leaf processes because those have zero inflows and zero outflows
                 is_root = self.is_root_process(process_id)
                 is_leaf = self.is_leaf_process(process_id)
+
+                # Check that virtual flows are actually needed
+                diff = abs(total_inflows - total_outflows_abs)
+                need_virtual_flows = total_inflows < total_outflows_abs and (diff > self._virtual_flows_epsilon)
+
                 if not is_root and not is_leaf and total_inflows < total_outflows_abs:
-                    if self._use_virtual_flows:
+                    if self._use_virtual_flows and need_virtual_flows:
                         # TODO: Show error message if inflows are not able to satisfy the defined outflow
                         print("{}: Create virtual inflow".format(year))
                         diff = total_inflows - total_outflows_abs
@@ -726,7 +745,6 @@ class FlowSolver(object):
                 total_outflows_abs = np.sum([flow.evaluated_value for flow in outflows_abs])
                 total_outflows_rel = np.sum([flow.evaluated_value for flow in outflows_rel])
                 process_mass_balance = stock_outflow - total_outflows_abs - total_outflows_rel
-
             else:
                 # Process has no stock
                 process_mass_balance = inflows_total - outflows_total
@@ -787,7 +805,7 @@ class FlowSolver(object):
                 print("\t- Virtual process ID '{}'".format(v_id))
 
             for v_flow_id, virtual_flow in created_virtual_flows.items():
-                print("\t- Virtual flow ID '{}'".format(v_flow_id))
+                print("\t- Virtual flow ID '{} (value={:.5})'".format(v_flow_id, virtual_flow.evaluated_value))
 
             print("")
 

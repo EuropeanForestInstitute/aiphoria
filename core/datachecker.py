@@ -165,15 +165,6 @@ class DataChecker(object):
             print("Stopping execution...")
             raise SystemExit(-1)
 
-
-        # ok, errors = self._check_process_relative_outflows(df_year_to_process_flows)
-        # if not ok:
-        #     print("Found following errors while checking relative flow errors:")
-        #     for error in errors:
-        #         print("\t{}".format(error))
-        #     print("Stopping execution...")
-        #     raise SystemExit(-1)
-
         # Check if process has no inflows and only relative outflows:
         if not self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows):
             print("Stopping execution...")
@@ -634,7 +625,6 @@ class DataChecker(object):
 
                         s = ""
                         errors.append(s)
-                        result = False
 
         return not errors, errors
 
@@ -681,6 +671,13 @@ class DataChecker(object):
             for year, flow in flow_data.items():
                 if flow.is_unit_absolute_value:
                     continue
+
+                if flow.value < 0.0:
+                    s = "Flow {} has value less than 0% for year {} in row {} in sheet '{}'".format(
+                        flow.id, flow.year, flow.row_number, self._dataprovider.sheet_name_flows
+                    )
+                    errors.append(s)
+                    return not errors, errors
 
                 if flow.value > 100.0:
                     s = "Flow {} has value over 100% for year {} in row {} in sheet '{}'".format(
