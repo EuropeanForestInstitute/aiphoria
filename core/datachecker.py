@@ -257,24 +257,25 @@ class DataChecker(object):
 
     def check_processes_integrity(self):
         # Check that there is only processes with unique ids
-        result = True
-        messages = []
-        process_ids = set()
-        duplicate_process_ids = []
-
+        errors = []
+        process_id_to_processes = {}
         for process in self._processes:
-            if process.id not in process_ids:
-                process_ids.add(process.id)
-            else:
-                duplicate_process_ids.append(process.id)
+            process_id = process.id
+            if process_id not in process_id_to_processes:
+                process_id_to_processes[process_id] = []
 
-        if duplicate_process_ids:
-            result = False
-            messages.append("Found processes without unique IDs:")
-            for process_id in duplicate_process_ids:
-                messages.append("\t{}".format(process_id))
+            list_of_processes = process_id_to_processes[process_id]
+            list_of_processes.append(process)
 
-        return result, messages
+        for process_id, list_of_processes in process_id_to_processes.items():
+            if len(list_of_processes) > 1:
+                s = "Found multiple processes with the same ID in sheet '{}':\n".format(
+                    self._dataprovider.sheet_name_processes)
+                for process in list_of_processes:
+                    s += "\t- {} (row {})\n".format(process, process.row_number)
+                errors.append(s)
+
+        return not errors, errors
 
     def check_flows_integrity(self):
         # Check all years that all processes that are flows are using exists
@@ -706,7 +707,7 @@ class DataChecker(object):
                 total_share = np.sum([flow.value for flow in outflows])
                 if total_share > 100.0:
                     s = "Process {} has total relative outflows over 100%".format(process_id)
-                    s += " (total={}%) for year {} in sheet '{}'".format(
+                    s += " (total={:.3f}%) for year {} in sheet '{}'".format(
                         total_share, year, self._dataprovider.sheet_name_flows)
                     s.format(process_id)
                     errors.append(s)
