@@ -678,6 +678,9 @@ class DataChecker(object):
         for flow_id in df_year_to_flows.columns:
             flow_data = df_year_to_flows[flow_id]
             for year, flow in flow_data.items():
+                if flow.is_unit_absolute_value:
+                    continue
+
                 if flow.value > 100.0:
                     s = "Flow {} has value over 100% for year {} in row {} in sheet '{}'".format(
                         flow.id, flow.year, flow.row_number, self._dataprovider.sheet_name_flows
