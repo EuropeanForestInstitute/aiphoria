@@ -89,9 +89,20 @@ class DataProvider(object):
              "Path to directory where all output is created (relative to running script)",
              "output"
              ],
+            [ParameterName.ShowPlots,
+            bool,
+            "Show Matplotlib plots",
+             True,
+            ],
+            [ParameterName.VisualizeInflowsToProcesses,
+             list,
+             "Create inflow visualization and export data for process IDs defined in here. " +
+             "Each process ID must be separated by comma (',')",
+             [],
+            ],
         ]
 
-        param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean"}
+        param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}
 
         # Suppress openpyxl warning about the Data Validation removed in the future
         # We don't care that much about the actual Data Validation inside Excel, only that
@@ -163,6 +174,23 @@ class DataProvider(object):
         for entry in optional_params:
             param_name, param_type, param_desc, param_default_value = entry
             if param_name in param_name_to_value:
+                # NOTE: Lists need to be handled differently
+                if param_type == list:
+                    splits = []
+                    found_param_value = param_name_to_value[param_name]
+                    if type(found_param_value) is bool:
+                        # Empty cell is interpreted as bool for some reason
+                        splits = param_default_value
+                        continue
+
+                    if type(found_param_value) is str:
+                        # Remove whitespaces in string and split by separator ','
+                        sep = ","
+                        splits = found_param_value.replace(" ", "").split(sep)
+
+                    self._param_name_to_value[param_name] = splits
+                    continue
+
                 found_param_value = param_name_to_value[param_name]
                 found_param_type = type(found_param_value)
                 try:

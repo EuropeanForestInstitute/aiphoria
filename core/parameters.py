@@ -50,6 +50,13 @@ class ParameterName(str, Enum):
     # Output path
     OutputPath: str = "output_path"
 
+    # Show plots
+    ShowPlots: str = "show_plots"
+
+    # Visualize inflows to process IDs
+    VisualizeInflowsToProcesses: str = "visualize_inflows_to_processes"
+
+
 
 class ParameterFillMethod(str, Enum):
     """

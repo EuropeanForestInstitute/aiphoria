@@ -105,6 +105,18 @@ class DataChecker(object):
         unique_process_ids = self._get_unique_process_ids_in_year_range(flows, processes, self._years)
         df_year_to_flows = self._create_year_to_flow_data(unique_flow_ids, flows, self._years)
 
+        # **********************************
+        # * Check invalid parameter values *
+        # **********************************
+
+        # Check for invalid parameter values for process IDs to visualize
+        visualize_inflows_to_process_ids = model_params[ParameterName.VisualizeInflowsToProcesses]
+        for process_id in visualize_inflows_to_process_ids:
+            if process_id not in unique_process_ids.keys():
+                print("Process inflows to visualize '{}' is not valid process ID!".format(process_id))
+                print("Stopping execution...")
+                raise SystemExit(-1)
+
         # Check that source and target processes for flows are defined
         ok, errors = self._check_flow_sources_and_targets(unique_process_ids, df_year_to_flows)
         if not ok:
@@ -178,6 +190,7 @@ class DataChecker(object):
                 print("\t{}".format(error))
             print("Stopping execution...")
             raise SystemExit(-1)
+
 
         # *************************************
         # * Unpack DataFrames to dictionaries *
