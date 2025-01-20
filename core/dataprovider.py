@@ -100,6 +100,11 @@ class DataProvider(object):
              "Each process ID must be separated by comma (',')",
              [],
             ],
+            [ParameterName.BaseUnitName,
+             str,
+             "Base unit name. This is used with relative flows when exporting flow data to CSVs.",
+             "Mm3 SWE",
+            ]
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}

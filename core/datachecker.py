@@ -63,20 +63,19 @@ class DataChecker(object):
         if ParameterName.FillMethod in model_params:
             fill_method = model_params[ParameterName.FillMethod]
 
-        # Checking options
-        epsilon_inflows_outflows_mismatch = 0.1
-
         if not processes:
-            print("DataChecker: No valid processes!")
+            error = "No valid processes!"
+            raise Exception([error])
 
         if not flows:
-            print("DataChecker: No valid flows!")
+            error = "No valid flows!"
+            raise Exception([error])
 
         if not processes or not flows:
-            raise SystemExit("No processes or flows found!")
+            error = "No processes or flows!"
+            raise Exception([error])
 
         if detect_year_range:
-            # Years are converted to int
             self._year_start, self._year_end = self._detect_year_range(flows)
         else:
             self._year_start = model_params[ParameterName.StartYear]
@@ -84,16 +83,19 @@ class DataChecker(object):
 
         # Check if start year is after end year and vice versa
         if self._year_start > self._year_end:
-            print("Start year is greater than end year! (start year: {}, end year: {})".format(
-                self._year_start, self._year_end))
-            print("Stopping execution...")
-            raise SystemExit(-1)
+            error = "Start year is greater than end year! (start year: {}, end year: {})".format(
+                self._year_start, self._year_end)
+            raise Exception([error])
 
         if self._year_end < self._year_start:
-            print("End year is less than start year! (start year: {}, end year: {})".format(
-                self._year_start, self._year_end))
-            print("Stopping execution...")
-            raise SystemExit(-1)
+            error = "End year is less than start year! (start year: {}, end year: {})".format(
+                self._year_start, self._year_end)
+            raise Exception([error])
+
+        # Check if data years are outside defined year range
+        ok, errors = self._check_if_data_is_outside_year_range(flows)
+        if not ok:
+            raise Exception(errors)
 
         # Build array of available years, last year is also included in year range
         self._years = self._get_year_range()
@@ -109,37 +111,30 @@ class DataChecker(object):
         # * Check invalid parameter values *
         # **********************************
 
-        # Check for invalid parameter values for process IDs to visualize
-        visualize_inflows_to_process_ids = model_params[ParameterName.VisualizeInflowsToProcesses]
-        for process_id in visualize_inflows_to_process_ids:
-            if process_id not in unique_process_ids.keys():
-                print("Process inflows to visualize '{}' is not valid process ID!".format(process_id))
-                print("Stopping execution...")
-                raise SystemExit(-1)
+        print("Checking process for inflow visualization...")
+        process_ids_for_inflow_viz = model_params[ParameterName.VisualizeInflowsToProcesses]
+        ok, errors = self._check_process_ids_for_inflow_visualization(process_ids_for_inflow_viz, unique_process_ids)
+        if not ok:
+            raise Exception(errors)
 
         # Check that source and target processes for flows are defined
+        print("Checking flow source and target processes...")
         ok, errors = self._check_flow_sources_and_targets(unique_process_ids, df_year_to_flows)
         if not ok:
-            print("Found following errors checking flow sources and targets:")
-            for error in errors:
-                print("\t{}".format(error))
-            print("Stopping execution...")
-            raise SystemExit(-1)
+            raise Exception(errors)
 
         # Check that there is not multiple definitions for the exact same flow per year
         # Exact means that source and target processes are the same
+        print("Checking multiple flow definitions in the same year...")
         ok, errors = self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows, self._years)
         if not ok:
-            print("Found following errors checking multiple flow definitions for same year:")
-            for error in errors:
-                print("\t{}".format(error))
-            print("Stopping execution...")
-            raise SystemExit(-1)
+            raise Exception(errors)
 
         # Check if stock distribution type and parameters are set and valid
-        if not self._check_process_stock_parameters(processes):
-            print("Stopping execution...")
-            raise SystemExit(-1)
+        print("Checking process stock parameters...")
+        ok, errors = self._check_process_stock_parameters(processes)
+        if not ok:
+            raise Exception(errors)
 
         # Create and propagate flow data for missing years
         df_year_to_flows = self._create_flow_data_for_missing_years(
@@ -155,42 +150,34 @@ class DataChecker(object):
         # Check if process only absolute inflows AND absolute outflows so that
         # the total inflow matches with the total outflows within certain limit
         print("Checking process total inflows and total outflows mismatches...")
-        if not self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
-                                                                 epsilon=epsilon_inflows_outflows_mismatch):
-            pass
+        ok, errors = self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
+                                                                       epsilon=virtual_flows_epsilon)
+        if not ok:
+            raise Exception(errors)
 
         # Check that flow type stays the same during the simulation
         print("Checking flow type changes...")
         ok, errors = self._check_flow_type_changes(df_year_to_flows)
         if not ok:
-            print("Found following errors while checking flow type changes:")
-            for error in errors:
-                print("\t{}".format(error))
-            print("Stopping execution...")
-            raise SystemExit(-1)
+            raise Exception(errors)
 
+        print("Checking relative flow errors...")
         ok, errors = self._check_relative_flow_errors(df_year_to_flows)
         if not ok:
-            print("Found following errors while checking relative flow errors:")
-            for error in errors:
-                print("\t{}".format(error))
-            print("Stopping execution...")
-            raise SystemExit(-1)
+            raise Exception(errors)
 
         # Check if process has no inflows and only relative outflows:
-        if not self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows):
-            print("Stopping execution...")
-            raise SystemExit(-1)
+        print("Checking processes with no inflows and only relative outflows...")
+        ok, errors = self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows)
+        if not ok:
+            raise Exception(errors)
 
         # Check that the sheet ParameterName.SheetNameScenarios exists
         # and that it has properly defined data (source process ID, target process IDs, etc.)
+        print("Checking scenario definitions...")
         ok, errors = self.check_scenario_definitions(df_year_to_process_flows)
         if not ok:
-            for error in errors:
-                print("\t{}".format(error))
-            print("Stopping execution...")
-            raise SystemExit(-1)
-
+            raise Exception(errors)
 
         # *************************************
         # * Unpack DataFrames to dictionaries *
@@ -393,6 +380,13 @@ class DataChecker(object):
         return self._year_to_flow_id_to_flow
 
     def _detect_year_range(self, flows: List[Flow]) -> (int, int):
+        """
+        Detect year range for flow data.
+        Return tuple (start year, end year)
+
+        :param flows: List of Flows
+        :return: Tuple (start year, end year)
+        """
         year_min = 9999
         year_max = 0
 
@@ -417,6 +411,57 @@ class DataChecker(object):
         :return: List of years as integers
         """
         return [year for year in range(self._year_start, self._year_end + 1)]
+
+    def _check_if_data_is_outside_year_range(self, flows: List[Flow]) -> Tuple[bool, List[str]]:
+        errors = []
+
+        # Get year range defined in settings (= simulation years)
+        years = self._get_year_range()
+        year_min = min(years)
+        year_max = max(years)
+
+        unique_flow_years = set()
+        for flow in flows:
+            unique_flow_years.add(flow.year)
+
+        # Min and max year found in data
+        flow_year_min = min(unique_flow_years)
+        flow_year_max = max(unique_flow_years)
+
+        # Flows defined later that end_year
+        if flow_year_min > year_max:
+            error = "All flows are defined after the end year ({}) defined in settings file".format(year_max)
+            errors.append(error)
+
+        # Flows defined before the start_year
+        if flow_year_max < year_min:
+            error = "All flows are defined before the start year ({}) defined in the settings file".format(year_min)
+            errors.append(error)
+
+        # First flow year is defined afther the start_year
+        if flow_year_min > year_min:
+            error = "Start year ({}) is set before first flow data year ({}) in settings file".format(
+                year_min, flow_year_min)
+            errors.append(error)
+
+        return not errors, errors
+
+    def _check_process_ids_for_inflow_visualization(self, process_ids: List[str],
+                                                    unique_processes: Dict[str, Process]) -> Tuple[bool, List[str]]:
+        """
+        Check that all Process IDs that are selected for inflow visualization are valid
+
+        :param process_ids: List of Process IDs
+        :param unique_processes: Dictionary (Process ID, Process)
+        :return: Tuple (has errors, list of errors)
+        """
+        errors = []
+        for process_id in process_ids:
+            if process_id not in unique_processes.keys():
+                errors.append("Process inflows to visualize '{}' is not valid process ID!".format(process_id))
+
+        return not errors, errors
+
 
     def _check_flow_sources_and_targets(self,
                                         unique_process_ids: dict[str, Process],
@@ -631,7 +676,7 @@ class DataChecker(object):
                             s = "- flow '{}' in row {}".format(flow.id, flow.row_number)
                             errors.append(s)
 
-                        print("Check following outflows:")
+                        errors.append("Check following outflows:")
                         for flow in outflows:
                             s = "- flow '{}' in row {}".format(flow.id, flow.row_number)
                             errors.append(s)
@@ -915,14 +960,13 @@ class DataChecker(object):
                 df.at[year, flow.target_process_id]["flows"]["in"].append(flow)
         return df
 
-    def _check_process_stock_parameters(self, processes: List[Process]):
+    def _check_process_stock_parameters(self, processes: List[Process]) -> Tuple[bool, list[str]]:
         """
         Check if Process has valid definition for stock distribution type
         :param processes: List of Processes
         :return: True if no errors, False otherwise
         """
         errors = []
-        result_type = True
         print("Checking stock distribution types...")
         allowed_distribution_types = ["Fixed", "Simple", "Normal", "LogNormal", "FoldedNormal", "Weibull"]
         for process in processes:
@@ -933,20 +977,18 @@ class DataChecker(object):
                 errors.append(msg)
 
         if errors:
-            for msg in errors:
-                print("\t{}".format(msg))
-
-            print("")
-            print("\tValid stock distribution types are:")
+            # Add information about the valid stock distribution types
+            errors.append("")
+            errors.append("\tValid stock distribution types are:")
             for distribution_type in allowed_distribution_types:
-                print("\t{}".format(distribution_type))
-            print("")
-            result_type = False
+                errors.append("\t{}".format(distribution_type))
+            errors.append("")
+
+            return not errors, errors
 
         # Check if Process has valid parameters for stock distribution parameters
         # Expected: float or dictionary with valid keys (stddev, shape, scale)
         errors = []
-        result_params = True
         print("Checking stock distribution parameters...")
         for process in processes:
             if process.stock_distribution_params is None:
@@ -970,11 +1012,9 @@ class DataChecker(object):
                 "Weibull": ['shape', 'scale'],
             }
 
-            is_fixed = process.stock_distribution_type == "Fixed"
             is_float = type(process.stock_distribution_params) is float
             required_params = required_params_for_distribution_type[process.stock_distribution_type]
             num_required_params = len(required_params)
-            missing_required_params = []
             for param in required_params:
                 if num_required_params > 1 and is_float:
                     msg = "Stock distribution parameters was number, following parameters are required "
@@ -989,14 +1029,13 @@ class DataChecker(object):
                             process.stock_distribution_type))
                         errors.append("\t{}".format(param))
 
-        if errors:
-            for msg in errors:
-                print("{}".format(msg))
-            result_params = False
+            if errors:
+                return not errors, errors
 
-        return result_type and result_params
+        return not errors, errors
 
-    def _check_process_has_no_inflows_and_only_relative_outflows(self, df_year_to_process_flows: pd.DataFrame) -> bool:
+    def _check_process_has_no_inflows_and_only_relative_outflows(self, df_year_to_process_flows: pd.DataFrame)\
+            -> Tuple[bool, List[str]]:
         """
         Check for Processes that have no inflows and have only relative outflows.
         This is error in data.
@@ -1004,6 +1043,7 @@ class DataChecker(object):
         :param df_year_to_process_flows: DataFrame (index: year, column: Process name, cell: Dictionary)
         :return: True if no errors, False otherwise
         """
+        errors = []
         print("Checking for processes that have no inflows and only relative outflows...")
         year_to_errors = {}
         for year in df_year_to_process_flows.index:
@@ -1029,17 +1069,23 @@ class DataChecker(object):
                     " (= processes have no inflows and have ONLY relative outflows)\n"
 
             msg += "Ensure that any process causing an error has at least one absolute incoming flow in the first year"
-            print(msg)
-            for year, errors in year_to_errors.items():
-                print("Year {} ({} errors):".format(year, len(errors)))
-                for msg in errors:
-                    print("\t{}".format(msg))
-                print("")
 
-        return not has_errors
+            errors.append(msg)
+            for year, year_errors in year_to_errors.items():
+                errors.append("Year {} ({} errors):".format(year, len(year_errors)))
+                for error in year_errors:
+                    errors.append("\t{}".format(error))
+                errors.append("")
 
-    def check_scenario_definitions(self, df_year_to_process_flows: pd.DataFrame):
-        print("Checking scenario definitions...")
+        return not has_errors, errors
+
+    def check_scenario_definitions(self, df_year_to_process_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
+        """
+        Check scenario definitions...
+
+        :param df_year_to_process_flows: pd.DataFrame
+        :return: Tuple (has errors: bool, list of errors)
+        """
         errors = []
         scenario_definitions = self._scenario_definitions
         valid_years = list(df_year_to_process_flows.index)

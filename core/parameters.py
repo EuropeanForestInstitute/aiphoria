@@ -56,6 +56,9 @@ class ParameterName(str, Enum):
     # Visualize inflows to process IDs
     VisualizeInflowsToProcesses: str = "visualize_inflows_to_processes"
 
+    # Base unit name
+    BaseUnitName: str = "base_unit_name"
+
 
 
 class ParameterFillMethod(str, Enum):
