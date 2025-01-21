@@ -4,7 +4,7 @@ from typing import List, Dict, Tuple, Union
 import numpy as np
 from core.dataprovider import DataProvider
 from core.parameters import ParameterName, ParameterFillMethod
-from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData
+from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color
 from core.types import FunctionType, ChangeType
 import pandas as pd
 
@@ -16,6 +16,7 @@ class DataChecker(object):
         self._flows = self._dataprovider.get_flows()
         self._stocks = self._dataprovider.get_stocks()
         self._scenario_definitions = self._dataprovider.get_scenario_definitions()
+        self._color_definitions = self._dataprovider.get_color_definitions()
         self._year_to_flow_id_to_flow = {}
         self._year_start = 0
         self._year_end = 0
@@ -177,6 +178,12 @@ class DataChecker(object):
         # and that it has properly defined data (source process ID, target process IDs, etc.)
         print("Checking scenario definitions...")
         ok, errors = self.check_scenario_definitions(df_year_to_process_flows)
+        if not ok:
+            raise Exception(errors)
+
+        # Check that colors have both name and valid value
+        print("Checking color definitions...")
+        ok, errors = self._check_color_definitions(self._color_definitions)
         if not ok:
             raise Exception(errors)
 
@@ -611,7 +618,7 @@ class DataChecker(object):
         """
         errors = []
         sheet_name_flows = self._dataprovider.sheet_name_flows
-        df = pd.DataFrame(index=years, columns=unique_flow_ids)
+        df = pd.DataFrame(index=years, columns=list(unique_flow_ids.keys()))
         for flow in flows:
             if flow.year not in years:
                 continue
@@ -1237,5 +1244,68 @@ class DataChecker(object):
                         s = "" + error_message_prefix
                         s += "Target value must be > 0.0"
                         errors.append(s)
+
+        return not errors, errors
+
+    def _check_color_definitions(self, colors: List[Color]) -> Tuple[bool, List[str]]:
+        """
+        Check if all color definitions are valid:
+        - Color definition must have name
+        - Color definition must have valid value (hex string starting with character '#')
+
+        :param colors: List of Colors
+        :return: Tuple (has errors: bool, list of errors)
+        """
+
+        # Get list of unique transformation stages
+        transformation_stages = set()
+        for process in self._processes:
+            transformation_stages.add(process.transformation_stage)
+
+        errors = []
+        for color in colors:
+            row_errors = []
+
+            # Has valid name?
+            if not color.name:
+                s = "Color definition does not have name (row {})".format(color.row_number)
+                row_errors.append(s)
+
+            # Has valid value?
+            # - hex string prefixed with character '#'
+            # - string length is 7
+            if not color.value.startswith('#'):
+                s = "Color definition does not start with character '#' (row {})".format(color.row_number)
+                row_errors.append(s)
+
+            if len(color.value) != 7:
+                s = "Color definition value length must be 7, example: #123456 (row {})".format(color.row_number)
+                row_errors.append(s)
+
+            # Check if color value can be converted to hexadecimal value
+            int_value = -1
+            try:
+                int_value = int(color.value[1:], 16)
+            except ValueError:
+                s = "Color definition value '{}' is not hexadecimal string (row {})".format(color.value,
+                                                                                            color.row_number)
+                row_errors.append(s)
+
+            # Check that transformation stage with the name color.name exists
+            if color.name:
+                if color.name not in transformation_stages:
+                    s = "INFO: Color definition name '{}' is not transformation stage name (row {})".format(
+                        color.name, color.row_number)
+                    print(s)
+
+            # TODO: Should all transformation stage colors be defined?
+
+            if row_errors:
+                msg = "errors" if len(row_errors) > 1 else "error"
+                row_errors.insert(0, "{} {} in row {}:".format(len(row_errors), msg, color.row_number))
+
+                for error in row_errors:
+                    errors.append(error)
+                errors.append("")
 
         return not errors, errors

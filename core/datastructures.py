@@ -558,7 +558,7 @@ class Stock(ObjectBase):
         self._process: Process = None
         self._id = -1
 
-        if not params:
+        if params is None:
             return
 
         self._process = params
@@ -1023,3 +1023,92 @@ class Scenario(object):
         :param scenario_data: ScenarioData from baseline FlowSolver.
         """
         self._scenario_data = copy.deepcopy(scenario_data)
+
+
+class Color(ObjectBase):
+    def __init__(self, params=None, row_number=-1):
+        super().__init__()
+        self._name: str = ""
+        self._value: str = ""
+        self.row_number = row_number
+
+        if params is None:
+            return
+
+        self.name = str(params[0])
+        self.value = str(params[1])
+
+    def __str__(self) -> str:
+        """
+        Returns the string presentation of the Color in format:
+        #rrggbb
+        where
+            rr = red component
+            gg = green component
+            bb = blue component
+
+        :return: Color as hexadecimal string, prefixed with character '#'
+        """
+        return self.value.lower()
+
+    def is_valid(self) -> bool:
+        return not self.name and self.value
+
+    @property
+    def name(self) -> str:
+        """
+        Get color name.
+
+        :return: Color name (str)
+        """
+        return self._name
+
+    @name.setter
+    def name(self, new_name: str):
+        """
+        Set color name.
+
+        :param new_name: New color name
+        """
+        self._name = new_name
+
+    @property
+    def value(self) -> str:
+        """
+        Color value (hexadecimal, e.g. #AABBCC) prefixed with the character '#'
+        """
+        return self._value
+
+    @value.setter
+    def value(self, new_value: str):
+        """
+        Set new color value (hexadecimal).
+        New color must be prefixed with the character '#'.
+
+        :param new_value: New color value (hexadecimal)
+        """
+        self._value = new_value
+
+    def get_red_as_float(self) -> float:
+        """
+        Get red component value in range [0, 1]
+        :return: Red value (float)
+        """
+        return self._hex_to_normalized_float(self.value[1:][0:2])
+
+    def get_green_as_float(self) -> float:
+        """
+        Get green component value in range [0, 1]
+        :return: Green value (float)
+        """
+        return self._hex_to_normalized_float(self.value[1:][2:4])
+
+    def get_blue_as_float(self) -> float:
+        """
+        Get blue component value in range [0, 1]
+        :return: Blue value (float)
+        """
+        return self._hex_to_normalized_float(self.value[1:][4:6])
+
+    def _hex_to_normalized_float(self, hex_value: str) -> float:
+        return int(hex_value, 16) / 255.0

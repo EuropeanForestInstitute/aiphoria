@@ -4,7 +4,7 @@ from typing import List, Union, Any, Dict
 import numpy as np
 import openpyxl
 import pandas as pd
-from core.datastructures import Process, Flow, Stock, FlowModifier, ScenarioDefinition
+from core.datastructures import Process, Flow, Stock, FlowModifier, ScenarioDefinition, Color
 from core.parameters import ParameterName, ParameterFillMethod
 
 
@@ -17,13 +17,15 @@ class DataProvider(object):
 
         self._workbook = None
         self._param_name_to_value = {}
-        self._processes = []
-        self._flows = []
-        self._stocks = []
-        self._scenario_definitions = []
-        self._sheet_name_processes = None
-        self._sheet_name_flows = None
-        self._sheet_name_scenarios = None
+        self._processes: List[Process] = []
+        self._flows: List[Flow] = []
+        self._stocks: List[Stock] = []
+        self._scenario_definitions: List[ScenarioDefinition] = []
+        self._colors: List[Color] = []
+        self._sheet_name_processes: Union[None, str] = None
+        self._sheet_name_flows: Union[None, str] = None
+        self._sheet_name_scenarios: Union[None, str] = None
+        self._sheet_name_colors: Union[None, str] = None
 
         # Check that all required keys exists
         required_params = [
@@ -104,7 +106,12 @@ class DataProvider(object):
              str,
              "Base unit name. This is used with relative flows when exporting flow data to CSVs.",
              "Mm3 SWE",
-            ]
+            ],
+            [ParameterName.SheetNameColors,
+             str,
+             "Sheet name that contains data for transformation stage colors (e.g. Colors)",
+             None],
+
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}
@@ -255,6 +262,10 @@ class DataProvider(object):
         col_range_scenarios = param_name_to_value.get(ParameterName.ColumnRangeScenarios, None)
         skip_num_rows_scenarios = param_name_to_value.get(ParameterName.SkipNumRowsScenarios, None)
 
+        sheet_name_colors = param_name_to_value.get(ParameterName.SheetNameColors, None)
+        col_range_colors = param_name_to_value.get(ParameterName.ColumnRangeColors, None)
+        skip_num_rows_colors = param_name_to_value.get(ParameterName.SkipNumRowsColors, None)
+
         # Sheet name to DataFrame
         sheets = {}
         try:
@@ -278,7 +289,7 @@ class DataProvider(object):
                 except ValueError:
                     pass
 
-                # Optional
+                # Optionals
                 try:
                     sheet_scenarios = pd.read_excel(xls, sheet_name=sheet_name_scenarios,
                                                     skiprows=skip_num_rows_scenarios,
@@ -288,14 +299,23 @@ class DataProvider(object):
                 except ValueError:
                     pass
 
+                try:
+                    sheet_colors = pd.read_excel(xls, sheet_name=sheet_name_colors,
+                                                 skiprows=skip_num_rows_colors,
+                                                 usecols=col_range_colors
+                                                 )
+                    sheets[sheet_name_colors] = sheet_colors
+                except ValueError:
+                    pass
+
         except FileNotFoundError:
-            raise Exception("DataProvider: File not found ({})".format(filename))
+            raise Exception("Settings file '{}' not found".format(filename))
 
         # Check that all the required sheets exists
         required_sheet_names = [sheet_name_processes, sheet_name_flows]
         missing_sheet_names = self._check_missing_sheet_names(required_sheet_names, sheets)
         if missing_sheet_names:
-            print("DataProvider: file '{}' is missing following required sheets:".format(filename))
+            print("Settings file '{}' is missing following required sheets:".format(filename))
             for key in missing_sheet_names:
                 print("\t- {}".format(key))
             raise Exception(-1)
@@ -304,19 +324,23 @@ class DataProvider(object):
         self._sheet_name_flows = sheet_name_flows
 
         # Check that all optional sheets exists (only if optional sheets have been defined)
-        optional_sheet_names = []
+        optional_sheet_names = [sheet_name_colors]
 
         if sheet_name_scenarios:
             optional_sheet_names.append(sheet_name_scenarios)
 
         missing_sheet_names = self._check_missing_sheet_names(optional_sheet_names, sheets)
         if missing_sheet_names:
-            print("DataProvider: file '{}' is missing following optional sheets:".format(filename))
+            errors = []
+            s = "Settings file '{}' is missing following sheets:".format(filename)
+            errors.append(s)
             for key in missing_sheet_names:
-                print("\t- {}".format(key))
-            raise Exception(-1)
+                s = "\t- {}".format(key)
+                errors.append(s)
+            raise Exception(errors)
 
         self._sheet_name_scenarios = sheet_name_scenarios
+        self._sheet_name_colors = sheet_name_colors
 
         # Create Processes
         rows_processes = []
@@ -352,6 +376,16 @@ class DataProvider(object):
                 rows_scenarios.append(row)
 
             self._scenario_definitions = self._create_scenario_definitions(rows_scenarios)
+
+        # Create colors (optional)
+        if sheet_name_colors:
+            rows_colors = []
+            df_colors = sheets[self._sheet_name_colors]
+            for (row_index, row) in df_colors.iterrows():
+                row = self._convert_row_nan_to_none(row)
+                rows_colors.append(row)
+
+            self._colors = self._create_colors(rows_colors)
 
     def _check_missing_sheet_names(self, required_sheet_names: List[str], sheets: Dict[str, pd.DataFrame]):
         missing_sheet_names = []
@@ -430,7 +464,24 @@ class DataProvider(object):
                 result.append(new_scenario_definition)
         return result
 
+    def _create_colors(self, rows: List[Any] = None) -> List[Color]:
+        if not rows:
+            rows = []
+
+        result = []
+        for row_index, row in enumerate(rows):
+            # Header = row 1
+            result.append(Color(row, row_number=row_index + 2))
+        return result
+
     def _is_row_valid(self, row):
+        """
+        Check if row is valid.
+        Defining all first 4 columns makes the row valid.
+
+        :param row: Target row
+        :return: True if row is valid, false otherwise
+        """
         # Each row must have all first columns defined
         cols = row.iloc[0:4]
         if any(pd.isna(cols)):
@@ -460,16 +511,39 @@ class DataProvider(object):
         return self._param_name_to_value
 
     def get_processes(self) -> List[Process]:
+        """
+        Get all Processes.
+
+        :return: List of Processes
+        """
         return self._processes
 
     def get_flows(self) -> List[Flow]:
+        """
+        Get all Flows.
+
+        :return: List of Flows
+        """
         return self._flows
 
     def get_stocks(self) -> List[Stock]:
+        """
+        Get all Stocks.
+
+        :return: List of Stocks
+        """
         return self._stocks
 
     def get_scenario_definitions(self) -> List[ScenarioDefinition]:
+        """
+        Get all ScenarioDefinitions.
+
+        :return: List of ScenarioDefinitions
+        """
         return self._scenario_definitions
+
+    def get_color_definitions(self) -> List[Color]:
+        return self._colors
 
     def _to_bool(self, value: Any) -> bool:
         """

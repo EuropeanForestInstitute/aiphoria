@@ -1,7 +1,7 @@
 import os
 import json
 from typing import List, Dict, Any
-from core.datastructures import Scenario
+from core.datastructures import Scenario, Color
 import plotly.graph_objects as go
 from PIL import Image
 
@@ -347,7 +347,7 @@ class DataVisualizer(object):
         else:
             # Build separate files for each scenario
             for scenario_name, year_to_data in scenario_name_to_data.items():
-                fig, script = self._build_plotly_data_seperate(scenario_name, year_to_data, visualizer_params)
+                fig, script = self._build_plotly_data_separate(scenario_name, year_to_data, visualizer_params)
 
                 output_path = os.path.join(model_params[ParameterName.OutputPath], scenario_name)
                 filename = "{}_sankey.html".format(scenario_name)
@@ -461,7 +461,7 @@ class DataVisualizer(object):
 
         return year_to_data
 
-    def _build_plotly_data_seperate(self, scenario_name: str, year_to_data: Dict[str, Dict] = None, params: Dict = None):
+    def _build_plotly_data_separate(self, scenario_name: str, year_to_data: Dict[str, Dict] = None, params: Dict = None):
         # Metadata for all the traces
         fig_metadata = []
         # for process in process_to_flows:
@@ -620,6 +620,17 @@ class DataVisualizer(object):
         flow_alpha = params["flow_alpha"]
         virtual_process_color = params["virtual_process_color"]
         virtual_flow_color = params["virtual_flow_color"]
+
+        # Check if all transformation stages have defined color
+        unique_transformation_stages = set()
+        year_to_process_to_flows = flow_solver.get_year_to_process_to_flows()
+        first_year = list(year_to_process_to_flows.keys())[0]
+        for process in year_to_process_to_flows[first_year]:
+            unique_transformation_stages.add(process.transformation_stage)
+
+        # Build colors for missing transformation stages or create default color palette
+        self._build_default_transformation_stage_colors(unique_transformation_stages,
+                                                        process_transformation_stage_colors)
 
         year_to_data = {}
         year_to_process_to_flows = flow_solver.get_year_to_process_to_flows()
@@ -838,7 +849,7 @@ class DataVisualizer(object):
         result_fig = fig
 
         # Add JS script that is run after the Plotly has loaded
-        filename = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/datavisualizer_plotly_post.js")
+        filename = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/datavisualizer_plotly_post_dev.js")
 
         visualizer_js = ""
         with open(filename, "r", encoding="utf-8") as fs:
@@ -855,3 +866,35 @@ class DataVisualizer(object):
         result_script = visualizer_js.replace("{year_to_data}", json.dumps(scenario_name_to_data))
 
         return result_fig, result_script
+
+    def _build_default_transformation_stage_colors(self,
+                                                   unique_transformation_stages: set,
+                                                   process_transformation_stage_colors: Dict[str, str]):
+        """
+        Build and fill missing transformation stage colors with default color palette.
+
+        :param unique_transformation_stages: Set of unique transformation stages
+        :param process_transformation_stage_colors: Dictionary (transformation stage, Color)
+        """
+
+        # Default color palette for 8 transformation stages
+        default_color_palette = [
+            "#7dda60",
+            "#eb5e34",
+            "#8c76cf",
+            "#5baa11",
+            "#3281db",
+            "#61b053",
+            "#efc3ca",
+            "#dfc57b",
+        ]
+
+        # Find missing transformation stage names
+        defined_transformation_stage_names = set(list(process_transformation_stage_colors.keys()))
+        missing_transformation_stage_names = unique_transformation_stages.difference(defined_transformation_stage_names)
+
+        # Fill process_transformation_stage_colors with
+        for index, transformation_stage in enumerate(missing_transformation_stage_names):
+            color = default_color_palette[index % len(default_color_palette)]
+            new_color = Color(params=[transformation_stage, color])
+            process_transformation_stage_colors[transformation_stage] = new_color.value

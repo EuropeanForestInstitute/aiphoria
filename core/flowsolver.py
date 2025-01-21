@@ -354,9 +354,11 @@ class FlowSolver(object):
         dsm.compute_outflow_total()
 
     def _get_year_to_process_id_to_process(self) -> Dict[str, Dict[str, Process]]:
+        # TODO: Implement
         return self._year_to_process_id_to_process
 
     def _get_year_to_process_id_to_flows(self):
+        # TODO: Implement
         return self.year_to_process_id_to_flows
 
     def _get_year_to_flow_id_to_flow(self) -> Dict[int, Dict[str, Flow]]:
@@ -416,7 +418,7 @@ class FlowSolver(object):
         Get list of absolute outflows from Process for the selected year.
 
         :param process_id: Process ID
-        :param year: Selected uear
+        :param year: Selected year
         :return: List of absolute outflows (Flow)
         """
         outflows_abs = []
@@ -431,7 +433,7 @@ class FlowSolver(object):
         Get list of relative outflows from Process for the selected year.
 
         :param process_id: Process ID
-        :param year: Selected uear
+        :param year: Selected year
         :return: List of relative outflows (Flow)
         """
 

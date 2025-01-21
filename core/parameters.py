@@ -59,6 +59,10 @@ class ParameterName(str, Enum):
     # Base unit name
     BaseUnitName: str = "base_unit_name"
 
+    # Sheet name for colors
+    SheetNameColors: str = "sheet_name_colors"
+    ColumnRangeColors: str = "column_range_colors"
+    SkipNumRowsColors: str = "skip_num_rows_colors"
 
 
 class ParameterFillMethod(str, Enum):
