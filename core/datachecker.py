@@ -149,11 +149,12 @@ class DataChecker(object):
 
         # Check if process only absolute inflows AND absolute outflows so that
         # the total inflow matches with the total outflows within certain limit
-        print("Checking process total inflows and total outflows mismatches...")
-        ok, errors = self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
-                                                                       epsilon=virtual_flows_epsilon)
-        if not ok:
-            raise Exception(errors)
+        if not model_params[ParameterName.UseVirtualFlows]:
+            print("Checking process total inflows and total outflows mismatches...")
+            ok, errors = self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
+                                                                           epsilon=virtual_flows_epsilon)
+            if not ok:
+                raise Exception(errors)
 
         # Check that flow type stays the same during the simulation
         print("Checking flow type changes...")
