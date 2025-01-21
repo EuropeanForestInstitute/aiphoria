@@ -130,11 +130,11 @@ class DataProvider(object):
                         param_name_to_value[param_name] = param_value
 
                 except ValueError as e:
-                    raise SystemExit("DataProvider: Settings sheet '{}' not found in file {}!".format(
+                    raise Exception("DataProvider: Settings sheet '{}' not found in file {}!".format(
                         sheet_settings_name, filename))
 
-        except FileNotFoundError:
-            raise SystemExit("DataProvider: File not found ({})".format(filename))
+        except FileNotFoundError as ex:
+            raise Exception("File not found: {}".format(filename))
 
         # Check that all required params are defined in settings sheet
         missing_params = []
@@ -157,7 +157,7 @@ class DataProvider(object):
                 fixed_param_name = fixed_param_name.format(param_name)
                 print("\t{} (type: {}). {}".format(fixed_param_name, param_type_to_str[param_type], param_desc))
 
-            raise SystemExit(-1)
+            raise Exception(-1)
 
         # Check that required and optionals parameters are correct types
         for entry in required_params:
@@ -232,7 +232,7 @@ class DataProvider(object):
 
                         self._param_name_to_value[param_name] = param_default_value
                         print("")
-                        raise SystemExit(-1)
+                        raise Exception(-1)
 
             else:
                 # Use default optional parameter value
@@ -289,8 +289,7 @@ class DataProvider(object):
                     pass
 
         except FileNotFoundError:
-            print("DataProvider: file not found (" + filename + ")")
-            raise SystemExit(-1)
+            raise Exception("DataProvider: File not found ({})".format(filename))
 
         # Check that all the required sheets exists
         required_sheet_names = [sheet_name_processes, sheet_name_flows]
@@ -299,7 +298,7 @@ class DataProvider(object):
             print("DataProvider: file '{}' is missing following required sheets:".format(filename))
             for key in missing_sheet_names:
                 print("\t- {}".format(key))
-            raise SystemExit(-1)
+            raise Exception(-1)
 
         self._sheet_name_processes = sheet_name_processes
         self._sheet_name_flows = sheet_name_flows
@@ -315,7 +314,7 @@ class DataProvider(object):
             print("DataProvider: file '{}' is missing following optional sheets:".format(filename))
             for key in missing_sheet_names:
                 print("\t- {}".format(key))
-            raise SystemExit(-1)
+            raise Exception(-1)
 
         self._sheet_name_scenarios = sheet_name_scenarios
 
