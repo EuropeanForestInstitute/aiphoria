@@ -111,7 +111,6 @@ class DataChecker(object):
         # **********************************
         # * Check invalid parameter values *
         # **********************************
-
         print("Checking process for inflow visualization...")
         process_ids_for_inflow_viz = model_params[ParameterName.VisualizeInflowsToProcesses]
         ok, errors = self._check_process_ids_for_inflow_visualization(process_ids_for_inflow_viz, unique_process_ids)
@@ -177,13 +176,18 @@ class DataChecker(object):
         # Check that the sheet ParameterName.SheetNameScenarios exists
         # and that it has properly defined data (source process ID, target process IDs, etc.)
         print("Checking scenario definitions...")
-        ok, errors = self.check_scenario_definitions(df_year_to_process_flows)
+        ok, errors = self._check_scenario_definitions(df_year_to_process_flows)
         if not ok:
             raise Exception(errors)
 
         # Check that colors have both name and valid value
         print("Checking color definitions...")
         ok, errors = self._check_color_definitions(self._color_definitions)
+        if not ok:
+            raise Exception(errors)
+
+        print("Checking flow indicators...")
+        ok, errors = self._check_flow_indicators(df_year_to_flows)
         if not ok:
             raise Exception(errors)
 
@@ -1087,9 +1091,9 @@ class DataChecker(object):
 
         return not has_errors, errors
 
-    def check_scenario_definitions(self, df_year_to_process_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
+    def _check_scenario_definitions(self, df_year_to_process_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
         """
-        Check scenario definitions...
+        Check scenario definitions.
 
         :param df_year_to_process_flows: pd.DataFrame
         :return: Tuple (has errors: bool, list of errors)
@@ -1307,5 +1311,36 @@ class DataChecker(object):
                 for error in row_errors:
                     errors.append(error)
                 errors.append("")
+
+        return not errors, errors
+
+    def _check_flow_indicators(self, df_year_to_flows: pd.DataFrame, default_conversion_factor: float = 1.0)\
+            -> Tuple[bool, List[str]]:
+        """
+        Check and set default value to every flow that is missing value.
+
+        :param df_year_to_flows:
+        :return: Tuple (has errors (bool), list of errors (str))
+        """
+        errors = []
+        for year in df_year_to_flows.index:
+            for flow_id in df_year_to_flows:
+                flow = df_year_to_flows.at[year, flow_id]
+                for name, indicator in flow.indicator_name_to_indicator.items():
+                    if indicator.conversion_factor is None:
+                        s = "Flow '{}' has no conversion factor defined for year {}, using default={} (row {})"\
+                            .format(flow_id, year, default_conversion_factor, flow.row_number)
+                        print("INFO: {}".format(s))
+                        indicator.conversion_factor = default_conversion_factor
+
+                    try:
+                        # Try casting value to float and if exception happens then
+                        # value was not float
+                        conversion_factor = float(indicator.conversion_factor)
+                        indicator.conversion_factor = conversion_factor
+                    except ValueError as ex:
+                        s = "Flow '{}' has invalid conversion factor defined for year {} (row {})".format(
+                            flow_id, year, flow.row_number)
+                        errors.append(s)
 
         return not errors, errors

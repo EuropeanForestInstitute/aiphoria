@@ -40,6 +40,69 @@ class ObjectBase(object):
         self._is_virtual = value
 
 
+class Indicator(object):
+    def __init__(self, name: str = None, conversion_factor: float = 1.0, comment: str = None):
+        super().__init__()
+        self._name: Union[str, None] = name
+        self._conversion_factor: Union[float, None] = conversion_factor
+        self._comment: Union[str, None] = comment
+
+    @property
+    def name(self) -> str:
+        """
+        Get the indicator name.
+
+        :return: Indicator name (str)
+        """
+        return self._name
+
+    @name.setter
+    def name(self, new_name: str):
+        """
+        Set the indicator name.
+
+        :param new_name: New indicator name (str)
+        """
+        self._name = new_name
+
+    @property
+    def conversion_factor(self) -> float:
+        """
+        Get the indicator conversion factor.
+
+        :return: Conversion factor (float)
+        """
+        return self._conversion_factor
+
+    @conversion_factor.setter
+    def conversion_factor(self, new_conversion_factor: float):
+        """
+        Set the indicator conversion factor.
+
+        :param new_value: New conversion factor (float)
+        """
+        self._conversion_factor = new_conversion_factor
+
+    @property
+    def comment(self) -> str:
+        """
+        Get indicator comment.
+
+        :return: Indicator comment (str)
+        """
+        return self._comment
+
+    @comment.setter
+    def comment(self, new_comment: str):
+        """
+        Set the indicator comment.
+
+        :param new_comment: New indicator comment (str)
+        """
+        self._comment = new_comment
+
+
+
 class Process(ObjectBase):
     def __init__(self, params=None, row_number=-1):
         super().__init__()
@@ -328,6 +391,9 @@ class Flow(ObjectBase):
 
         self._indicators = {}
 
+        # TODO: New indicator mapping
+        self._indicator_name_to_indicator = {}
+
         if params is None:
             return
 
@@ -356,6 +422,7 @@ class Flow(ObjectBase):
 
         # Rest of the elements except last element are indicators
         # There should be even number of indicators because each indicator has value and comment
+        # TODO: Should not raise Exception
         first_indicator_index = 16
         indicators = params[first_indicator_index:]
         if len(indicators) % 2:
@@ -372,8 +439,16 @@ class Flow(ObjectBase):
             indicator_comment = indicators.iloc[i+1]
 
             # Default to 1 as indicator value if no value is provided
-            indicator_value = 1 if indicator_value is None else indicator_value
+            indicator_value = 1.0 if indicator_value is None else indicator_value
             self._indicators[indicator_name] = indicator_value
+
+        # TODO: New indicators
+        for i in range(0, len(indicators), 2):
+            name = indicators.index[i]
+            conversion_factor = indicators.iloc[i]
+            comment = indicators.iloc[i+1]
+            new_indicator = Indicator(name, conversion_factor, comment)
+            self._indicator_name_to_indicator[name] = new_indicator
 
         self._row_number = row_number  # Track Excel file row number
 
@@ -549,6 +624,10 @@ class Flow(ObjectBase):
     @property
     def evaluated_value_carbon(self) -> float:
         return self.evaluated_value * self.carbon_content_factor
+
+    @property
+    def indicator_name_to_indicator(self) -> Dict[str, Indicator]:
+        return self._indicator_name_to_indicator
 
 
 # Stock is created for each process that has lifetime
@@ -1112,3 +1191,4 @@ class Color(ObjectBase):
 
     def _hex_to_normalized_float(self, hex_value: str) -> float:
         return int(hex_value, 16) / 255.0
+
