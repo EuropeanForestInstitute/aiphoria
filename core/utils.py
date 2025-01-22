@@ -21,6 +21,21 @@ def setup_current_working_directory():
         # Running Notebook, cwd is already set
         pass
 
+def create_output_directory(output_dir_path: str):
+    """
+    Create output directory.
+    Deletes existing directory.
+    """
+
+    # If exists then delete existing directory and create new
+    if os.path.exists(output_dir_path):
+        try:
+            shutil.rmtree(output_dir_path)
+        except Exception as ex:
+            raise ex
+
+    # Create output directory and directories for all scenarios
+    os.makedirs(output_dir_path)
 
 def setup_odym_directories():
     """
@@ -29,27 +44,34 @@ def setup_odym_directories():
     sys.path.insert(0, os.path.join(os.getcwd(), '.', 'lib', 'odym', 'modules'))
 
 
-def setup_output_directory(output_dir_path: str, scenario_names: List[str]) -> Dict[str, str]:
+def setup_scenario_output_directories(output_dir_path: str, scenario_names: List[str]) -> Dict[str, str]:
     """
-    Create output directory path. Deletes existing directory if exists.
+    Setup scenario output directories. Deletes existing scenario directory if exists.
     Returns Dictionary of scenario name to scenario directory (absolute path)
 
     :param output_dir_name: Output directory name
     :param scenario_names: List of scenario names
     :return: Dictionary [str, str]: Scenario name to scenario directory (absolute path)
     """
-    # If exists then delete existing directory and create new
-    if os.path.exists(output_dir_path):
-        try:
-            shutil.rmtree(output_dir_path)
-        except Exception as ex:
-            print(ex)
+    # # If exists then delete existing directory and create new
+    # if os.path.exists(output_dir_path):
+    #     try:
+    #         shutil.rmtree(output_dir_path)
+    #     except Exception as ex:
+    #         raise ex
+    #
+    # # Create output directory and directories for all scenarios
+    # os.makedirs(output_dir_path)
 
-    # Create output directory and directories for all scenarios
-    os.makedirs(output_dir_path)
     scenario_name_to_abs_scenario_output_path = {}
     for scenario_name in scenario_names:
         abs_scenario_output_path = os.path.join(output_dir_path, scenario_name)
+        try:
+            # shutil.rmtree(output_dir_path)
+            print(abs_scenario_output_path)
+        except Exception as ex:
+            raise ex
+
         os.makedirs(abs_scenario_output_path)
         scenario_name_to_abs_scenario_output_path[scenario_name] = abs_scenario_output_path
 
