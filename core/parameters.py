@@ -3,7 +3,6 @@
 # values for each parameter
 from enum import Enum
 
-
 class ParameterName(str, Enum):
     """
     Parameter enumerations used in settings file
@@ -15,13 +14,13 @@ class ParameterName(str, Enum):
 
     # Process related
     SheetNameProcesses: str = "sheet_name_processes"
-    ColumnRangeProcesses: str = "column_range_processes"
     SkipNumRowsProcesses: str = "skip_num_rows_processes"
+    IgnoreColumnsProcesses: str = "ignore_columns_processes"
 
     # Flow related
     SheetNameFlows: str = "sheet_name_flows"
-    ColumnRangeFlows: str = "column_range_flows"
     SkipNumRowsFlows: str = "skip_num_rows_flows"
+    IgnoreColumnsFlows: str = "ignore_columns_flows"
 
     # Model parameters
     StartYear: str = "start_year"
@@ -40,8 +39,13 @@ class ParameterName(str, Enum):
 
     # Scenarios related
     SheetNameScenarios: str = "sheet_name_scenarios"
-    ColumnRangeScenarios: str = "column_range_scenarios"
     SkipNumRowsScenarios: str = "skip_num_rows_scenarios"
+    IgnoreColumnsScenarios: str = "ignore_columns_scenarios"
+
+    # Sheet name for colors
+    SheetNameColors: str = "sheet_name_colors"
+    SkipNumRowsColors: str = "skip_num_rows_colors"
+    IgnoreColumnsColors: str = "ignore_columns_colors"
 
     # Network graph
     CreateNetworkGraphs: str = "create_network_graphs"
@@ -58,11 +62,6 @@ class ParameterName(str, Enum):
 
     # Base unit name
     BaseUnitName: str = "base_unit_name"
-
-    # Sheet name for colors
-    SheetNameColors: str = "sheet_name_colors"
-    ColumnRangeColors: str = "column_range_colors"
-    SkipNumRowsColors: str = "skip_num_rows_colors"
 
 
 class ParameterFillMethod(str, Enum):

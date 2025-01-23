@@ -29,22 +29,54 @@ class DataProvider(object):
 
         # Check that all required keys exists
         required_params = [
-            [ParameterName.SheetNameProcesses, str, "Sheet name that contains data for Processes, (e.g. Processes)"],
-            [ParameterName.ColumnRangeProcesses, str, "Start and end column names separated by colon (e.g. B:R) that contain data for Processes"],
-            [ParameterName.SkipNumRowsProcesses, int, "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!"],
+            [ParameterName.SheetNameProcesses,
+             str,
+             "Sheet name that contains data for Processes, (e.g. Processes)",
+             ],
+            [ParameterName.SkipNumRowsProcesses,
+             int,
+             "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!",
+             ],
+            [ParameterName.IgnoreColumnsProcesses,
+             list,
+             "Columns to ignore when reading Process sheet"
+             ],
 
             # Flow related
-            [ParameterName.SheetNameFlows, str, "Sheet name that contains data for Flows (e.g. Flows)"],
-            [ParameterName.ColumnRangeFlows, str, "Start and end column names separated by colon (e.g. B:R) that contain data for Flows"],
-            [ParameterName.SkipNumRowsFlows, int, "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!",],
+            [ParameterName.SheetNameFlows,
+             str,
+             "Sheet name that contains data for Flows (e.g. Flows)",
+             ],
+            [ParameterName.SkipNumRowsFlows,
+             int,
+             "Number of rows to skip when reading data for Processes (e.g. 2). NOTE: Header row must be the first row to read!"
+             ],
+            [ParameterName.IgnoreColumnsFlows,
+             list,
+             "Columns to ignore when reading Flows sheet"
+             ],
 
             # Model related
-            [ParameterName.StartYear, int, "Starting year of the model"],
-            [ParameterName.EndYear, int, "Ending year of the model, included in time range"],
-            [ParameterName.DetectYearRange, bool, "Detect the year range automatically from file"],
-            [ParameterName.UseVirtualFlows, bool, "Use virtual flows (create missing flows for Processes that have imbalance of input and output flows, i.e. unreported flows)"],
-            [ParameterName.VirtualFlowsEpsilon, float,
-             "Maximum allowed absolute difference of process input and outputs before creating virtual flow"],
+            [ParameterName.StartYear,
+             int,
+             "Starting year of the model"
+             ],
+            [ParameterName.EndYear,
+             int,
+             "Ending year of the model, included in time range"
+             ],
+            [ParameterName.DetectYearRange,
+             bool,
+             "Detect the year range automatically from file"
+             ],
+            [ParameterName.UseVirtualFlows,
+             bool,
+             "Use virtual flows (create missing flows for Processes that have imbalance of input and output flows, i.e. unreported flows)"
+             ],
+            [ParameterName.VirtualFlowsEpsilon,
+             float,
+             "Maximum allowed absolute difference of process input and outputs before creating virtual flow"
+             ],
         ]
 
         # Optional parameters entry structure:
@@ -53,17 +85,20 @@ class DataProvider(object):
             [ParameterName.ConversionFactorCToCO2,
              float,
              "Conversion factor from C to CO2",
-             None],
+             None,
+             ],
 
             [ParameterName.FillMissingAbsoluteFlows,
              bool,
              "Fill missing absolute flows with previous valid flow data?",
-             True],
+             True,
+             ],
 
             [ParameterName.FillMissingRelativeFlows,
              bool,
              "Fill missing relative flows with previous valid flow data?",
-             True],
+             True,
+             ],
 
             [ParameterName.FillMethod,
              str,
@@ -74,44 +109,54 @@ class DataProvider(object):
             [ParameterName.SheetNameScenarios,
              str,
              "Sheet name that contains data for scenarios (flow modifiers and constraints)",
-             "Scenarios"
+             "Scenarios",
+             ],
+            [ParameterName.IgnoreColumnsScenarios,
+             list,
+             "Columns to ignore when reading Scenarios sheet",
+             [],
+             ],
+            [ParameterName.SheetNameColors,
+             str,
+             "Sheet name that contains data for transformation stage colors (e.g. Colors)",
+             None,
+             ],
+            [ParameterName.IgnoreColumnsColors,
+             list,
+             "Columns to ignore when reading Colors sheet",
+             [],
              ],
             [ParameterName.CreateNetworkGraphs,
              bool,
              "Create network graphs to visualize process connections for each scenario",
-             False
+             False,
              ],
             [ParameterName.CreateSankeyCharts,
              bool,
              "Create Sankey charts for each scenario",
-             True
-            ],
+             True,
+             ],
             [ParameterName.OutputPath,
              str,
              "Path to directory where all output is created (relative to running script)",
-             "output"
+             "output",
              ],
             [ParameterName.ShowPlots,
-            bool,
-            "Show Matplotlib plots",
+             bool,
+             "Show Matplotlib plots",
              True,
-            ],
+             ],
             [ParameterName.VisualizeInflowsToProcesses,
              list,
              "Create inflow visualization and export data for process IDs defined in here. " +
              "Each process ID must be separated by comma (',')",
              [],
-            ],
+             ],
             [ParameterName.BaseUnitName,
              str,
              "Base unit name. This is used with relative flows when exporting flow data to CSVs.",
              "Mm3 SWE",
-            ],
-            [ParameterName.SheetNameColors,
-             str,
-             "Sheet name that contains data for transformation stage colors (e.g. Colors)",
-             None],
-
+             ],
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}
@@ -173,56 +218,41 @@ class DataProvider(object):
                 found_param_value = param_name_to_value[param_name]
                 found_param_type = type(found_param_value)
                 try:
-                    # Convert Excel value needed as bool to Python bool
                     if param_type is bool:
                         found_param_value = self._to_bool(found_param_value)
-                    param_value = param_type(found_param_value)
-                    self._param_name_to_value[param_name] = param_value
 
+                    if param_type is list:
+                        found_param_value = self._to_list(found_param_value)
+
+                    found_param_value = param_type(found_param_value)
+                    self._param_name_to_value[param_name] = found_param_value
                 except ValueError as e:
                     print("Invalid type for required parameter '{}': expected {}, got {}".format(
                         param_name, param_type_to_str[param_type], param_type_to_str[found_param_type]))
 
+        # Check that optional parameters are correct types
         for entry in optional_params:
             param_name, param_type, param_desc, param_default_value = entry
             if param_name in param_name_to_value:
-                # NOTE: Lists need to be handled differently
-                if param_type == list:
-                    splits = []
-                    found_param_value = param_name_to_value[param_name]
-                    if type(found_param_value) is bool:
-                        # Empty cell is interpreted as bool for some reason
-                        splits = param_default_value
-                        continue
-
-                    if type(found_param_value) is str:
-                        # Remove whitespaces in string and split by separator ','
-                        sep = ","
-                        splits = found_param_value.replace(" ", "").split(sep)
-
-                    self._param_name_to_value[param_name] = splits
-                    continue
-
                 found_param_value = param_name_to_value[param_name]
                 found_param_type = type(found_param_value)
                 try:
                     if param_type is bool:
                         found_param_value = self._to_bool(found_param_value)
-                    param_value = param_type(found_param_value)
-                    self._param_name_to_value[param_name] = param_value
+
+                    if param_type is list:
+                        found_param_value = self._to_list(found_param_value)
+
+                    self._param_name_to_value[param_name] = param_type(found_param_value)
                 except ValueError as e:
                     print("Invalid type for optional parameter '{}': expected {}, got {}".format(
                         param_name, param_type_to_str[param_type], param_type_to_str[found_param_type]))
 
                 # Check that FillMethod has valid value
                 if param_name is ParameterName.FillMethod:
-                    valid_fill_method_names = []
-                    for method_name in dir(ParameterFillMethod):
-                        if not method_name.startswith("__"):
-                            valid_fill_method_names.append(method_name)
-
                     # Convert found param name and valid fill method names to lowercase
                     # and check if found param name is one of the valid method names
+                    valid_fill_method_names = [fill_method_name for fill_method_name in ParameterFillMethod]
                     found_param_value_lower = found_param_value.lower()
                     valid_method_names_lower = [name.lower() for name in valid_fill_method_names]
                     if found_param_value_lower in valid_method_names_lower:
@@ -250,21 +280,21 @@ class DataProvider(object):
         # ********************************************
 
         # Create Processes and Flows
-        sheet_name_processes = param_name_to_value.get(ParameterName.SheetNameProcesses, None)
-        col_range_processes = param_name_to_value.get(ParameterName.ColumnRangeProcesses, None)
-        skip_num_rows_processes = param_name_to_value.get(ParameterName.SkipNumRowsProcesses, None)
+        sheet_name_processes = self._param_name_to_value.get(ParameterName.SheetNameProcesses, None)
+        ignore_columns_processes = self._param_name_to_value.get(ParameterName.IgnoreColumnsProcesses, [])
+        skip_num_rows_processes = self._param_name_to_value.get(ParameterName.SkipNumRowsProcesses, None)
 
-        sheet_name_flows = param_name_to_value.get(ParameterName.SheetNameFlows, None)
-        col_range_flows = param_name_to_value.get(ParameterName.ColumnRangeFlows, None)
-        skip_num_rows_flows = param_name_to_value.get(ParameterName.SkipNumRowsFlows, None)
+        sheet_name_flows = self._param_name_to_value.get(ParameterName.SheetNameFlows, None)
+        ignore_columns_flows = self._param_name_to_value.get(ParameterName.IgnoreColumnsFlows, [])
+        skip_num_rows_flows = self._param_name_to_value.get(ParameterName.SkipNumRowsFlows, None)
 
-        sheet_name_scenarios = param_name_to_value.get(ParameterName.SheetNameScenarios, None)
-        col_range_scenarios = param_name_to_value.get(ParameterName.ColumnRangeScenarios, None)
-        skip_num_rows_scenarios = param_name_to_value.get(ParameterName.SkipNumRowsScenarios, None)
+        sheet_name_scenarios = self._param_name_to_value.get(ParameterName.SheetNameScenarios, None)
+        ignore_columns_scenarios = self._param_name_to_value.get(ParameterName.IgnoreColumnsScenarios, [])
+        skip_num_rows_scenarios = self._param_name_to_value.get(ParameterName.SkipNumRowsScenarios, None)
 
-        sheet_name_colors = param_name_to_value.get(ParameterName.SheetNameColors, None)
-        col_range_colors = param_name_to_value.get(ParameterName.ColumnRangeColors, None)
-        skip_num_rows_colors = param_name_to_value.get(ParameterName.SkipNumRowsColors, None)
+        sheet_name_colors = self._param_name_to_value.get(ParameterName.SheetNameColors, None)
+        ignore_columns_colors = self._param_name_to_value.get(ParameterName.IgnoreColumnsColors, [])
+        skip_num_rows_colors = self._param_name_to_value.get(ParameterName.SkipNumRowsColors, None)
 
         # Sheet name to DataFrame
         sheets = {}
@@ -273,38 +303,37 @@ class DataProvider(object):
                 try:
                     sheet_processes = pd.read_excel(xls,
                                                     sheet_name=sheet_name_processes,
-                                                    skiprows=skip_num_rows_processes,
-                                                    usecols=col_range_processes
-                                                    )
-                    sheets[sheet_name_processes] = sheet_processes
+                                                    skiprows=skip_num_rows_processes)
+                    sheets[sheet_name_processes] = self._drop_ignored_columns_from_sheet(sheet_processes,
+                                                                                         ignore_columns_processes)
                 except ValueError:
                     pass
 
                 try:
-                    sheet_flows = pd.read_excel(xls, sheet_name=sheet_name_flows,
-                                                skiprows=skip_num_rows_flows,
-                                                usecols=col_range_flows
-                                                )
-                    sheets[sheet_name_flows] = sheet_flows
+                    sheet_flows = pd.read_excel(xls,
+                                                sheet_name=sheet_name_flows,
+                                                skiprows=skip_num_rows_flows)
+                    sheets[sheet_name_flows] = self._drop_ignored_columns_from_sheet(sheet_flows,
+                                                                                     ignore_columns_flows)
                 except ValueError:
                     pass
 
                 # Optionals
                 try:
-                    sheet_scenarios = pd.read_excel(xls, sheet_name=sheet_name_scenarios,
-                                                    skiprows=skip_num_rows_scenarios,
-                                                    usecols=col_range_scenarios
-                                                    )
-                    sheets[sheet_name_scenarios] = sheet_scenarios
+                    sheet_scenarios = pd.read_excel(xls,
+                                                    sheet_name=sheet_name_scenarios,
+                                                    skiprows=skip_num_rows_scenarios)
+                    sheets[sheet_name_scenarios] = self._drop_ignored_columns_from_sheet(sheet_scenarios,
+                                                                                         ignore_columns_scenarios)
                 except ValueError:
                     pass
 
                 try:
-                    sheet_colors = pd.read_excel(xls, sheet_name=sheet_name_colors,
-                                                 skiprows=skip_num_rows_colors,
-                                                 usecols=col_range_colors
-                                                 )
-                    sheets[sheet_name_colors] = sheet_colors
+                    sheet_colors = pd.read_excel(xls,
+                                                 sheet_name=sheet_name_colors,
+                                                 skiprows=skip_num_rows_colors)
+                    sheets[sheet_name_colors] = self._drop_ignored_columns_from_sheet(sheet_colors,
+                                                                                      ignore_columns_colors)
                 except ValueError:
                     pass
 
@@ -386,6 +415,14 @@ class DataProvider(object):
                 rows_colors.append(row)
 
             self._colors = self._create_colors(rows_colors)
+
+    @property
+    def sheet_name_processes(self):
+        return self._sheet_name_processes
+
+    @property
+    def sheet_name_flows(self):
+        return self._sheet_name_flows
 
     def _check_missing_sheet_names(self, required_sheet_names: List[str], sheets: Dict[str, pd.DataFrame]):
         missing_sheet_names = []
@@ -502,6 +539,87 @@ class DataProvider(object):
                 row[col_name] = None
         return row
 
+    def _to_bool(self, value: Any) -> bool:
+        """
+        Check and convert value to bool.
+        If value is string then converts to lowercase and checks if value is either "true" or "false"
+        and returns corresponding value as bool.\n
+        NOTE: Only converts value to string and checks bool validity, no other checking is done.
+
+        :param value: Value to convert to bool
+        :return: Value as bool
+        """
+        if isinstance(value, str):
+            if value.lower() == "true":
+                return True
+
+        if isinstance(value, bool):
+            return value
+
+        else:
+            return False
+
+    def _to_list(self, value: Any, sep=',') -> List[str]:
+        """
+        Check and convert value to list of strings.
+        Default separator is comma (',')
+        Returns empty list of conversion is not possible.
+
+        :param value: Value to be converted to list
+        :return: List of strings
+        """
+        result = []
+        if type(value) is not str:
+            # float and int are not valid types, just return empty list
+            result = []
+        else:
+            # Split the string by sep and ignore all elements that are not strings
+            splits = value.split(sep)
+            for s in splits:
+                stripped = str(s).strip()
+                if not stripped.isalpha():
+                    continue
+
+                result.append(stripped)
+
+        return result
+
+
+    def _excel_column_name_to_index(self, col_name: str) -> int:
+        n = 0
+        for c in col_name:
+            n = \
+                (n * 26) + 1 + ord(c) - ord('A')
+        return n
+
+    def _excel_column_index_to_name(self, col_index: int) -> str:
+        name = ''
+        n = col_index
+        while n > 0:
+            n, r = divmod(n - 1, 26)
+            name = chr(r + ord('A')) + name
+        return name
+
+    def _drop_ignored_columns_from_sheet(self, sheet: pd.DataFrame, ignored_col_names: List[str]) -> pd.DataFrame:
+        """
+        Drop list of Excel column names from DataFrame.
+        Does not modify original pd.DataFrame.
+
+        :param sheet: Target pd.DataFrame
+        :param ignored_col_names: List of ignored Excel column names, e.g. ['A', 'B', 'E']
+        :return:
+        """
+
+        # Drop ignored columns
+        col_indices_to_drop = []
+        for ignored_col_name in ignored_col_names:
+            # Convert index of Excel column name (1-based) to 0-based index for DataFrame
+            col_index = self._excel_column_name_to_index(ignored_col_name) - 1
+            col_indices_to_drop.append(col_index)
+
+        new_sheet = sheet.drop(sheet.columns[col_indices_to_drop], axis=1)
+        return new_sheet
+
     def get_model_params(self) -> dict[ParameterName, Any]:
         """
         Get model parameters read from the data file.
@@ -544,38 +662,3 @@ class DataProvider(object):
 
     def get_color_definitions(self) -> List[Color]:
         return self._colors
-
-    def _to_bool(self, value: Any) -> bool:
-        """
-        Check and convert value to bool.
-        If value is string then converts to lowercase and checks if value is either "true" or "false"
-        and returns corresponding value as bool.\n
-        NOTE: Only converts value to string and checks bool validity, no other checking is done.
-
-        :param value: Value to convert to bool
-        :return: Value as bool
-        """
-        if isinstance(value, str):
-            if value.lower() == "true":
-                return True
-
-        if isinstance(value, bool):
-            return value
-
-        else:
-            return False
-
-    @property
-    def sheet_name_processes(self):
-        return self._sheet_name_processes
-
-    @property
-    def sheet_name_flows(self):
-        return self._sheet_name_flows
-
-
-if __name__ == "__main__":
-    dp = DataProvider("C:/dev/PythonProjects/aiphoria/data/example_data.xlsx",
-                      sheet_settings_name="Settings",
-                      sheet_settings_col_range="B:C",
-                      sheet_settings_skip_num_rows=5)
