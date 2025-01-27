@@ -1,6 +1,7 @@
-import webbrowser
-import os
 import json
+import os
+import webbrowser
+
 from core.datastructures import ScenarioData
 
 

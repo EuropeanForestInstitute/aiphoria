@@ -1,12 +1,13 @@
 import copy
-from collections import namedtuple
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict, Tuple
+
 import numpy as np
-from core.dataprovider import DataProvider
-from core.parameters import ParameterName, ParameterFillMethod
-from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color
-from core.types import FunctionType, ChangeType
 import pandas as pd
+
+from core.dataprovider import DataProvider
+from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color
+from core.parameters import ParameterName, ParameterFillMethod
+from core.types import FunctionType, ChangeType
 
 
 class DataChecker(object):
@@ -43,6 +44,8 @@ class DataChecker(object):
         self._year_start = model_params[ParameterName.StartYear]
         self._year_end = model_params[ParameterName.EndYear]
         use_virtual_flows = model_params[ParameterName.UseVirtualFlows]
+        baseline_value_name = model_params[ParameterName.BaselineValueName]
+        baseline_unit_name = model_params[ParameterName.BaselineUnitName]
 
         # Default optional values
         # The default values are set inside DataProvider but
@@ -241,7 +244,9 @@ class DataChecker(object):
                                               process_id_to_stock=process_id_to_stock,
                                               stocks=stocks,
                                               use_virtual_flows=use_virtual_flows,
-                                              virtual_flows_epsilon=virtual_flows_epsilon
+                                              virtual_flows_epsilon=virtual_flows_epsilon,
+                                              baseline_value_name=baseline_value_name,
+                                              baseline_unit_name=baseline_unit_name,
                                               )
 
         baseline_scenario_definition = ScenarioDefinition(name="Baseline", flow_modifiers=[])

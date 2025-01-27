@@ -1,10 +1,11 @@
-import os
 import json
+import os
 from typing import List, Dict, Any
-from core.datastructures import Scenario, Color
+
 import plotly.graph_objects as go
 from PIL import Image
 
+from core.datastructures import Scenario, Color
 from core.parameters import ParameterName
 
 

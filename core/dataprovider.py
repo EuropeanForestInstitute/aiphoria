@@ -1,9 +1,9 @@
-import sys
-import os
 from typing import List, Union, Any, Dict
+
 import numpy as np
 import openpyxl
 import pandas as pd
+
 from core.datastructures import Process, Flow, Stock, FlowModifier, ScenarioDefinition, Color
 from core.parameters import ParameterName, ParameterFillMethod
 
@@ -76,6 +76,14 @@ class DataProvider(object):
             [ParameterName.VirtualFlowsEpsilon,
              float,
              "Maximum allowed absolute difference of process input and outputs before creating virtual flow"
+             ],
+            [ParameterName.BaselineValueName,
+             str,
+             "Baseline value name. Name of the value type that is used as baseline e.g. 'Solid wood equivalent'"
+             ],
+            [ParameterName.BaselineUnitName,
+             str,
+             "Baseline unit name. This is used with relative flows when exporting flow data to CSVs."
              ],
         ]
 
@@ -151,12 +159,7 @@ class DataProvider(object):
              "Create inflow visualization and export data for process IDs defined in here. " +
              "Each process ID must be separated by comma (',')",
              [],
-             ],
-            [ParameterName.BaseUnitName,
-             str,
-             "Base unit name. This is used with relative flows when exporting flow data to CSVs.",
-             "Mm3 SWE",
-             ],
+             ]
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}
@@ -197,7 +200,7 @@ class DataProvider(object):
 
         # Print missing parameters and information
         if missing_params:
-            print("DataProvider: Settings sheet (Sheet) is missing required following parameters")
+            print("DataProvider: Settings sheet (Sheet) is missing required following parameters:")
             max_param_name_len = 0
             for entry in missing_params:
                 param_name = entry[0]

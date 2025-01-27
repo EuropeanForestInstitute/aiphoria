@@ -1,6 +1,7 @@
+import copy
 from builtins import float
 from typing import Tuple, List, Union, Dict
-import copy
+
 from core.types import FunctionType, ChangeType
 
 
@@ -41,11 +42,12 @@ class ObjectBase(object):
 
 
 class Indicator(object):
-    def __init__(self, name: str = None, conversion_factor: float = 1.0, comment: str = None):
+    def __init__(self, name: str = None, conversion_factor: float = 1.0, comment: str = None, unit: str = None):
         super().__init__()
         self._name: Union[str, None] = name
         self._conversion_factor: Union[float, None] = conversion_factor
         self._comment: Union[str, None] = comment
+        self._unit: Union[str, None] = unit
 
     @property
     def name(self) -> str:
@@ -101,6 +103,23 @@ class Indicator(object):
         """
         self._comment = new_comment
 
+    @property
+    def unit(self) -> str:
+        """
+        Get the indicator unit.
+
+        :return: Indicator unit (str)
+        """
+        return self._unit
+
+    @unit.setter
+    def unit(self, new_unit: str):
+        """
+        Set the indicator unit.
+
+        :param new_unit: New Indicator unit (str)
+        """
+        self._unit = new_unit
 
 
 class Process(ObjectBase):
@@ -389,10 +408,9 @@ class Flow(ObjectBase):
         self._evaluated_share = 0.0
         self._evaluated_value = 0.0
 
-        self._indicators = {}
-
-        # TODO: New indicator mapping
+        # Indicator name to Indicator
         self._indicator_name_to_indicator = {}
+        self._indicator_name_to_evaluated_value = {}
 
         if params is None:
             return
@@ -422,33 +440,33 @@ class Flow(ObjectBase):
 
         # Rest of the elements except last element are indicators
         # There should be even number of indicators because each indicator has value and comment
-        # TODO: Should not raise Exception
+        # TODO: Should not raise Exception?
         first_indicator_index = 16
         indicators = params[first_indicator_index:]
         if len(indicators) % 2:
-            print("Not even number of indicator columns in data file.")
+            print("Not even number of indicator columns in settings file.")
             print("Each indicator needs two columns (value and comment) in this order.")
             raise SystemExit(-1)
 
-        # Go through indicators with step size of 2
-        # column at index i   = indicator value
-        # column at index i+1 = indicator comment
-        for i in range(0, len(indicators), 2):
-            indicator_name = str(indicators.index[i])
-            indicator_value = indicators.iloc[i]
-            indicator_comment = indicators.iloc[i+1]
-
-            # Default to 1 as indicator value if no value is provided
-            indicator_value = 1.0 if indicator_value is None else indicator_value
-            self._indicators[indicator_name] = indicator_value
-
-        # TODO: New indicators
+        # Build indicator name to Indicator mappings
         for i in range(0, len(indicators), 2):
             name = indicators.index[i]
             conversion_factor = indicators.iloc[i]
             comment = indicators.iloc[i+1]
-            new_indicator = Indicator(name, conversion_factor, comment)
+
+            # Strip substring inside characters '(' and  ')'
+            # and use that as a unit
+            unit = ""
+            start_index = name.find("(")
+            end_index = name.find(")")
+            if start_index >= 0 and end_index >= 0:
+                unit_name = name[start_index:end_index + 1]
+                name = name.replace(unit_name, '').strip()
+                unit = unit_name[1:-1].strip()
+
+            new_indicator = Indicator(name, conversion_factor, comment, unit)
             self._indicator_name_to_indicator[name] = new_indicator
+            self._indicator_name_to_evaluated_value[name] = 0.0
 
         self._row_number = row_number  # Track Excel file row number
 
@@ -498,6 +516,11 @@ class Flow(ObjectBase):
 
     @property
     def source_process(self) -> Process:
+        """
+        Get source Process.
+
+        :return: Source Process (Process)
+        """
         return self._source_process
 
     @property
@@ -510,6 +533,10 @@ class Flow(ObjectBase):
 
     @property
     def target_process(self) -> Process:
+        """
+        Get target Process.
+        :return: Target Process (Process)
+        """
         return self._target_process
 
     @property
@@ -522,27 +549,56 @@ class Flow(ObjectBase):
 
     @property
     def source_process_id(self) -> str:
+        """
+        Get source Process ID.
+        :return: Source Process ID (str)
+        """
         return self._source_process_id
 
     @source_process_id.setter
     def source_process_id(self, source_process_id: str):
+        """
+        Set source Process ID.
+
+        :param source_process_id: Source Process ID (str)
+        """
         self._source_process_id = source_process_id
 
     @property
     def target_process_id(self) -> str:
+        """
+        Get target Process ID.
+
+        :return: Target Process ID (str)
+        """
         return self._target_process_id
 
     @target_process_id.setter
     def target_process_id(self, target_process_id: str):
+        """
+        Set target Process ID.
+
+        :param target_process_id: New target Process ID
+        """
         self._target_process_id = target_process_id
 
     # Original value from Excel row
     @property
     def value(self) -> float:
+        """
+        Get original baseline value.
+
+        :return: Original baseline value (float)
+        """
         return self._value
 
     @value.setter
     def value(self, value: float):
+        """
+        Set original base value.
+
+        :param value: New original base value (float)
+        """
         self._value = value
 
     @property
@@ -590,27 +646,39 @@ class Flow(ObjectBase):
         self._carbon_content_source = value
 
     @property
-    def indicators(self) -> dict[str, float]:
-        return self._indicators
-
-    @indicators.setter
-    def indicators(self, val):
-        self._indicators = val
-
-    @property
     def is_evaluated(self) -> bool:
+        """
+        Get flow evaluated state.
+
+        :return: True if Flow is evaluated, False otherwise.
+        """
         return self._is_evaluated
 
     @is_evaluated.setter
     def is_evaluated(self, value: bool):
+        """
+        Set flow evaluated state.
+
+        :param value: New evaluated state (bool)
+        """
         self._is_evaluated = value
 
     @property
     def evaluated_value(self) -> float:
+        """
+        Get evaluated base value.
+
+        :return: Evaluated base value (float)
+        """
         return self._evaluated_value
 
     @evaluated_value.setter
     def evaluated_value(self, value: float):
+        """
+        Set evaluated base value.
+
+        :param value: New evaluated base value (float)
+        """
         self._evaluated_value = value
 
     @property
@@ -628,6 +696,63 @@ class Flow(ObjectBase):
     @property
     def indicator_name_to_indicator(self) -> Dict[str, Indicator]:
         return self._indicator_name_to_indicator
+
+    @property
+    def indicator_name_to_evaluated_value(self) -> Dict[str, float]:
+        return self._indicator_name_to_evaluated_value
+
+    def get_indicator_names(self) -> List[str]:
+        """
+        Get list of Indicator names (including baseline indicator name).
+
+        :return: List of Indicator names
+        """
+        return list(self._indicator_name_to_indicator.keys())
+
+    def get_indicator_conversion_factor(self, indicator_name: str) -> float:
+        """
+
+        :param indicator_name:
+        :return:
+        """
+        return self._indicator_name_to_indicator[indicator_name].conversion_factor
+
+    def get_evaluated_value_for_indicator(self, indicator_name: str) -> float:
+        """
+        Get evaluated value for Indicator.
+
+        :param indicator_name: Target Indicator name (str)
+        :return: Evaluated value for Indicator (float)
+        """
+        return self._indicator_name_to_evaluated_value[indicator_name]
+
+    def set_evaluated_value_for_indicator(self, indicator_name: str, value: float):
+        """
+        Set evaluated value for Indicator.
+
+        :param indicator_name: Target Indicator name (str)
+        :param value: New evaluated value for Indicator (float)
+        """
+        self._indicator_name_to_evaluated_value[indicator_name] = value
+
+    def evaluate_indicator_values_from_baseline_value(self):
+        """
+        Evaluated indicator evaluated value from baseline value.
+        """
+        for indicator_name, indicator in self._indicator_name_to_indicator.items():
+            evaluated_value = self.evaluated_value * indicator.conversion_factor
+            self.set_evaluated_value_for_indicator(indicator_name, evaluated_value)
+
+    def get_all_evaluated_values(self) -> List[float]:
+        """
+        Get list of all evaluated values.
+        First index is always the evaluated baseline value.
+        Other indices are evaluated indicator values
+
+        :return: List of evaluated values (list of float)
+        """
+
+        return [self.evaluated_value] + [value for name, value in self.indicator_name_to_evaluated_value.items()]
 
 
 # Stock is created for each process that has lifetime
@@ -884,7 +1009,9 @@ class ScenarioData(object):
                  unique_process_id_to_process: Dict[str, Process] = None,
                  unique_flow_id_to_flow: Dict[str, Flow] = None,
                  use_virtual_flows: bool = True,
-                 virtual_flows_epsilon: float = 0.1
+                 virtual_flows_epsilon: float = 0.1,
+                 baseline_value_name: str = "Baseline",
+                 baseline_unit_name: str = "Baseline unit",
                  ):
 
         if years is None:
@@ -929,6 +1056,11 @@ class ScenarioData(object):
         self._unique_flow_id_to_flow = unique_flow_id_to_flow
         self._use_virtual_flows = use_virtual_flows
         self._virtual_flows_epsilon = virtual_flows_epsilon
+        self._baseline_value_name = baseline_value_name
+        self._baseline_unit_name = baseline_unit_name
+
+        # Cache scenario indicators
+        self._indicator_name_to_indicator = {}
 
     @property
     def years(self) -> List[int]:
@@ -1006,7 +1138,7 @@ class ScenarioData(object):
     def start_year(self) -> int:
         """
         Get starting year
-        :return: Starting year
+        :return: Starting year (int)
         """
         return self._year_start
 
@@ -1015,9 +1147,44 @@ class ScenarioData(object):
         """
         Get ending year
         Ending year is included in simulation.
-        :return:
+
+        :return: Ending year (int)
         """
         return self._year_end
+
+    @property
+    def baseline_value_name(self) -> str:
+        """
+        Get baseline value name (e.g. "Solid wood equivalent")
+        :return: Baseline value name (str)
+        """
+        return self._baseline_value_name
+
+    @baseline_value_name.setter
+    def baseline_value_name(self, new_name: str):
+        """
+        Set new baseline value name.
+
+        :param new_name: New baseline value name (str)
+        """
+        self._baseline_value_name = new_name
+
+    @property
+    def baseline_unit_name(self) -> str:
+        """
+        Get baseline unit name (e.g. "Mm3")
+        :return: Baseline unit name (str)
+        """
+        return self._baseline_unit_name
+
+    @baseline_unit_name.setter
+    def baseline_unit_name(self, new_name: str):
+        """
+        Set new baseline unt name.
+
+        :param new_name: New baseline name (str)
+        """
+        self._baseline_unit_name = new_name
 
 
 class ScenarioDefinition(object):
@@ -1041,6 +1208,7 @@ class ScenarioDefinition(object):
     def name(self) -> str:
         """
         Get scenario name.
+
         :return: Scenario name
         """
         return self._name
@@ -1050,6 +1218,7 @@ class ScenarioDefinition(object):
         """
         Get list of FlowModifiers.
         These are the rules that are applied to Scenario.
+
         :return: List of FlowModify-objects
         """
         return self._flow_modifiers
@@ -1088,6 +1257,10 @@ class Scenario(object):
     # Flow solver
     @property
     def flow_solver(self):
+        """
+        Get FlowSolver that is assigned to Scenario.
+        :return: FlowSolver (FlowSolver)
+        """
         return self._flow_solver
 
     @flow_solver.setter

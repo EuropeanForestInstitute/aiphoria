@@ -60,8 +60,11 @@ class ParameterName(str, Enum):
     # Visualize inflows to process IDs
     VisualizeInflowsToProcesses: str = "visualize_inflows_to_processes"
 
-    # Base unit name
-    BaseUnitName: str = "base_unit_name"
+    # Baseline unit
+    # BaseLineValueName: Name of the baseline value e.g. "Solid wood equivalent"
+    # BaselineUnitName: Name of the baseline unit e.g. Mm3 SWE
+    BaselineValueName: str = "baseline_value_name"
+    BaselineUnitName: str = "baseline_unit_name"
 
 
 class ParameterFillMethod(str, Enum):

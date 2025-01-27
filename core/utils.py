@@ -1,13 +1,14 @@
 import os
 import shutil
 import sys
-import pandas as pd
-import numpy as np
 from typing import List, Dict
+
+import numpy as np
+import pandas as pd
 from IPython import get_ipython
 
-from core.datastructures import Scenario
 import lib.odym.modules.ODYM_Classes as msc
+from core.datastructures import Scenario
 
 
 def setup_current_working_directory():
@@ -53,22 +54,13 @@ def setup_scenario_output_directories(output_dir_path: str, scenario_names: List
     :param scenario_names: List of scenario names
     :return: Dictionary [str, str]: Scenario name to scenario directory (absolute path)
     """
-    # # If exists then delete existing directory and create new
-    # if os.path.exists(output_dir_path):
-    #     try:
-    #         shutil.rmtree(output_dir_path)
-    #     except Exception as ex:
-    #         raise ex
-    #
-    # # Create output directory and directories for all scenarios
-    # os.makedirs(output_dir_path)
-
     scenario_name_to_abs_scenario_output_path = {}
     for scenario_name in scenario_names:
         abs_scenario_output_path = os.path.join(output_dir_path, scenario_name)
         try:
-            # shutil.rmtree(output_dir_path)
-            print(abs_scenario_output_path)
+            shutil.rmtree(abs_scenario_output_path)
+        except FileNotFoundError as ex:
+            pass
         except Exception as ex:
             raise ex
 
@@ -90,11 +82,19 @@ def build_mfa_system_for_scenario(scenario: Scenario):
     # Dictionary of classifications enters the index table defined for the system.
     # The index table lists all aspects needed and assigns a classification and index letter to each aspect.
     scenario_data = scenario.scenario_data
+    flow_solver = scenario.flow_solver
     years = scenario_data.years
+
+    # Baseline value and unit name: e.g. name = "Solid wood equivalent and unit = "Mm3"
+    baseline_value_name = scenario_data.baseline_value_name
+    baseline_unit_name = scenario_data.baseline_unit_name
+
+    # Indicator names are used as Elements in ODYM MFASystem
+    indicator_names = flow_solver.get_indicator_names()
 
     model_time_start = scenario_data.start_year
     model_time_end = scenario_data.end_year
-    model_elements = ['Solid wood equivalent', 'Carbon']
+    model_elements = [baseline_value_name] + indicator_names
     model_years = years
 
     model_classifications = {
@@ -107,7 +107,7 @@ def build_mfa_system_for_scenario(scenario: Scenario):
                                 'Description': ['Model aspect "time"', 'Model aspect "age-cohort"', 'Model aspect "Element"'],
                                 'Dimension': ['Time', 'Time', 'Element'],  # 'Time' and 'Element' are also dimensions
                                 'Classification': [model_classifications[Aspect] for Aspect in ['Time', 'Cohort', 'Element']],
-                                'IndexLetter': ['t', 'c', 'e' ]})  # Unique one letter (upper or lower case) indices to be used later for calculations.
+                                'IndexLetter': ['t', 'c', 'e']})  # Unique one letter (upper or lower case) indices to be used later for calculations.
 
     # Default indexing of IndexTable, other indices are produced on the fly
     index_table.set_index('Aspect', inplace=True)
@@ -116,7 +116,9 @@ def build_mfa_system_for_scenario(scenario: Scenario):
     # Initialize ODYM MFA system *
     # ****************************
     flow_solver = scenario.flow_solver
-    mfa_system = msc.MFAsystem(Name='Wood product system', Geogr_Scope='Europe', Unit='Mm3',
+    mfa_system = msc.MFAsystem(Name='MFA System',
+                               Geogr_Scope='Not defined',
+                               Unit=baseline_unit_name,
                                ProcessList=[], FlowDict={}, StockDict={}, ParameterDict={},
                                Time_Start=model_time_start, Time_End=model_time_end, IndexTable=index_table,
                                Elements=index_table.loc['Element'].Classification.Items)
@@ -168,27 +170,33 @@ def build_mfa_system_for_scenario(scenario: Scenario):
                 continue
 
             # NOTE: Virtual flows use default value defined in Flow for carbon content (now 1.0).
+            # Get all evaluated values and set those to ODYM flow
             solved_flow = flow_solver.get_flow(year=year_index_to_year[year_index], flow_id=flow_id)
-            flow.Values[year_index, 0] = solved_flow.evaluated_value
-            flow.Values[year_index, 1] = solved_flow.evaluated_value_carbon
+            for index, evaluated_value in enumerate(solved_flow.get_all_evaluated_values()):
+                flow.Values[year_index, index] = evaluated_value
 
     # Process stocks (fill with data)
     for stock_id, stock in odym_stocks.items():
-        # Calculate cohorts for "Solid wood equivalent"
-        dsm_swe = flow_solver.get_dynamic_stocks_swe()[stock_id]
-        swe_stock_by_cohort = dsm_swe.compute_s_c_inflow_driven()
-        swe_outflow_by_cohort = dsm_swe.compute_o_c_from_s_c()
-        swe_stock_total = dsm_swe.compute_stock_total()
-        swe_stock_change = dsm_swe.compute_stock_change()
-        stock.Values[:, 0] = swe_stock_change
+        # Baseline DSM
+        # These are needed for triggering DSM calculations
+        baseline_dsm = flow_solver.get_baseline_dynamic_stocks()[stock_id]
+        baseline_stock_by_cohort = baseline_dsm.compute_s_c_inflow_driven()
+        baseline_outflow_by_cohort = baseline_dsm.compute_o_c_from_s_c()
+        baseline_stock_total = baseline_dsm.compute_stock_total()
+        baseline_stock_change = baseline_dsm.compute_stock_change()
+        stock.Values[:, 0] = baseline_stock_change
 
-        # Calculate cohorts for "Carbon"
-        dsm_carbon = flow_solver.get_dynamic_stocks_carbon()[stock_id]
-        carbon_stock_by_cohort = dsm_carbon.compute_s_c_inflow_driven()
-        carbon_outflow_by_cohort = dsm_carbon.compute_o_c_from_s_c()
-        carbon_stock_total = dsm_carbon.compute_stock_total()
-        carbon_stock_change = dsm_carbon.compute_stock_change()
-        stock.Values[:, 1] = carbon_stock_change
+        # Indicator DSMs
+        for indicator_index, indicator_name in enumerate(indicator_names):
+            # These are needed for triggering DSM calculations
+            indicator_dsm = flow_solver.get_indicator_dynamic_stocks()[stock_id][indicator_name]
+            indicator_stock_by_cohort = indicator_dsm.compute_s_c_inflow_driven()
+            indicator_outflow_by_cohort = indicator_dsm.compute_o_c_from_s_c()
+            indicator_stock_total = indicator_dsm.compute_stock_total()
+            indicator_stock_change = indicator_dsm.compute_stock_change()
+
+            # Baseline values are at index 0 so offset by +1
+            stock.Values[:, indicator_index + 1] = indicator_stock_change
 
     return mfa_system
 
