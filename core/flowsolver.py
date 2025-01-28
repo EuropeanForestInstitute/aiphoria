@@ -662,6 +662,7 @@ class FlowSolver(object):
     def _solve_timestep(self) -> None:
         self._current_flow_id_to_flow = self._year_to_flow_id_to_flow[self._year_current]
         self._current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[self._year_current]
+        self._current_process_id_to_process = self._year_to_process_id_to_process[self._year_current]
 
         # Check if any flow constraints should be applied at the start of each timestep
         self._apply_flow_constraints()
@@ -674,6 +675,8 @@ class FlowSolver(object):
         # Without this mechanism the relative outflows from stocks are not possible, and it
         # would prevent in some cases the whole evaluation of scenarios with stocks.
         self._evaluate_dynamic_stock_outflows(self._year_current)
+
+        # TODO: At the start of the second timestep there already is Virtual process in list of Processes to evaluate
 
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
