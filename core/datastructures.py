@@ -767,6 +767,7 @@ class Stock(ObjectBase):
 
         self._process = params
         self._id = params.id
+        self._row_number = row_number
 
     def __str__(self):
         if not self.is_valid():

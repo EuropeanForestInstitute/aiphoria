@@ -1,5 +1,5 @@
 import copy
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Set
 
 import numpy as np
 import pandas as pd
@@ -139,6 +139,12 @@ class DataChecker(object):
         if not ok:
             raise Exception(errors)
 
+
+        print("Checking stocks in isolated processes...")
+        ok, errors = self._check_stocks_in_isolated_processes(stocks, unique_process_ids)
+        if not ok:
+            raise Exception(errors)
+
         # Create and propagate flow data for missing years
         df_year_to_flows = self._create_flow_data_for_missing_years(
             df_year_to_flows,
@@ -173,6 +179,11 @@ class DataChecker(object):
         # Check if process has no inflows and only relative outflows:
         print("Checking processes with no inflows and only relative outflows...")
         ok, errors = self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows)
+        if not ok:
+            raise Exception(errors)
+
+        print("Checking isolated/unconnected processes...")
+        ok, errors = self._check_for_isolated_processes(df_year_to_process_flows)
         if not ok:
             raise Exception(errors)
 
@@ -342,30 +353,26 @@ class DataChecker(object):
 
         return result, messages
 
-    def check_for_isolated_processes(self):
+    def _check_for_isolated_processes(self, df_year_to_process_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
+        """
+        Check for isolated Processes (= processes that have no inflows and no outflows).
+
+        :return: Tuple (has errors (bool), list of errors (list[str]))
+        """
+
         # Find isolated processes (= processes that has no inflows and outflows)
         # This is an error in data
-        result = True
-        messages = []
-        for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
-            process_to_flows = {}
-            for process in self._processes:
-                process_to_flows[process] = {"in": [], "out": []}
+        errors = []
+        first_year = df_year_to_process_to_flows.index[0]
+        for process_id in df_year_to_process_to_flows.columns:
+            entry = df_year_to_process_to_flows.at[first_year, process_id]
+            process = entry["process"]
+            inflows = entry["flows"]["in"]
+            outflows = entry["flows"]["out"]
+            if (not inflows) and (not outflows):
+                errors.append("ERROR: Found isolated Process '{}' found in row {}".format(process.id, process.row_number))
 
-            for flow_id, flow in flow_id_to_flow.items():
-                source_process_id = flow.source_process_id
-                target_process_id = flow.target_process_id
-                process_to_flows[target_process_id]["in"].append(flow)
-                process_to_flows[source_process_id]["out"].append(flow)
-
-            for process, flows in process_to_flows.items():
-                inflows = flows["in"]
-                outflows = flows["out"]
-                if (not inflows) and (not outflows):
-                    messages.append("Found isolated processes:")
-                    messages.append("{} in row ".format(process.id, process.row_number))
-
-        return result, messages
+        return not errors, errors
 
     def check_for_errors(self) -> Tuple[bool, List[str]]:
         ok, messages_processes = self.check_processes_integrity()
@@ -1048,6 +1055,24 @@ class DataChecker(object):
 
             if errors:
                 return not errors, errors
+
+        return not errors, errors
+
+    def _check_stocks_in_isolated_processes(self, stocks: List[Stock], unique_process_ids: Set[str]) -> Tuple[bool, List[str]]:
+        # Check for processes with stocks that are not used unique_process_ids
+        """
+        Check for stock in isolated Processes.
+
+        :param stocks: All stocks (list of Stocks)
+        :param unique_process_ids: Set of unique Process IDs
+        :return: Tuple (has errors (bool), list of errors (List[str])
+        """
+        errors = []
+        for stock in stocks:
+            stock_id = stock.id
+            if stock_id not in unique_process_ids:
+                s = "ERROR: Stock found in isolated Process {} in row {}".format(stock_id, stock.row_number)
+                errors.append(s)
 
         return not errors, errors
 

@@ -467,7 +467,7 @@ class DataProvider(object):
             if process.stock_lifetime == 0:
                 continue
 
-            new_stock = Stock(process)
+            new_stock = Stock(process, row_number=process.row_number)
             if new_stock.is_valid():
                 result.append(new_stock)
 
