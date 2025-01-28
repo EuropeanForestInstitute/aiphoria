@@ -224,3 +224,8 @@ def calculate_scenario_mass_balance(mfa_system: msc.MFAsystem) -> pd.DataFrame:
     df_mass_balance = df_mass_balance.astype({"Year": "int32"})
     df_mass_balance.set_index(["Year"], inplace=True)
     return df_mass_balance
+
+def shorten_sheet_name(name, max_length=31):
+    """Shorten and sanitize Excel sheet names to comply with the 31-character limit."""
+    sanitized_name = name.replace(":", "_").replace("/", "_").replace("\\", "_")
+    return sanitized_name[:max_length]
