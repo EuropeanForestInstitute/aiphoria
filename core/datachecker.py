@@ -1226,17 +1226,19 @@ class DataChecker(object):
                     # - Absolute flows must have change_type == ChangeType.Value
                     # - Relative flows must have change_type == ChangeType.Proportional
                     source_to_target_id = "{} {}".format(flow_modifier.source_process_id, flow_modifier.target_process_id)
-
                     start_year_processes = df_year_to_process_flows.loc[flow_modifier.start_year]
-                    if source_to_target_id not in start_year_processes.keys():
+
+                    # Get source-to-target flow mappings at start year
+                    source_process_flows = start_year_processes[source_process_id]
+                    flow_id_to_flow = {flow.id: flow for flow in source_process_flows["flows"]["out"]}
+                    if source_to_target_id not in flow_id_to_flow:
                         s = "" + error_message_prefix
-                        s += "Source Process ID '{}' does not have outflow to target Process 'ID' {}".format(
+                        s += "Source Process ID '{}' does not have outflow to target Process ID '{}'".format(
                             source_process_id, target_process_id)
                         errors.append(s)
                         continue
 
-                    source_to_target_flow = df_year_to_process_flows.at[flow_modifier.start_year, source_to_target_id]
-
+                    source_to_target_flow = flow_id_to_flow[source_to_target_id]
                     is_flow_abs = source_to_target_flow.is_unit_absolute_value
                     is_flow_rel = not is_flow_abs
                     if is_flow_abs and flow_modifier.change_type is not ChangeType.Value:
