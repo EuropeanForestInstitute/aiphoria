@@ -100,47 +100,88 @@ class FlowSolver(object):
 
     # Utility methods
     def get_processes_as_dataframe(self) -> DataFrame:
-        df = pd.DataFrame({"Year": [], "Process ID": [], "Total inflows": [], "Total outflows": []})
+        """
+        Get Process information as DataFrame for every year:
+            - Process ID
+            - Total inflows (baseline)
+            - Total outflows (baseline)
+            - Total inflows (indicator N)
+            - Total outflows (indicator N)
+            - Total inflows (indicator N+1)
+            - Total outflows (indicator N+1)
+            - ...
+
+        :return: DataFrame
+        """
+        col_names = ["Year", "Process ID"]
+        col_names += ["Total inflows, {} ({})".format(self._baseline_value_name, self._baseline_unit_name)]
+        col_names += ["Total outflows, {} ({})".format(self._baseline_value_name, self._baseline_unit_name)]
+        for indicator in self.get_indicators().values():
+            col_names += ["Total inflows, {} ({})".format(indicator.name, indicator.unit)]
+            col_names += ["Total outflows, {} ({})".format(indicator.name, indicator.unit)]
+
+        df = pd.DataFrame({name: [] for name in col_names})
         for year, process_id_to_process in self._year_to_process_id_to_process.items():
             for process_id, process in process_id_to_process.items():
-                inflows_total = self.get_process_inflows_total(process_id, year)
-                outflows_total = self.get_process_outflows_total(process_id, year)
-                new_row = [year, process_id, inflows_total, outflows_total]
+                new_row = [year, process_id]
+                new_row += [self.get_process_inflows_total(process_id, year)]
+                new_row += [self.get_process_outflows_total(process_id, year)]
+                for indicator in self.get_indicators().values():
+                    new_row += [self._get_process_indicator_inflows_total(process_id, indicator.name, year)]
+                    new_row += [self._get_process_indicator_outflows_total(process_id, indicator.name, year)]
+
                 df.loc[len(df.index)] = new_row
         return df
 
     def get_flows_as_dataframe(self) -> DataFrame:
-        df = pd.DataFrame({
-            "Year": [], "Flow ID": [], "Source process ID": [], "Target process ID": [],
-            "Value (SWE)": [], "Value (Carbon)": []
-        })
+        """
+        Get all Flow information for all years in DataFrame:
+            - Flow ID
+            - Source Process ID
+            - Target Process ID
+            - Baseline value (baseline unit)
+            - Indicator N value (indicator N unit)
+            - Indicator N+1 value (indicator N+1 unit)
+            - ...
+
+        :return: DataFrame
+        """
+        col_names = ["Year", "Flow ID", "Source Process ID", "Target Process ID"]
+        col_names += ["{} ({})".format(self._baseline_value_name, self._baseline_unit_name)]
+        col_names += ["{} ({})".format(ind.name, ind.unit) for ind in self.get_indicators().values()]
+
+        df = pd.DataFrame({name: [] for name in col_names})
         for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             for flow_id, flow in flow_id_to_flow.items():
-                new_row = [year, flow_id, flow.source_process_id, flow.target_process_id,
-                           flow.evaluated_value, flow.evaluated_value_carbon]
+                new_row = [year, flow_id, flow.source_process_id, flow.target_process_id]
+                new_row += [evaluated_value for evaluated_value in flow.get_all_evaluated_values()]
                 df.loc[len(df.index)] = new_row
         return df
 
     def get_evaluated_flow_values_as_dataframe(self) -> DataFrame:
-        # Populate flow values per year, initialize flow values to 0.0
+        """
+        Get baseline evaluated value for Flows for all years.
+
+        :return: DataFrame
+        """
+
         unique_flows = self.get_unique_flows()
-        df_flow_values = pd.DataFrame(index=self._years)
-        for flow_id in unique_flows:
-            df_flow_values[flow_id] = [0.0 for _ in self._years]
+        sorted_flow_ids = sorted([flow.id for flow in unique_flows.values()], key=lambda x: x)
+        columns = ["Year"]
+        columns += [flow_id for flow_id in sorted_flow_ids]
 
-        year_to_process_to_flows = self.get_year_to_process_to_flows()
-
-        # Populate flow values
-        for year in df_flow_values.index:
-            process_to_flows = year_to_process_to_flows[year]
-            for flow_id in df_flow_values.columns:
-                for process, flows in process_to_flows.items():
-                    outflows = flows["out"]
-                    for flow in outflows:
-                        if flow.id == flow_id:
-                            df_flow_values.at[year, flow_id] = flow.evaluated_value
-
-        return df_flow_values
+        df = pd.DataFrame(columns=columns)
+        df["Year"] = [year for year in self._years]
+        df.set_index(["Year"], inplace=True)
+        for year in df.index:
+            for flow_id in df.columns:
+                flow_value = 0.0
+                if self.has_flow(flow_id, year):
+                    flow = self.get_flow(flow_id, year)
+                    flow_value = flow.evaluated_value
+                df.at[year, flow_id] = flow_value
+        df.reset_index(inplace=True)
+        return df
 
     def get_process(self, process_id: str, year: int = -1) -> Process:
         """
