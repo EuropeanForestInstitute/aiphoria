@@ -130,6 +130,7 @@ class FlowSolver(object):
                     new_row += [self._get_process_indicator_inflows_total(process_id, indicator.name, year)]
                     new_row += [self._get_process_indicator_outflows_total(process_id, indicator.name, year)]
 
+
                 df.loc[len(df.index)] = new_row
         return df
 
@@ -567,6 +568,7 @@ class FlowSolver(object):
         :param year: Target year
         :return: Total outflows of indicator name (float)
         """
+
         total = 0.0
         flows = self._get_process_outflows(process_id, year)
         for flow in flows:
@@ -848,6 +850,13 @@ class FlowSolver(object):
         new_virtual_flow.evaluated_value = value
         new_virtual_flow.unit = unit
         new_virtual_flow.is_virtual = True
+
+        # Copy indicators to virtual flows
+        for indicator_name, indicator in self._indicators.items():
+            new_indicator = copy.deepcopy(indicator)
+            new_virtual_flow.indicator_name_to_indicator[new_indicator.name] = new_indicator
+            new_virtual_flow.indicator_name_to_evaluated_value[new_indicator.name] = 0.0
+
         return new_virtual_flow
 
     def _create_virtual_flow_ex(self, source_process: Process, target_process: Process, value: float) -> Flow:
@@ -1061,6 +1070,8 @@ class FlowSolver(object):
         stocks = copy.deepcopy(self._all_stocks)
         use_virtual_flows = copy.deepcopy(self._use_virtual_flows)
         virtual_flows_epsilon = copy.deepcopy(self._virtual_flows_epsilon)
+        baseline_value_name = copy.deepcopy(self._baseline_value_name)
+        baseline_unit_name = copy.deepcopy(self._baseline_unit_name)
 
         scenario_data = ScenarioData(years=years,
                                      year_to_process_id_to_process=year_to_process_id_to_process,
@@ -1071,8 +1082,10 @@ class FlowSolver(object):
                                      process_id_to_stock=process_id_to_stock,
                                      stocks=stocks,
                                      use_virtual_flows=use_virtual_flows,
-                                     virtual_flows_epsilon=virtual_flows_epsilon
-                                     )
+                                     virtual_flows_epsilon=virtual_flows_epsilon,
+                                     baseline_value_name=baseline_value_name,
+                                     baseline_unit_name=baseline_unit_name
+        )
         return scenario_data
 
     def _apply_flow_modifiers(self):

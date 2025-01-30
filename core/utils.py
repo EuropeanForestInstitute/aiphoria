@@ -222,7 +222,7 @@ def calculate_scenario_mass_balance(mfa_system: msc.MFAsystem) -> pd.DataFrame:
         abs_diff = abs(p0) - abs(rest)
         df_mass_balance.loc[year_index] = np.array([year, p0, rest, abs_diff])
     df_mass_balance = df_mass_balance.astype({"Year": "int32"})
-    df_mass_balance.set_index(["Year"], inplace=True)
+    # df_mass_balance.set_index(["Year"], inplace=True)
     return df_mass_balance
 
 def shorten_sheet_name(name, max_length=31):
