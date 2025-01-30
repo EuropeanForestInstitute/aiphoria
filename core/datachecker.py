@@ -139,11 +139,16 @@ class DataChecker(object):
         if not ok:
             raise Exception(errors)
 
-
         print("Checking stocks in isolated processes...")
         ok, errors = self._check_stocks_in_isolated_processes(stocks, unique_process_ids)
         if not ok:
             raise Exception(errors)
+
+        if fill_missing_absolute_flows or fill_missing_absolute_flows:
+            print("Checking fill method requirements...")
+            ok, errors = self._check_fill_method_requirements(fill_method, df_year_to_flows)
+            if not ok:
+                raise Exception(errors)
 
         # Create and propagate flow data for missing years
         df_year_to_flows = self._create_flow_data_for_missing_years(
@@ -242,6 +247,10 @@ class DataChecker(object):
             stock_id = stock.id
             process_id_to_stock[stock_id] = stock
 
+        # Copy Indicator mappings from first unique Flow (Indicator ID -> Indicator)
+        first_unique_flow = unique_flow_ids[list(unique_flow_ids.keys())[0]]
+        indicator_name_to_indicator = copy.deepcopy(first_unique_flow.indicator_name_to_indicator)
+
         # List of all scenarios, first element is always the baseline scenario and always exists even if
         # any alternative scenarios are not defined
         scenarios = []
@@ -258,6 +267,7 @@ class DataChecker(object):
                                               virtual_flows_epsilon=virtual_flows_epsilon,
                                               baseline_value_name=baseline_value_name,
                                               baseline_unit_name=baseline_unit_name,
+                                              indicator_name_to_indicator=indicator_name_to_indicator
                                               )
 
         baseline_scenario_definition = ScenarioDefinition(name="Baseline", flow_modifiers=[])
@@ -355,22 +365,36 @@ class DataChecker(object):
 
     def _check_for_isolated_processes(self, df_year_to_process_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
         """
-        Check for isolated Processes (= processes that have no inflows and no outflows).
+        Check for isolated Processes (= processes that have no inflows and no outflows) in any year.
+        This is most likely error in data.
 
         :return: Tuple (has errors (bool), list of errors (list[str]))
         """
 
-        # Find isolated processes (= processes that has no inflows and outflows)
-        # This is an error in data
+        # NOTE: Assumes that every year is filled with actual Flows
+        # errors = []
+        # first_year = df_year_to_process_to_flows.index[0]
+        # for process_id in df_year_to_process_to_flows.columns:
+        #     entry = df_year_to_process_to_flows.at[first_year, process_id]
+        #     process = entry["process"]
+        #     inflows = entry["flows"]["in"]
+        #     outflows = entry["flows"]["out"]
+        #     if (not inflows) and (not outflows):
+        #         errors.append("ERROR: Found isolated Process '{}' found in row {}".format(process.id, process.row_number))
+
         errors = []
-        first_year = df_year_to_process_to_flows.index[0]
         for process_id in df_year_to_process_to_flows.columns:
-            entry = df_year_to_process_to_flows.at[first_year, process_id]
-            process = entry["process"]
-            inflows = entry["flows"]["in"]
-            outflows = entry["flows"]["out"]
-            if (not inflows) and (not outflows):
-                errors.append("ERROR: Found isolated Process '{}' found in row {}".format(process.id, process.row_number))
+            flow_data = df_year_to_process_to_flows[[process_id]]
+            has_inflows = False
+            has_outflows = False
+            for year in flow_data.index:
+                entry = flow_data.at[year, process_id]
+                has_inflows = has_inflows or len(entry["flows"]["in"]) > 0
+                has_inflows = has_inflows or len(entry["flows"]["out"]) > 0
+
+            if (not has_inflows) and (not has_outflows):
+                errors.append("ERROR: Found isolated Process '{}', no inflows and no outflows at any year".format(
+                    process_id))
 
         return not errors, errors
 
@@ -751,6 +775,10 @@ class DataChecker(object):
         for flow_id in df_year_to_flows.columns:
             flow_data = df_year_to_flows[flow_id]
             for year, flow in flow_data.items():
+                # NOTE: NEW, allow making "holes" to DataFrame
+                if not isinstance(flow, Flow):
+                    continue
+
                 if flow.is_unit_absolute_value:
                     continue
 
@@ -773,6 +801,10 @@ class DataChecker(object):
             process_id_to_rel_outflows = {}
             for flow_id in df_year_to_flows.columns:
                 flow = df_year_to_flows.at[year, flow_id]
+                # NOTE: NEW, allow making "holes" to DataFrame
+                if not isinstance(flow, Flow):
+                    continue
+
                 if flow.is_unit_absolute_value:
                     continue
 
@@ -826,6 +858,7 @@ class DataChecker(object):
         """
         # No filling, convert nan in DataFrame to None
         if (not fill_missing_absolute_flows) and (not fill_missing_relative_flows):
+            # TODO: Convert nan in DataFrame to None
             result = df_year_flows.copy()
             return result
 
@@ -846,8 +879,6 @@ class DataChecker(object):
                         flow_id_to_max_year[flow_id] = year
 
         # Find gaps flow data columns and set values according to fill_method
-        year_start = min(df_year_flows.index)
-        year_end = max(df_year_flows.index)
         for flow_id in df_year_flows.columns:
             flow_data = df_year_flows[flow_id]
             flow_has_data = df_flow_id_has_data[flow_id]
@@ -1058,7 +1089,7 @@ class DataChecker(object):
 
         return not errors, errors
 
-    def _check_stocks_in_isolated_processes(self, stocks: List[Stock], unique_process_ids: Set[str]) -> Tuple[bool, List[str]]:
+    def _check_stocks_in_isolated_processes(self, stocks: List[Stock], unique_process_ids: Dict[str, Process]) -> Tuple[bool, List[str]]:
         # Check for processes with stocks that are not used unique_process_ids
         """
         Check for stock in isolated Processes.
@@ -1073,6 +1104,21 @@ class DataChecker(object):
             if stock_id not in unique_process_ids:
                 s = "ERROR: Stock found in isolated Process {} in row {}".format(stock_id, stock.row_number)
                 errors.append(s)
+
+        return not errors, errors
+
+    def _check_fill_method_requirements(self, fill_method: ParameterFillMethod, df_year_to_flows: pd.DataFrame)\
+            ->Tuple[bool, List[str]]:
+        errors = []
+        # TODO: Check if using fill_method is possible
+        # TODO: ParameterFillMethod.Zeros: Works always
+        # TODO: ParameterFillMethod.Previous: At least Flow for the starting year must be defined in the data
+        # TODO: ParameterFillMethod.Next: At least Flow for the last year must be defined in the data
+        # TODO: ParameterFillMethod.Interpolate: At least starting AND last year must be defined
+        if fill_method is ParameterFillMethod.Zeros:
+            # Flow must be defined at least for one year
+            # This works always, just fills years without Flow data with Flows
+            return not errors, errors
 
         return not errors, errors
 
@@ -1358,6 +1404,10 @@ class DataChecker(object):
         for year in df_year_to_flows.index:
             for flow_id in df_year_to_flows:
                 flow = df_year_to_flows.at[year, flow_id]
+                # NOTE: NEW, allow making "holes" to DataFrame
+                if not isinstance(flow, Flow):
+                    continue
+
                 for name, indicator in flow.indicator_name_to_indicator.items():
                     if indicator.conversion_factor is None:
                         s = "Flow '{}' has no conversion factor defined for year {}, using default={} (row {})"\

@@ -58,11 +58,9 @@ class FlowSolver(object):
         for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             self._prepare_flows_for_timestep(flow_id_to_flow)
 
-        # Get and store indicator names
-        first_flow_id = list(self._current_flow_id_to_flow.keys())[0]
-        first_flow = self._current_flow_id_to_flow[first_flow_id]
-        self._indicator_names = [name for name in first_flow.indicator_name_to_indicator.keys()]
-        self._indicators = {name: indicator for name, indicator in first_flow.indicator_name_to_indicator.items()}
+        # Get and store indicator names from scenario.scenario_data
+        self._indicator_name_to_indicator = scenario.scenario_data.indicator_name_to_indicator
+        self._indicators = {name: indicator for name, indicator in self._indicator_name_to_indicator.items()}
 
         # Baseline indicator name (e.g. Solid wood equivalent) and unit name (e.g. 'Mm3')
         self._baseline_value_name = self._scenario.scenario_data.baseline_value_name
@@ -116,7 +114,7 @@ class FlowSolver(object):
         col_names = ["Year", "Process ID"]
         col_names += ["Total inflows, {} ({})".format(self._baseline_value_name, self._baseline_unit_name)]
         col_names += ["Total outflows, {} ({})".format(self._baseline_value_name, self._baseline_unit_name)]
-        for indicator in self.get_indicators().values():
+        for indicator in self.get_indicator_name_to_indicator().values():
             col_names += ["Total inflows, {} ({})".format(indicator.name, indicator.unit)]
             col_names += ["Total outflows, {} ({})".format(indicator.name, indicator.unit)]
 
@@ -126,7 +124,7 @@ class FlowSolver(object):
                 new_row = [year, process_id]
                 new_row += [self.get_process_inflows_total(process_id, year)]
                 new_row += [self.get_process_outflows_total(process_id, year)]
-                for indicator in self.get_indicators().values():
+                for indicator in self.get_indicator_name_to_indicator().values():
                     new_row += [self._get_process_indicator_inflows_total(process_id, indicator.name, year)]
                     new_row += [self._get_process_indicator_outflows_total(process_id, indicator.name, year)]
 
@@ -149,11 +147,14 @@ class FlowSolver(object):
         """
         col_names = ["Year", "Flow ID", "Source Process ID", "Target Process ID"]
         col_names += ["{} ({})".format(self._baseline_value_name, self._baseline_unit_name)]
-        col_names += ["{} ({})".format(ind.name, ind.unit) for ind in self.get_indicators().values()]
+        col_names += ["{} ({})".format(ind.name, ind.unit) for ind in self.get_indicator_name_to_indicator().values()]
 
         df = pd.DataFrame({name: [] for name in col_names})
         for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             for flow_id, flow in flow_id_to_flow.items():
+                if not isinstance(flow, Flow):
+                    continue
+
                 new_row = [year, flow_id, flow.source_process_id, flow.target_process_id]
                 new_row += [evaluated_value for evaluated_value in flow.get_all_evaluated_values()]
                 df.loc[len(df.index)] = new_row
@@ -179,7 +180,10 @@ class FlowSolver(object):
                 flow_value = 0.0
                 if self.has_flow(flow_id, year):
                     flow = self.get_flow(flow_id, year)
-                    flow_value = flow.evaluated_value
+                    if not isinstance(flow, Flow):
+                        pass
+                    else:
+                        flow_value = flow.evaluated_value
                 df.at[year, flow_id] = flow_value
         df.reset_index(inplace=True)
         return df
@@ -243,15 +247,15 @@ class FlowSolver(object):
 
         :return: Indicator names (list of strings)
         """
-        return self._indicator_names
+        return list(self._indicator_name_to_indicator.keys())
 
-    def get_indicators(self) -> Dict[str, Indicator]:
+    def get_indicator_name_to_indicator(self) -> Dict[str, Indicator]:
         """
         Get Indicator ID to Indicator mappings.
 
         :return: Dictionary (Indicator ID (str) -> Indicator (Indicator))
         """
-        return self._indicators
+        return self._indicator_name_to_indicator
 
     def get_process_inflows_total(self, process_id: str, year: int = -1) -> float:
         """
@@ -453,6 +457,12 @@ class FlowSolver(object):
         # TODO: Implement
         return self.year_to_process_id_to_flows
 
+    # TODO: NEW
+    def _get_current_year_process_id_to_process(self) -> Dict[str, Process]:
+        return self._year_to_process_id_to_process[self._year_current]
+
+    # TODO: NEW
+
     def _get_year_to_flow_id_to_flow(self) -> Dict[int, Dict[str, Flow]]:
         return self._year_to_flow_id_to_flow
 
@@ -584,6 +594,9 @@ class FlowSolver(object):
         :param flow_id_to_flow: Dictionary (Flow ID to Flow)
         """
         for flow_id, flow in flow_id_to_flow.items():
+            if not isinstance(flow, Flow):
+                continue
+
             if flow.is_unit_absolute_value:
                 flow.is_evaluated = True
                 flow.evaluated_share = 1.0
@@ -1072,6 +1085,7 @@ class FlowSolver(object):
         virtual_flows_epsilon = copy.deepcopy(self._virtual_flows_epsilon)
         baseline_value_name = copy.deepcopy(self._baseline_value_name)
         baseline_unit_name = copy.deepcopy(self._baseline_unit_name)
+        indicator_name_to_indicator = copy.deepcopy(self._indicator_name_to_indicator)
 
         scenario_data = ScenarioData(years=years,
                                      year_to_process_id_to_process=year_to_process_id_to_process,
@@ -1084,7 +1098,8 @@ class FlowSolver(object):
                                      use_virtual_flows=use_virtual_flows,
                                      virtual_flows_epsilon=virtual_flows_epsilon,
                                      baseline_value_name=baseline_value_name,
-                                     baseline_unit_name=baseline_unit_name
+                                     baseline_unit_name=baseline_unit_name,
+                                     indicator_name_to_indicator=indicator_name_to_indicator
         )
         return scenario_data
 

@@ -256,9 +256,12 @@ class DataProvider(object):
                     # Convert found param name and valid fill method names to lowercase
                     # and check if found param name is one of the valid method names
                     valid_fill_method_names = [fill_method_name for fill_method_name in ParameterFillMethod]
-                    found_param_value_lower = found_param_value.lower()
-                    valid_method_names_lower = [name.lower() for name in valid_fill_method_names]
+                    found_param_value_lower = found_param_value.lower().strip()
+                    valid_method_names_lower = [name.lower().strip() for name in valid_fill_method_names]
                     if found_param_value_lower in valid_method_names_lower:
+                        # Get the actual parameter name from ParameterFillMethod-enum
+                        fill_method_index = valid_method_names_lower.index(found_param_value_lower)
+                        found_param_value = valid_fill_method_names[fill_method_index]
                         self._param_name_to_value[param_name] = found_param_value
                     else:
                         print("{} not valid value for {}! ".format(found_param_value, param_name), end="")

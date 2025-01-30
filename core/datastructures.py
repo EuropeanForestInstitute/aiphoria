@@ -400,8 +400,6 @@ class Flow(ObjectBase):
         self._data_source = None
         self._data_source_comment = None
         self._comment = None
-        self._carbon_content_factor = 1.0
-        self._carbon_content_source = None
 
         # Evaluated per timestep
         self._is_evaluated = False
@@ -432,16 +430,11 @@ class Flow(ObjectBase):
         self._year = int(params.iloc[10])
         self._data_source = params.iloc[11]
         self._data_source_comment = params.iloc[12]
-        self._conversion_factor_used = params.iloc[13]
-        
-        # Carbon content
-        self._carbon_content_factor = 1.0 if params.iloc[14] is None else params.iloc[14]
-        self._carbon_content_source = params.iloc[15]
 
         # Rest of the elements except last element are indicators
         # There should be even number of indicators because each indicator has value and comment
         # TODO: Should not raise Exception?
-        first_indicator_index = 16
+        first_indicator_index = 13
         indicators = params[first_indicator_index:]
         if len(indicators) % 2:
             print("Not even number of indicator columns in settings file.")
@@ -450,23 +443,23 @@ class Flow(ObjectBase):
 
         # Build indicator name to Indicator mappings
         for i in range(0, len(indicators), 2):
-            name = indicators.index[i]
+            indicator_name = indicators.index[i]
             conversion_factor = indicators.iloc[i]
             comment = indicators.iloc[i+1]
 
             # Strip substring inside characters '(' and  ')'
             # and use that as a unit
-            unit = ""
-            start_index = name.find("(")
-            end_index = name.find(")")
+            indicator_unit = ""
+            start_index = indicator_name.find("(")
+            end_index = indicator_name.find(")")
             if start_index >= 0 and end_index >= 0:
-                unit_name = name[start_index:end_index + 1]
-                name = name.replace(unit_name, '').strip()
-                unit = unit_name[1:-1].strip()
+                unit_name = indicator_name[start_index:end_index + 1]
+                indicator_name = indicator_name.replace(unit_name, '').strip()
+                indicator_unit = unit_name[1:-1].strip()
 
-            new_indicator = Indicator(name, conversion_factor, comment, unit)
-            self._indicator_name_to_indicator[name] = new_indicator
-            self._indicator_name_to_evaluated_value[name] = 0.0
+            new_indicator = Indicator(indicator_name, conversion_factor, comment, indicator_unit)
+            self._indicator_name_to_indicator[indicator_name] = new_indicator
+            self._indicator_name_to_evaluated_value[indicator_name] = 0.0
 
         self._row_number = row_number  # Track Excel file row number
 
@@ -630,22 +623,6 @@ class Flow(ObjectBase):
         return self._comment
 
     @property
-    def carbon_content_factor(self) -> float:
-        return self._carbon_content_factor
-
-    @carbon_content_factor.setter
-    def carbon_content_factor(self, value: float):
-        self._carbon_content_factor = value
-
-    @property
-    def carbon_content_source(self) -> str:
-        return self._carbon_content_source
-
-    @carbon_content_source.setter
-    def carbon_content_source(self, value: str):
-        self._carbon_content_source = value
-
-    @property
     def is_evaluated(self) -> bool:
         """
         Get flow evaluated state.
@@ -688,10 +665,6 @@ class Flow(ObjectBase):
     @evaluated_share.setter
     def evaluated_share(self, value: float):
         self._evaluated_share = value
-
-    @property
-    def evaluated_value_carbon(self) -> float:
-        return self.evaluated_value * self.carbon_content_factor
 
     @property
     def indicator_name_to_indicator(self) -> Dict[str, Indicator]:
@@ -1013,6 +986,7 @@ class ScenarioData(object):
                  virtual_flows_epsilon: float = 0.1,
                  baseline_value_name: str = "Baseline",
                  baseline_unit_name: str = "Baseline unit",
+                 indicator_name_to_indicator: Dict[str, Indicator] = None
                  ):
 
         if years is None:
@@ -1039,6 +1013,9 @@ class ScenarioData(object):
         if unique_flow_id_to_flow is None:
             unique_flow_id_to_flow = {}
 
+        if indicator_name_to_indicator is None:
+            indicator_name_to_indicator = {}
+
         self._year_to_flow_id_to_flow = year_to_flow_id_to_flow
         self._year_to_process_id_to_process = year_to_process_id_to_process
         self._year_to_process_id_to_flow_ids = year_to_process_id_to_flow_ids
@@ -1059,9 +1036,7 @@ class ScenarioData(object):
         self._virtual_flows_epsilon = virtual_flows_epsilon
         self._baseline_value_name = baseline_value_name
         self._baseline_unit_name = baseline_unit_name
-
-        # Cache scenario indicators
-        self._indicator_name_to_indicator = {}
+        self._indicator_name_to_indicator = indicator_name_to_indicator
 
     @property
     def years(self) -> List[int]:
@@ -1157,6 +1132,7 @@ class ScenarioData(object):
     def baseline_value_name(self) -> str:
         """
         Get baseline value name (e.g. "Solid wood equivalent")
+
         :return: Baseline value name (str)
         """
         return self._baseline_value_name
@@ -1174,6 +1150,7 @@ class ScenarioData(object):
     def baseline_unit_name(self) -> str:
         """
         Get baseline unit name (e.g. "Mm3")
+
         :return: Baseline unit name (str)
         """
         return self._baseline_unit_name
@@ -1186,6 +1163,24 @@ class ScenarioData(object):
         :param new_name: New baseline name (str)
         """
         self._baseline_unit_name = new_name
+
+    @property
+    def indicator_name_to_indicator(self) -> Dict[str, Indicator]:
+        """
+        Get dictionary of Indicator name to Indicator.
+
+        :return: Dictionary (indicator name (str), Indicator)
+        """
+        return self._indicator_name_to_indicator
+
+    @indicator_name_to_indicator.setter
+    def indicator_name_to_indicator(self, new_indicator_name_to_indicator: Dict[str, Indicator]):
+        """
+        Set new Indicator name to Indicator mapping.
+
+        :param new_indicator_name_to_indicator: New Indicator name to Indicator dictionary
+        """
+        self._indicator_name_to_indicator = new_indicator_name_to_indicator
 
 
 class ScenarioDefinition(object):
