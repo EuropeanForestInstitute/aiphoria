@@ -248,8 +248,13 @@ class DataChecker(object):
             process_id_to_stock[stock_id] = stock
 
         # Copy Indicator mappings from first unique Flow (Indicator ID -> Indicator)
+        # and set indicator conversion factors to default values.
+        # NOTE: Virtual flows creation uses directly these default values
         first_unique_flow = unique_flow_ids[list(unique_flow_ids.keys())[0]]
         indicator_name_to_indicator = copy.deepcopy(first_unique_flow.indicator_name_to_indicator)
+        for name, indicator in indicator_name_to_indicator.items():
+            indicator.conversion_factor = 1.0
+
 
         # List of all scenarios, first element is always the baseline scenario and always exists even if
         # any alternative scenarios are not defined
