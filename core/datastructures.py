@@ -938,6 +938,10 @@ class FlowModifier(ObjectBase):
         return self._target_process_id
 
     @property
+    def target_flow_id(self) -> str:
+        return "{} {}".format(self.source_process_id, self.target_process_id)
+
+    @property
     def change_in_value(self) -> float:
         return self._change_in_value
 
@@ -1361,3 +1365,87 @@ class Color(ObjectBase):
     def _hex_to_normalized_float(self, hex_value: str) -> float:
         return int(hex_value, 16) / 255.0
 
+
+class ProcessEntry(object):
+    """
+    Internal storage class for Process entry (process, inflows, and outflows).
+    Used when storing Process data in DataFrames.
+    """
+
+    KEY_IN: str = "in"
+    KEY_OUT: str = "out"
+
+    def __init__(self, process: Process = None):
+        """
+        Initialize ProcessEntry.
+        Makes deep copy of target Process.
+
+        :param process: Target Process
+        """
+        self._process = process
+        self._flows = {self.KEY_IN: {}, self.KEY_OUT: {}}
+
+    @property
+    def process(self) -> Process:
+        return self._process
+
+    @property
+    def flows(self) -> Dict[str, Dict[str, Flow]]:
+        return self._flows
+
+    @flows.setter
+    def flows(self, flows: Dict[str, Dict[str, Flow]]):
+        self._flows = flows
+
+    @property
+    def inflows(self) -> List[Flow]:
+        return list(self._flows[self.KEY_IN].values())
+
+    @inflows.setter
+    def inflows(self, flows: List[Flow]):
+        self._flows[self.KEY_IN] = {flow.id: flow for flow in flows}
+
+    @property
+    def inflows_as_dict(self) -> Dict[str, Flow]:
+        return self._flows[self.KEY_IN]
+
+    @property
+    def outflows(self) -> List[Flow]:
+        return list(self._flows[self.KEY_OUT].values())
+
+    @outflows.setter
+    def outflows(self, flows: List[Flow]):
+        self._flows[self.KEY_OUT] = {flow.id: flow for flow in flows}
+
+    def outflows_as_dict(self) -> Dict[str, Flow]:
+        return self._flows[self.KEY_OUT]
+
+    def add_inflow(self, flow: Flow):
+        self._flows[self.KEY_IN][flow.id] = flow
+
+    def add_outflow(self, flow: Flow):
+        self._flows[self.KEY_OUT][flow.id] = flow
+
+    def remove_inflow(self, flow_id: str):
+        """
+        Remove inflow by Flow ID.
+        Raises Exception if Flow ID is not found in inflows.
+
+        :param flow_id: Target Flow ID
+        :raises Exception If Flow ID is not found
+        """
+        removed_flow_id = self._flows[self.KEY_IN].pop(flow_id, None)
+        if not removed_flow_id:
+            raise Exception("No flow_id {} in inflows".format(flow_id))
+
+    def remove_outflow(self, flow_id: str):
+        """
+        Remove outflow by Flow ID.
+        Raises Exception if Flow ID is not found in outflows.
+
+        :param flow_id: Target Flow ID
+        :raises Exception If Flow ID is not found
+        """
+        removed_flow_id = self._flows[self.KEY_OUT].pop(flow_id, None)
+        if not removed_flow_id:
+            raise Exception("No flow_id {} in outflows".format(flow_id))

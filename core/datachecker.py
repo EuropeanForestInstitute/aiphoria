@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from core.dataprovider import DataProvider
-from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color
+from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color, ProcessEntry
 from core.parameters import ParameterName, ParameterFillMethod
 from core.types import FunctionType, ChangeType
 
@@ -28,10 +28,7 @@ class DataChecker(object):
         Build scenarios to be solved using the FlowSolver.
         First element in the list is always baseline scenario and existence of this is always guaranteed.
 
-        :param epsilon: Maximum allowed absolute difference in process inputs and outputs.\n
-                        Generate warning message in case this happens.
-                        Default: 0.1
-        :return:        Dictionary with data for FlowSolver.\n
+        :return: Dictionary with data for FlowSolver
         """
 
         # NOTE: All flows must have data for the starting year
@@ -114,7 +111,8 @@ class DataChecker(object):
         # **********************************
         # * Check invalid parameter values *
         # **********************************
-        print("Checking process for inflow visualization...")
+
+        print("Checking processes for inflow visualization...")
         process_ids_for_inflow_viz = model_params[ParameterName.VisualizeInflowsToProcesses]
         ok, errors = self._check_process_ids_for_inflow_visualization(process_ids_for_inflow_viz, unique_process_ids)
         if not ok:
@@ -139,6 +137,7 @@ class DataChecker(object):
         if not ok:
             raise Exception(errors)
 
+        # Check if stocks are defined in processes that do not have any inflows and outflows at any year
         print("Checking stocks in isolated processes...")
         ok, errors = self._check_stocks_in_isolated_processes(stocks, unique_process_ids)
         if not ok:
@@ -150,6 +149,14 @@ class DataChecker(object):
             if not ok:
                 raise Exception(errors)
 
+        # # Create and propagate flow data for missing years
+        # df_year_to_flows = self._create_flow_data_for_missing_years(
+        #     df_year_to_flows,
+        #     fill_missing_absolute_flows=fill_missing_absolute_flows,
+        #     fill_missing_relative_flows=fill_missing_relative_flows,
+        #     fill_method=fill_method
+        # )
+
         # Create and propagate flow data for missing years
         df_year_to_flows = self._create_flow_data_for_missing_years(
             df_year_to_flows,
@@ -159,7 +166,26 @@ class DataChecker(object):
         )
 
         # Create process to flow mappings
-        df_year_to_process_flows = self._create_process_to_flows(unique_process_ids, df_year_to_flows)
+        df_year_to_process_flows = self._create_process_to_flows_entries(unique_process_ids, df_year_to_flows)
+
+        print("Merge relative outflows...")
+        # NOTE: This is externalized in the future, now go with the hardcoded value
+        # min_threshold is value for checking if flow is 100%: any relative flow share greater than min_threshold
+        # are considered relative flows with 100% share.
+        min_threshold = 99.99
+        df_year_to_process_flows, df_year_to_flows = self._merge_relative_outflows(df_year_to_process_flows,
+                                                                                   df_year_to_flows,
+                                                                                   min_threshold)
+
+        # Remove isolated processes caused by the flow merging
+        df_year_to_process_flows = self._remove_isolated_processes(df_year_to_process_flows)
+
+
+        # Check that root flows have no inflows and only absolute outflows
+        print("Checking root processes...")
+        ok, errors = self._check_root_processes(df_year_to_process_flows)
+        if not ok:
+            raise Exception(errors)
 
         # Check if process only absolute inflows AND absolute outflows so that
         # the total inflow matches with the total outflows within certain limit
@@ -170,11 +196,12 @@ class DataChecker(object):
             if not ok:
                 raise Exception(errors)
 
-        # Check that flow type stays the same during the simulation
-        print("Checking flow type changes...")
-        ok, errors = self._check_flow_type_changes(df_year_to_flows)
-        if not ok:
-            raise Exception(errors)
+        # NOTE: Flow type checking is not needed anymore[
+        # # Check that flow type stays the same during the simulation
+        # print("Checking flow type changes...")
+        # ok, errors = self._check_flow_type_changes(df_year_to_flows)
+        # if not ok:
+        #     raise Exception(errors)
 
         print("Checking relative flow errors...")
         ok, errors = self._check_relative_flow_errors(df_year_to_flows)
@@ -219,8 +246,19 @@ class DataChecker(object):
         for year in df_year_to_process_flows.index:
             year_to_process_id_to_process[year] = {}
             for process_id in df_year_to_process_flows.columns:
-                entry = copy.deepcopy(df_year_to_process_flows.at[year, process_id])
-                process = entry["process"]
+                entry = df_year_to_process_flows.at[year, process_id]
+
+                # Skip removed entries
+                if pd.isna(entry):
+                    continue
+
+                new_entry = copy.deepcopy(entry)
+                process = new_entry.process
+
+                # # DEBUG
+                # for flow in new_entry.outflows:
+                #     print(f"{year}: {flow.id}")
+
                 year_to_process_id_to_process[year][process_id] = process
 
         # Create mapping of year -> Process ID -> List of incoming Flow IDs and list of outgoing Flow IDs
@@ -228,9 +266,13 @@ class DataChecker(object):
         for year in df_year_to_process_flows.index:
             year_to_process_id_to_flow_ids[year] = {}
             for process_id in df_year_to_process_flows.columns:
-                entry = copy.deepcopy(df_year_to_process_flows.at[year, process_id])
-                inflow_ids = [flow.id for flow in entry["flows"]["in"]]
-                outflow_ids = [flow.id for flow in entry["flows"]["out"]]
+                entry = df_year_to_process_flows.at[year, process_id]
+                if pd.isna(entry):
+                    continue
+
+                new_entry: ProcessEntry = copy.deepcopy(entry)
+                inflow_ids = [flow.id for flow in entry.inflows]
+                outflow_ids = [flow.id for flow in entry.outflows]
                 year_to_process_id_to_flow_ids[year][process_id] = {"in": inflow_ids, "out": outflow_ids}
 
         # Create mapping of year -> Flow ID -> Flow by deep copying entry from DataFrame
@@ -238,8 +280,12 @@ class DataChecker(object):
         for year in df_year_to_flows.index:
             year_to_flow_id_to_flow[year] = {}
             for flow_id in df_year_to_flows.columns:
-                entry = copy.deepcopy(df_year_to_flows.at[year, flow_id])
-                year_to_flow_id_to_flow[year][flow_id] = entry
+                entry = df_year_to_flows.at[year, flow_id]
+                if pd.isna(entry):
+                    continue
+
+                new_entry = copy.deepcopy(df_year_to_flows.at[year, flow_id])
+                year_to_flow_id_to_flow[year][flow_id] = new_entry
 
         # Process ID to stock mapping
         process_id_to_stock = {}
@@ -254,7 +300,6 @@ class DataChecker(object):
         indicator_name_to_indicator = copy.deepcopy(first_unique_flow.indicator_name_to_indicator)
         for name, indicator in indicator_name_to_indicator.items():
             indicator.conversion_factor = 1.0
-
 
         # List of all scenarios, first element is always the baseline scenario and always exists even if
         # any alternative scenarios are not defined
@@ -393,9 +438,9 @@ class DataChecker(object):
             has_inflows = False
             has_outflows = False
             for year in flow_data.index:
-                entry = flow_data.at[year, process_id]
-                has_inflows = has_inflows or len(entry["flows"]["in"]) > 0
-                has_inflows = has_inflows or len(entry["flows"]["out"]) > 0
+                entry: ProcessEntry = flow_data.at[year, process_id]
+                has_inflows = has_inflows or len(entry.inflows) > 0
+                has_inflows = has_inflows or len(entry.outflows) > 0
 
             if (not has_inflows) and (not has_outflows):
                 errors.append("ERROR: Found isolated Process '{}', no inflows and no outflows at any year".format(
@@ -424,10 +469,10 @@ class DataChecker(object):
         return self._stocks
 
     def get_start_year(self) -> int:
-        return self.year_start
+        return self._year_start
 
     def get_end_year(self) -> int:
-        return self.year_end
+        return self._year_end
 
     def get_year_to_flow_id_to_flow_mapping(self):
         return self._year_to_flow_id_to_flow
@@ -693,6 +738,54 @@ class DataChecker(object):
 
         return not errors, errors
 
+    def _check_root_processes(self, df_year_to_process_flows: pd.DataFrame):
+        """
+        Check root processes.
+        Root processes do not have inflows and have only absolute outflows.
+
+        :param df_year_to_process_flows: DataFrame
+        :return: Tuple (has errors (bool), list of errors (list[str]))
+        """
+
+        errors = []
+        for year in df_year_to_process_flows.index:
+            for process_id in df_year_to_process_flows.columns:
+                entry: ProcessEntry = df_year_to_process_flows.at[year, process_id]
+
+                # Skip NA entries
+                if pd.isna(entry):
+                    continue
+
+                process = entry.process
+                inflows = entry.inflows
+                outflows = entry.outflows
+
+                if len(inflows) > 0:
+                    continue
+
+                abs_outflows = []
+                rel_outflows = []
+                for flow in outflows:
+                    if flow.is_unit_absolute_value:
+                        abs_outflows.append(flow)
+                    else:
+                        rel_outflows.append(flow)
+
+                num_abs_outflows = len(abs_outflows)
+                num_rel_outflows = len(rel_outflows)
+                no_outflows = (num_abs_outflows == 0) and (num_rel_outflows == 0)
+                if no_outflows:
+                    # Error: Root process does not have any outflows
+                    msg = "Root process '{}' has no outflows".format(process)
+                    errors.append(msg)
+
+                if num_rel_outflows > 0:
+                    # Error: root process can have only absolute outflows
+                    msg = "Root process '{}' has relative outflows".format(process)
+                    errors.append(msg)
+
+        return not errors, errors
+
     def _check_process_inflows_and_outflows_mismatch(self,
                                                      df_process_to_flows: pd.DataFrame,
                                                      epsilon: float = 0.1) -> Tuple[bool, List[str]]:
@@ -850,13 +943,13 @@ class DataChecker(object):
                                             fill_method: str = ParameterFillMethod.Zeros
                                             ) -> pd.DataFrame:
         """
-        Fill years missing Flow data with the previous valid Flow data.\n
-        If fill_absolute_flows is set to True then process Flows with absolute values.\n
-        If fill_relative_values is set to True then process Flows with relative values.\n
+        Fill years missing Flow data with the previous valid Flow data.
+        If fill_absolute_flows is set to True then process Flows with absolute values.
+        If fill_relative_values is set to True then process Flows with relative values.
         If both fill_absolute_flows and fill_relative_flows are set to False then returns copy
-        of the original.\n
+        of the original.
 
-        :param df_flows:
+        :param df_year_flows: DataFrame
         :param fill_missing_absolute_flows: If True then process Flows with absolute values
         :param fill_missing_relative_flows: If True then process Flows with relative values
         :return: DataFrame
@@ -1003,7 +1096,7 @@ class DataChecker(object):
         :return: DataFrame
         """
 
-        df = pd.DataFrame(index=df_year_flows.index, columns=unique_process_ids.keys(), dtype="object")
+        df = pd.DataFrame(index=df_year_flows.index, columns=list(unique_process_ids.keys()), dtype="object")
         for year in df_year_flows.index:
             for process_id, process in unique_process_ids.items():
                 df.at[year, process.id] = {"process": copy.deepcopy(process), "flows": {"in": [], "out": []}}
@@ -1011,13 +1104,117 @@ class DataChecker(object):
         # Add process inflows and outflows for every year
         for year in df_year_flows.index:
             for flow_id in df_year_flows.columns:
-                # No data defined for process ID at this year
                 flow = df_year_flows.at[year, flow_id]
+
+                # No data defined for process ID at this year
                 if pd.isnull(flow):
                     continue
 
                 df.at[year, flow.source_process_id]["flows"]["out"].append(flow)
                 df.at[year, flow.target_process_id]["flows"]["in"].append(flow)
+
+        return df
+
+    def _create_process_to_flows_entries(self,
+                                         unique_process_ids: dict[str, Process],
+                                         df_year_flows: pd.DataFrame) -> pd.DataFrame:
+        """
+        Create Process to Flows (inflows and outflows) entries.
+        Entries are ProcessEntry-objects inside DataFrame.
+
+        :param unique_process_ids: Dictionary of unique [Process ID -> Process]
+        :param df_year_flows: DataFrame, year to flows
+        :return: DataFrame (index as year, column as Process ID, cell as ProcessEntry)
+        """
+
+        df = pd.DataFrame(index=df_year_flows.index, columns=list(unique_process_ids.keys()), dtype="object")
+
+        for year in df_year_flows.index:
+            for process_id, process in unique_process_ids.items():
+                df.at[year, process_id] = ProcessEntry(process)
+
+        # Add Process inflows and outflows for every year
+        for year in df_year_flows.index:
+            for flow_id in df_year_flows.columns:
+                flow = df_year_flows.at[year, flow_id]
+                if pd.isnull(flow):
+                    continue
+
+                entry_source_process = df.at[year, flow.source_process_id]
+                entry_source_process.add_outflow(flow)
+
+                entry_target_process = df.at[year, flow.target_process_id]
+                entry_target_process.add_inflow(flow)
+
+        return df
+
+    @staticmethod
+    def _merge_relative_outflows(df_year_to_process_flows: pd.DataFrame,
+                                 df_year_to_flows: pd.DataFrame,
+                                 min_threshold: float = 99.9) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Check if relative outflows needs merging. Flow merging means that
+        if Process has only one 100% relative flow then from that year onward
+        that is going to be the only outflow unless new Flows are introduced
+        in later years. Other relative outflows are removed from the Process for that
+        year and the rest of the years.
+
+        :param min_threshold: Flow with share greater than this are considered as 100%
+        :param df_year_to_process_flows: pd.DataFrame (index is year, column is Process ID)
+        :param df_year_to_flows: pd.DataFrame (index is year, column is Flow ID)
+        :return: pd.DataFrame
+        """
+        assert min_threshold > 0.0, "min_threshold should be > 0.0"
+        assert min_threshold <= 100.0, "min_threshold should be <= 100.0"
+
+        df_process = df_year_to_process_flows.copy()
+        df_flows = df_year_to_flows.copy()
+        for process_id in df_process.columns:
+            for year in df_process.index:
+                entry: ProcessEntry = df_process.at[year, process_id]
+                inflows = entry.inflows
+                outflows = entry.outflows
+
+                # Skip root processes
+                if not inflows:
+                    continue
+
+                # Get only Processes that have only 1 relative outflow
+                rel_outflows = [flow for flow in outflows if not flow.is_unit_absolute_value]
+                full_relative_outflows = [flow for flow in rel_outflows if flow.value > min_threshold]
+                if not full_relative_outflows:
+                    continue
+
+                assert len(full_relative_outflows) == 1, "There should be only 1 full relative outflow"
+
+                # Remove all other flows except the Flow that had 100% share from both
+                # source process outflows and in target process inflows.
+                flows_to_remove = list(set(rel_outflows) - set(full_relative_outflows))
+
+                for flow in flows_to_remove:
+                    # Remove the source process outflow for this year
+                    source_entry: ProcessEntry = df_process.at[year, flow.source_process_id]
+                    source_entry.remove_outflow(flow.id)
+
+                    # Remove the target process inflow for this year
+                    target_entry: ProcessEntry = df_process.at[year, flow.target_process_id]
+                    target_entry.remove_inflow(flow.id)
+
+                    # Remove the flow also from df_flows for this year
+                    df_flows.at[year, flow.id] = pd.NA
+
+        return df_process, df_flows
+
+    def _remove_isolated_processes(self, df_year_to_process_flows: pd.DataFrame) -> pd.DataFrame:
+        df = df_year_to_process_flows.copy()
+
+        # Remove isolated processes from DataFrame
+        for year in df.index:
+            for process_id in df.columns:
+                entry = df.at[year, process_id]
+                if (not entry.inflows) and (not entry.outflows):
+                    df.at[year, process_id] = pd.NA
+
         return df
 
     def _check_process_stock_parameters(self, processes: List[Process]) -> Tuple[bool, list[str]]:
@@ -1114,16 +1311,31 @@ class DataChecker(object):
 
     def _check_fill_method_requirements(self, fill_method: ParameterFillMethod, df_year_to_flows: pd.DataFrame)\
             ->Tuple[bool, List[str]]:
+        """
+        Check if fill method requirements are met for flows.
+        Fill method Zeros: No checks needed.
+        Fill method Previous: At least Flow for the starting year must be defined in the data.
+        Fill method Next: At least Flow for the last year must be defined in the data.
+        Fill method Interpolate: At least start AND last year have Flows defined in the data.
+
+        :param fill_method: Fill method (ParameterFillMethod)
+        :param df_year_to_flows: DataFrame
+        :return: Tuple (has errors (bool), list of errors (list[str]))
+        """
         errors = []
-        # TODO: Check if using fill_method is possible
-        # TODO: ParameterFillMethod.Zeros: Works always
-        # TODO: ParameterFillMethod.Previous: At least Flow for the starting year must be defined in the data
-        # TODO: ParameterFillMethod.Next: At least Flow for the last year must be defined in the data
-        # TODO: ParameterFillMethod.Interpolate: At least starting AND last year must be defined
         if fill_method is ParameterFillMethod.Zeros:
             # Flow must be defined at least for one year
             # This works always, just fills years without Flow data with Flows
             return not errors, errors
+
+        if fill_method is ParameterFillMethod.Previous:
+            pass
+
+        if fill_method is ParameterFillMethod.Next:
+            pass
+
+        if fill_method is ParameterFillMethod.Interpolate:
+            pass
 
         return not errors, errors
 
@@ -1133,20 +1345,23 @@ class DataChecker(object):
         Check for Processes that have no inflows and have only relative outflows.
         This is error in data.
 
-        :param df_year_to_process_flows: DataFrame (index: year, column: Process name, cell: Dictionary)
+        :param df_year_to_process_flows: DataFrame (index: year, column: Process name, cell: ProcessEntry)
         :return: True if no errors, False otherwise
         """
         errors = []
         print("Checking for processes that have no inflows and only relative outflows...")
         year_to_errors = {}
         for year in df_year_to_process_flows.index:
-            row = df_year_to_process_flows.loc[year]
-            for entry in row:
-                # entry is Dictionary (keys: "process", "flows")
-                process = entry["process"]
-                flows = entry["flows"]
-                flows_in = flows["in"]
-                flows_out = flows["out"]
+            for process_id in df_year_to_process_flows.columns:
+                entry: ProcessEntry = df_year_to_process_flows.at[year, process_id]
+
+                # Skip removed entries
+                if pd.isna(entry):
+                    continue
+
+                process = entry.process
+                flows_in = entry.inflows
+                flows_out = entry.outflows
 
                 no_inflows = len(flows_in) == 0
                 all_outflows_relative = len(flows_out) > 0 and all([not flow.is_unit_absolute_value for flow in flows_out])
@@ -1234,9 +1449,8 @@ class DataChecker(object):
                         errors.append(s)
                         continue
 
-                    entry = year_data.at[year, source_process_id]
-                    process = entry["process"]
-                    flows_out = entry["flows"]["out"]
+                    entry: ProcessEntry = year_data.at[year, source_process_id]
+                    flows_out = entry.outflows
                     target_process_id_to_flow = {flow.target_process_id: flow for flow in flows_out}
                     source_to_target_flow = target_process_id_to_flow.get(target_process_id, None)
 
@@ -1305,8 +1519,9 @@ class DataChecker(object):
                     start_year_processes = df_year_to_process_flows.loc[flow_modifier.start_year]
 
                     # Get source-to-target flow mappings at start year
-                    source_process_flows = start_year_processes[source_process_id]
-                    flow_id_to_flow = {flow.id: flow for flow in source_process_flows["flows"]["out"]}
+                    source_process_entry: ProcessEntry = start_year_processes[source_process_id]
+                    source_process_outflows = source_process_entry.outflows
+                    flow_id_to_flow = {flow.id: flow for flow in source_process_outflows}
                     if source_to_target_id not in flow_id_to_flow:
                         s = "" + error_message_prefix
                         s += "Source Process ID '{}' does not have outflow to target Process ID '{}'".format(

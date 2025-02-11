@@ -1113,13 +1113,21 @@ class FlowSolver(object):
             # This is the case when dealing with baseline scenario, do nothing and just return
             return
 
+        # Keep track of minimum value of flows
+        row_to_opposite_flow_id_to_min_value = {}
+        row_to_target_flow_id_to_min_value = {}
+
+        # Keep track which year the minimum flow happened
+        row_to_opposite_flow_id_to_year = {}
+        row_to_target_flow_id_to_year = {}
+
         print("*** Applying flow modifiers for scenario '{}' ***".format(self._scenario.name))
         flow_modifiers = self._scenario.scenario_definition.flow_modifiers
         for flow_modifier in flow_modifiers:
             year_range = [year for year in range(flow_modifier.start_year, flow_modifier.end_year + 1)]
             source_process_id = flow_modifier.source_process_id
             target_process_id = flow_modifier.target_process_id
-            source_to_target_flow_id = "{} {}".format(source_process_id, target_process_id)
+            source_to_target_flow_id = flow_modifier.target_flow_id
 
             new_values = []
             if flow_modifier.function_type == FunctionType.Constant:
@@ -1218,10 +1226,46 @@ class FlowSolver(object):
                             opposite_value *= opposite_target_flow_share
                             self._apply_absolute_change_to_flow(opposite_flow, opposite_value)
 
+                            # Keep track of minimum value for opposite flows
+                            if opposite_flow.value < 0.0:
+                                row = flow_modifier.row_number
+                                if flow_modifier.row_number not in row_to_opposite_flow_id_to_min_value:
+                                    row_to_opposite_flow_id_to_min_value[row] = {}
+                                    row_to_opposite_flow_id_to_year[row] = {}
+
+                                opposite_flow_id_to_min_value = row_to_opposite_flow_id_to_min_value[row]
+                                opposite_flow_id_to_year = row_to_opposite_flow_id_to_year[row]
+                                if opposite_flow.id not in opposite_flow_id_to_min_value:
+                                    opposite_flow_id_to_min_value[opposite_flow_id] = opposite_flow.value
+                                    opposite_flow_id_to_year[opposite_flow_id] = year
+                                else:
+                                    prev_min_value = opposite_flow_id_to_min_value[opposite_flow_id]
+                                    if opposite_flow.value < prev_min_value:
+                                        opposite_flow_id_to_min_value[opposite_flow_id] = opposite_flow.value
+                                        opposite_flow_id_to_year[opposite_flow_id] = year
+
                         if flow_modifier.is_change_type_proportional:
                             opposite_value = -(value_diff / opposite_flow.value) * 100.0
                             opposite_value *= opposite_target_flow_share
                             self._apply_relative_change_to_flow(opposite_flow, opposite_value)
+
+                            # Keep track of minimum value for opposite flows
+                            if opposite_flow.value < 0.0:
+                                row = flow_modifier.row_number
+                                if flow_modifier.row_number not in row_to_opposite_flow_id_to_min_value:
+                                    row_to_opposite_flow_id_to_min_value[row] = {}
+                                    row_to_opposite_flow_id_to_year[row] = {}
+
+                                opposite_flow_id_to_min_value = row_to_opposite_flow_id_to_min_value[row]
+                                opposite_flow_id_to_year = row_to_opposite_flow_id_to_year[row]
+                                if opposite_flow.id not in opposite_flow_id_to_min_value:
+                                    opposite_flow_id_to_min_value[opposite_flow_id] = opposite_flow.value
+                                    opposite_flow_id_to_year[opposite_flow_id] = year
+                                else:
+                                    prev_min_value = opposite_flow_id_to_min_value[opposite_flow_id]
+                                    if opposite_flow.value < prev_min_value:
+                                        opposite_flow_id_to_min_value[opposite_flow_id] = opposite_flow.value
+                                        opposite_flow_id_to_year[opposite_flow_id] = year
 
                 else:
                     # Apply change to all same type outflows as flow_modifier
@@ -1241,10 +1285,82 @@ class FlowSolver(object):
                             opposite_value *= target_flow_share
                             self._apply_absolute_change_to_flow(target_flow, opposite_value)
 
+                            # Keep track of minimum value for target flows
+                            if target_flow.value < 0.0:
+                                row = flow_modifier.row_number
+                                if flow_modifier.row_number not in row_to_target_flow_id_to_min_value:
+                                    row_to_target_flow_id_to_min_value[row] = {}
+                                    row_to_target_flow_id_to_year[row] = {}
+
+                                target_flow_to_min_value = row_to_target_flow_id_to_min_value[row]
+                                target_flow_id_to_year = row_to_target_flow_id_to_year[row]
+                                if target_flow.id not in target_flow_to_min_value:
+                                    target_flow_to_min_value[target_flow.id] = target_flow.value
+                                    target_flow_id_to_year[target_flow.id] = year
+                                else:
+                                    prev_min_value = target_flow_to_min_value[target_flow.id]
+                                    if target_flow.value < prev_min_value:
+                                        target_flow_to_min_value[target_flow.id] = target_flow.value
+                                        target_flow_id_to_year[target_flow.id] = year
+
                         if flow_modifier.is_change_type_proportional:
                             opposite_value = -(value_diff / target_flow.value) * 100.0
                             opposite_value *= target_flow_share
                             self._apply_relative_change_to_flow(target_flow, opposite_value)
+
+                            # Keep track of minimum value for target flows
+                            if target_flow.value < 0.0:
+                                row = flow_modifier.row_number
+                                if flow_modifier.row_number not in row_to_target_flow_id_to_min_value:
+                                    row_to_target_flow_id_to_min_value[row] = {}
+                                    row_to_target_flow_id_to_year[row] = {}
+
+                                target_flow_to_min_value = row_to_target_flow_id_to_min_value[row]
+                                target_flow_id_to_year = row_to_target_flow_id_to_year[row]
+                                if target_flow.id not in target_flow_to_min_value:
+                                    target_flow_to_min_value[target_flow.id] = target_flow.value
+                                    target_flow_id_to_year[target_flow.id] = year
+                                else:
+                                    prev_min_value = target_flow_to_min_value[target_flow.id]
+                                    if target_flow.value < prev_min_value:
+                                        target_flow_to_min_value[target_flow.id] = target_flow.value
+                                        target_flow_id_to_year[target_flow.id] = year
+
+            # Show errors about applied flow modifier if any
+            has_error = False
+            if row_to_opposite_flow_id_to_min_value:
+                has_error = True
+                row = list(row_to_opposite_flow_id_to_min_value.keys())[0]
+
+                print("Following errors happened when applying flow modifier from row {}:".format(row))
+                opposite_flow_id_to_min_value = row_to_opposite_flow_id_to_min_value[row]
+                opposite_flow_id_to_year = row_to_opposite_flow_id_to_year[row]
+                for opposite_flow_id, min_value in opposite_flow_id_to_min_value.items():
+                    year = opposite_flow_id_to_year[opposite_flow_id]
+                    s = "Opposite target flow '{}' reached minimum negative flow value ({:.5f}) at year {}".format(
+                        opposite_flow_id, min_value, year)
+                    print("\t{}".format(s))
+
+                print("\n\tThis is caused by the source process not having enough inflows to satisfy all process outflows")
+
+            if row_to_target_flow_id_to_min_value:
+                has_error = True
+                row = list(row_to_target_flow_id_to_min_value.keys())[0]
+
+                print("Following errors happened when applying flow modifier from row {}:".format(row))
+                target_flow_id_to_min_value = row_to_target_flow_id_to_min_value[row]
+                target_flow_id_to_year = row_to_target_flow_id_to_year[row]
+                for target_flow_id, min_value in target_flow_id_to_min_value.items():
+                    year = target_flow_id_to_year[target_flow_id]
+                    s = "Target flow '{}' reached minimum negative flow value ({:.5f}) at year {}".format(
+                        target_flow_id, min_value, year)
+                    print("\t{}".format(s))
+
+                print("\n\tThis is caused by the source process not having enough inflows to satisfy all process outflows")
+
+            if has_error:
+                raise Exception("Flow modifier error")
+
 
     def _apply_absolute_change_to_flow(self, flow: Flow, value: float) -> Tuple[float, float]:
         """

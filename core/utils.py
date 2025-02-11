@@ -22,6 +22,7 @@ def setup_current_working_directory():
         # Running Notebook, cwd is already set
         pass
 
+
 def create_output_directory(output_dir_path: str):
     """
     Create output directory.
