@@ -38,6 +38,7 @@ class ParameterName(str, Enum):
     FillMethod: str = "fill_method"
 
     # Scenarios related
+    UseScenarios: str = "use_scenarios"
     SheetNameScenarios: str = "sheet_name_scenarios"
     SkipNumRowsScenarios: str = "skip_num_rows_scenarios"
     IgnoreColumnsScenarios: str = "ignore_columns_scenarios"

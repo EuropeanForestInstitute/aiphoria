@@ -113,7 +113,11 @@ class DataProvider(object):
              "Fill method if either fill_missing_absolute_flows or fill_missing_relative_flows is enabled",
              ParameterFillMethod.Zeros,
              ],
-
+            [ParameterName.UseScenarios,
+             bool,
+             "Run scenarios",
+             True,
+             ],
             [ParameterName.SheetNameScenarios,
              str,
              "Sheet name that contains data for scenarios (flow modifiers and constraints)",
@@ -302,6 +306,10 @@ class DataProvider(object):
         ignore_columns_colors = self._param_name_to_value.get(ParameterName.IgnoreColumnsColors, [])
         skip_num_rows_colors = self._param_name_to_value.get(ParameterName.SkipNumRowsColors, None)
 
+        use_scenarios = self._param_name_to_value[ParameterName.UseScenarios]
+        if not use_scenarios:
+            sheet_name_scenarios = ""
+
         # Sheet name to DataFrame
         sheets = {}
         try:
@@ -325,14 +333,16 @@ class DataProvider(object):
                     pass
 
                 # Optionals
-                try:
-                    sheet_scenarios = pd.read_excel(xls,
-                                                    sheet_name=sheet_name_scenarios,
-                                                    skiprows=skip_num_rows_scenarios)
-                    sheets[sheet_name_scenarios] = self._drop_ignored_columns_from_sheet(sheet_scenarios,
-                                                                                         ignore_columns_scenarios)
-                except ValueError:
-                    pass
+                if use_scenarios:
+                    try:
+                        sheet_scenarios = pd.read_excel(xls,
+                                                        sheet_name=sheet_name_scenarios,
+                                                        skiprows=skip_num_rows_scenarios)
+                        sheets[sheet_name_scenarios] = self._drop_ignored_columns_from_sheet(sheet_scenarios,
+                                                                                             ignore_columns_scenarios)
+
+                    except ValueError:
+                        pass
 
                 try:
                     sheet_colors = pd.read_excel(xls,
