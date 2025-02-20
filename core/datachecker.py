@@ -439,6 +439,9 @@ class DataChecker(object):
             has_outflows = False
             for year in flow_data.index:
                 entry: ProcessEntry = flow_data.at[year, process_id]
+                if entry is pd.NA:
+                    continue
+
                 has_inflows = has_inflows or len(entry.inflows) > 0
                 has_inflows = has_inflows or len(entry.outflows) > 0
 
