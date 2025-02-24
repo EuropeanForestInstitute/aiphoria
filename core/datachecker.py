@@ -247,17 +247,11 @@ class DataChecker(object):
             year_to_process_id_to_process[year] = {}
             for process_id in df_year_to_process_flows.columns:
                 entry = df_year_to_process_flows.at[year, process_id]
-
-                # Skip removed entries
                 if pd.isna(entry):
                     continue
 
                 new_entry = copy.deepcopy(entry)
                 process = new_entry.process
-
-                # # DEBUG
-                # for flow in new_entry.outflows:
-                #     print(f"{year}: {flow.id}")
 
                 year_to_process_id_to_process[year][process_id] = process
 
@@ -1246,6 +1240,17 @@ class DataChecker(object):
 
             return not errors, errors
 
+        # Check stock lifetimes
+        errors = []
+        for process in processes:
+            if process.stock_lifetime < 0:
+                msg = "Process {} has negative stock lifetime ({}) in row {} in sheet '{}'".format(
+                    process.id, process.stock_lifetime, process.row_number, self._dataprovider.sheet_name_processes)
+                errors.append(msg)
+
+            if errors:
+                return not errors, errors
+
         # Check if Process has valid parameters for stock distribution parameters
         # Expected: float or dictionary with valid keys (stddev, shape, scale)
         errors = []
@@ -1549,6 +1554,27 @@ class DataChecker(object):
                         s = "" + error_message_prefix
                         s += "Target value must be > 0.0"
                         errors.append(s)
+                else:
+                    # Change in delta, change flow value either by value or by factor
+                    # - If target flow is absolute: change_type can be either ChangeType.Value or ChangeType.Proportional
+                    # - If target flow is relative: change_type can be only ChangeType.Proportional
+                    #
+                    # Absolute flow:
+                    # Change in value (delta): 50 ABS, change in delta = 50 ABS, result = 50 ABS + 50 ABS = 100 ABS
+                    # Target value: 50 ABS, target value = 75, result = 50 ABS becomes 75 ABS during the defined time
+
+                    # Relative flow:
+                    # Relative flow can have change in value
+                    # Absolute change in this case means that e.g. original value = 100, "Change in value" is 50" then
+                    # the resulting value is 150.
+                    #
+                    # Relative flow:
+                    # Absolute change here means that e.g. original value = 100 %
+                    pass
+
+
+
+
 
         return not errors, errors
 

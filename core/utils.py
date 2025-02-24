@@ -1,14 +1,43 @@
 import os
 import shutil
 import sys
-from typing import List, Dict
-
+from typing import List, Dict, Any
 import numpy as np
 import pandas as pd
 from IPython import get_ipython
-
 import lib.odym.modules.ODYM_Classes as msc
 from core.datastructures import Scenario, Flow
+
+
+def show_model_parameters(model_params: Dict[str, Any]):
+    """
+    Show model parameters (= prints the model parameters to console).
+
+    :param model_params: Dictionary of model parameters
+    """
+    print("Using following parameters for running the model:")
+    for param_name, param_value in model_params.items():
+        print("\t{:32}= {}".format(param_name, param_value))
+
+
+def show_exception_errors(exception: Exception, msg: str = ""):
+    """
+    Show Exception errors.
+
+    :param msg: Message about exception.
+    :param exception: Exception
+    """
+
+    if msg:
+        print(msg)
+
+    errors = exception.args[0]
+    if type(errors) is str:
+        print(errors)
+
+    if type(errors) is list:
+        for error in errors:
+            print("\t{}".format(error))
 
 
 def setup_current_working_directory():
@@ -38,6 +67,7 @@ def create_output_directory(output_dir_path: str):
 
     # Create output directory and directories for all scenarios
     os.makedirs(output_dir_path)
+
 
 def setup_odym_directories():
     """
@@ -233,6 +263,7 @@ def calculate_scenario_mass_balance(mfa_system: msc.MFAsystem) -> pd.DataFrame:
     df_mass_balance = df_mass_balance.astype({"Year": "int32"})
     # df_mass_balance.set_index(["Year"], inplace=True)
     return df_mass_balance
+
 
 def shorten_sheet_name(name, max_length=31):
     """Shorten and sanitize Excel sheet names to comply with the 31-character limit."""
