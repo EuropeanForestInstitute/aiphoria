@@ -1,5 +1,5 @@
 import copy
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Any
 
 import numpy as np
 import pandas as pd
@@ -180,7 +180,6 @@ class DataChecker(object):
         # Remove isolated processes caused by the flow merging
         df_year_to_process_flows = self._remove_isolated_processes(df_year_to_process_flows)
 
-
         # Check that root flows have no inflows and only absolute outflows
         print("Checking root processes...")
         ok, errors = self._check_root_processes(df_year_to_process_flows)
@@ -196,13 +195,6 @@ class DataChecker(object):
             if not ok:
                 raise Exception(errors)
 
-        # NOTE: Flow type checking is not needed anymore[
-        # # Check that flow type stays the same during the simulation
-        # print("Checking flow type changes...")
-        # ok, errors = self._check_flow_type_changes(df_year_to_flows)
-        # if not ok:
-        #     raise Exception(errors)
-
         print("Checking relative flow errors...")
         ok, errors = self._check_relative_flow_errors(df_year_to_flows)
         if not ok:
@@ -216,6 +208,11 @@ class DataChecker(object):
 
         print("Checking isolated/unconnected processes...")
         ok, errors = self._check_for_isolated_processes(df_year_to_process_flows)
+        if not ok:
+            raise Exception(errors)
+
+        print("Checking prioritized transformation stages...")
+        ok, errors = self._check_prioritized_transformation_stages(self._processes, model_params)
         if not ok:
             raise Exception(errors)
 
@@ -414,18 +411,6 @@ class DataChecker(object):
 
         :return: Tuple (has errors (bool), list of errors (list[str]))
         """
-
-        # NOTE: Assumes that every year is filled with actual Flows
-        # errors = []
-        # first_year = df_year_to_process_to_flows.index[0]
-        # for process_id in df_year_to_process_to_flows.columns:
-        #     entry = df_year_to_process_to_flows.at[first_year, process_id]
-        #     process = entry["process"]
-        #     inflows = entry["flows"]["in"]
-        #     outflows = entry["flows"]["out"]
-        #     if (not inflows) and (not outflows):
-        #         errors.append("ERROR: Found isolated Process '{}' found in row {}".format(process.id, process.row_number))
-
         errors = []
         for process_id in df_year_to_process_to_flows.columns:
             flow_data = df_year_to_process_to_flows[[process_id]]
@@ -445,16 +430,43 @@ class DataChecker(object):
 
         return not errors, errors
 
-    def check_for_errors(self) -> Tuple[bool, List[str]]:
+    def _check_prioritized_transformation_stages(self, processes: List[Process], model_params: Dict[str, Any])\
+            -> Tuple[bool, List[str]]:
+        """
+        Check that prioritized transform stages are valid transformation stage names.
+
+        :param processes: List of Processes
+        :param model_params: Model parameters (Dictionary)
+        :return: Tuple (has errors (bool), list of errors (str))
+        """
+        errors = []
+        prioritized_transform_stages = model_params[ParameterName.PrioritizeTransformationStages]
+        found_transformation_stages = set()
+        for process in processes:
+            found_transformation_stages.add(process.transformation_stage)
+
+        for transformation_stage in prioritized_transform_stages:
+            if transformation_stage not in found_transformation_stages:
+                s = "Transformation stage '{}' is not used in any Processes".format(transformation_stage)
+                errors.append(s)
+
+        return not errors, errors
+
+
+    def check_for_errors(self):
+        """
+        Check for additional errors after building the scenarios.
+        Raises Exception if found errors.
+
+        :raises Exception: Exception
+        """
         ok, messages_processes = self.check_processes_integrity()
         if not ok:
-            return False, messages_processes
+            raise Exception(messages_processes)
 
         ok, messages_flows = self.check_flows_integrity()
         if not ok:
-            return False, messages_flows
-
-        return True, []
+            raise Exception(messages_flows)
 
     def get_processes(self) -> List[Process]:
         return self._processes
@@ -829,35 +841,35 @@ class DataChecker(object):
 
         return not errors, errors
 
-    def _check_flow_type_changes(self, df_year_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
-        """
-        Check that flows do not change the type during the simulation.
-
-        :param df_year_to_flows: DataFrame
-        :return: Tuple (bool, list of errors)
-        """
-        errors = []
-        for flow_id in df_year_to_flows.columns:
-            is_flow_abs_entry = []
-            flow_data = df_year_to_flows[flow_id]
-            for year, flow in flow_data.items():
-                if pd.notna(flow):
-                    new_entry = [flow.is_unit_absolute_value, year]
-                    is_flow_abs_entry.append(new_entry)
-
-            # Compare the rest of the list for the first state
-            initial_entry = is_flow_abs_entry[0]
-            is_same_as_initial_state = [entry[0] == initial_entry[0] for entry in is_flow_abs_entry]
-            if not all(is_same_as_initial_state):
-                source_type_name = "absolute" if initial_entry[0] else "relative"
-                target_type_name = "relative" if initial_entry[0] else "absolute"
-                for entry in is_flow_abs_entry:
-                    if entry[0] != initial_entry[0]:
-                        s = "\t- Flow '{}' was defined initially as {} in year {} but changed to {} in year {}".format(
-                            flow_id, source_type_name, initial_entry[1], target_type_name, entry[1])
-                        errors.append(s)
-
-        return not errors, errors
+    # def _check_flow_type_changes(self, df_year_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
+    #     """
+    #     Check that flows do not change the type during the simulation.
+    #
+    #     :param df_year_to_flows: DataFrame
+    #     :return: Tuple (bool, list of errors)
+    #     """
+    #     errors = []
+    #     for flow_id in df_year_to_flows.columns:
+    #         is_flow_abs_entry = []
+    #         flow_data = df_year_to_flows[flow_id]
+    #         for year, flow in flow_data.items():
+    #             if pd.notna(flow):
+    #                 new_entry = [flow.is_unit_absolute_value, year]
+    #                 is_flow_abs_entry.append(new_entry)
+    #
+    #         # Compare the rest of the list for the first state
+    #         initial_entry = is_flow_abs_entry[0]
+    #         is_same_as_initial_state = [entry[0] == initial_entry[0] for entry in is_flow_abs_entry]
+    #         if not all(is_same_as_initial_state):
+    #             source_type_name = "absolute" if initial_entry[0] else "relative"
+    #             target_type_name = "relative" if initial_entry[0] else "absolute"
+    #             for entry in is_flow_abs_entry:
+    #                 if entry[0] != initial_entry[0]:
+    #                     s = "\t- Flow '{}' was defined initially as {} in year {} but changed to {} in year {}".format(
+    #                         flow_id, source_type_name, initial_entry[1], target_type_name, entry[1])
+    #                     errors.append(s)
+    #
+    #     return not errors, errors
 
     def _check_relative_flow_errors(self, df_year_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
         """

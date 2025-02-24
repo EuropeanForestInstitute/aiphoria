@@ -163,7 +163,14 @@ class DataProvider(object):
              "Create inflow visualization and export data for process IDs defined in here. " +
              "Each process ID must be separated by comma (',')",
              [],
-             ]
+             ],
+            [ParameterName.PrioritizeTransformationStages,
+             list,
+             "Prioritize transformation stages. If stock is outflowing to prioritized transformation stage, then "
+             "ignore that amount as inflows to stock. This is to simulate trade flows happening during the timestep "
+             "which should not go in to the stock",
+             [],
+            ]
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}

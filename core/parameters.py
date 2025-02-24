@@ -67,6 +67,9 @@ class ParameterName(str, Enum):
     BaselineValueName: str = "baseline_value_name"
     BaselineUnitName: str = "baseline_unit_name"
 
+    # Flow prioritization
+    PrioritizeTransformationStages: str = "prioritize_transformation_stages"
+
 
 class ParameterFillMethod(str, Enum):
     """
