@@ -1,13 +1,12 @@
 import copy
 from typing import List, Dict, Tuple, Union
-
 import numpy as np
 import pandas as pd
 import tqdm as tqdm
 from pandas import DataFrame
 
 from core.datastructures import Process, Flow, Stock, ScenarioData, Scenario, Indicator
-from core.parameters import ParameterLandfillDecayType, ParameterLandfillKey
+from core.parameters import ParameterName, ParameterLandfillDecayType, ParameterLandfillKey
 from core.types import FunctionType
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
 
@@ -25,6 +24,10 @@ class FlowSolver(object):
 
     def __init__(self, scenario: Scenario = None):
         self._scenario = scenario
+
+        # Prioritized transformation stages
+        self._model_params = self._scenario.model_params
+        self._prioritized_transformation_stages = self._model_params[ParameterName.PrioritizeTransformationStages]
 
         # Time
         self._year_start = self._scenario.scenario_data.start_year
@@ -450,20 +453,14 @@ class FlowSolver(object):
         dsm.o = None
         dsm.compute_outflow_total()
 
-    def _get_year_to_process_id_to_process(self) -> Dict[str, Dict[str, Process]]:
-        # TODO: Implement
+    def _get_year_to_process_id_to_process(self) -> Dict[int, Dict[str, Process]]:
         return self._year_to_process_id_to_process
-
-    def _get_year_to_process_id_to_flows(self):
-        # TODO: Implement
-        return self.year_to_process_id_to_flows
 
     # TODO: NEW
     def _get_current_year_process_id_to_process(self) -> Dict[str, Process]:
         return self._year_to_process_id_to_process[self._year_current]
 
     # TODO: NEW
-
     def _get_year_to_flow_id_to_flow(self) -> Dict[int, Dict[str, Flow]]:
         return self._year_to_flow_id_to_flow
 
@@ -609,6 +606,10 @@ class FlowSolver(object):
                 flow.evaluated_share = flow.value / 100.0
                 flow.evaluated_value = 0.0
 
+            process = self.get_process(flow.target_process_id)
+            if process.transformation_stage in self._prioritized_transformation_stages:
+                flow.is_prioritized = True
+
     def _evaluate_process(self, process_id: str, year: int) -> tuple[bool, List]:
         is_evaluated = False
         outflows = self._get_process_outflows(process_id, year)
@@ -622,19 +623,61 @@ class FlowSolver(object):
         if self.is_all_process_inflows_evaluated(process_id, year):
             # Total baseline inflows
             total_inflows = self.get_process_inflows_total(process_id, year)
-
             if process_id in self.get_baseline_dynamic_stocks():
                 # All inflows are evaluated but process has stocks
 
+                # Flow prioritization:
+                # Ignore inflow amount to stock for outflows that are prioritized.
+                # Flow prioritization is defined by flow having target process with transformation stage
+                # defined in "prioritized_transformation_stages" parameter
+                total_outflows_prioritized = 0.0
+                prioritized_outflows = {}
+                for flow in outflows:
+                    if not flow.is_prioritized:
+                        continue
+
+                    if not flow.is_unit_absolute_value:
+                        raise Exception("Relative flow as prioritized flow!")
+
+                    flow.is_evaluated = True
+                    flow.evaluated_value = flow.value
+                    prioritized_outflows[flow.id] = flow
+                    total_outflows_prioritized += flow.evaluated_value
+
+                if total_outflows_prioritized > total_inflows:
+                    s = "Not enough inflows for prioritized outflows at process '{}' in year {}".format(
+                        process_id, year)
+                    raise Exception(s)
+
+                # Reduce total inflows to baseline stock by total prioritized outflows
+                total_inflows_to_stock = total_inflows - total_outflows_prioritized
+                print("Total inflows to stock:", total_inflows_to_stock)
+
                 # Update baseline DSM
                 baseline_dsm = self.get_baseline_dynamic_stocks()[process_id]
-                self.accumulate_dynamic_stock_inflows(baseline_dsm, total_inflows, year)
+                self.accumulate_dynamic_stock_inflows(baseline_dsm, total_inflows_to_stock, year)
 
                 # Update stock inflows to indicator DSMs
-                indicator_name_to_dsm = self.get_indicator_dynamic_stocks()[process_id]
-                for indicator_name, indicator_dsm in indicator_name_to_dsm.items():
-                    indicator_total_inflows = self._get_process_indicator_inflows_total(process_id, indicator_name, year)
-                    self.accumulate_dynamic_stock_inflows(indicator_dsm, indicator_total_inflows, year)
+                indicator_dynamic_stocks = self.get_indicator_dynamic_stocks()
+                if process_id in indicator_dynamic_stocks:
+                    inflows = self.get_process_inflows(process_id)
+                    indicator_name_to_dsm = indicator_dynamic_stocks[process_id]
+                    for indicator_name, indicator_dsm in indicator_name_to_dsm.items():
+                        # Flow evaluated indicator values are based on the actual inflows to process with stock
+                        # but with prioritized flows these values do not include the reduction of the prioritized flow.
+                        # Fix this by...
+                        # - calculating how much each inflow contributes to the original total inflows to get
+                        #   correction factor)
+                        # - Multiply total_inflows_to_stock by this factor to get correct value how much
+                        #   flow indicator contributes to the indicator stock
+                        total_indicator_inflows_to_stock = 0.0
+                        for flow in inflows:
+                            evaluated_indicator_value = flow.get_evaluated_value_for_indicator(indicator_name)
+                            correction_factor = evaluated_indicator_value / total_inflows
+                            corrected_flow_value = correction_factor * total_inflows_to_stock
+                            total_indicator_inflows_to_stock += corrected_flow_value
+
+                        self.accumulate_dynamic_stock_inflows(indicator_dsm, total_indicator_inflows_to_stock, year)
 
                 # Distribute baseline total outflow values
                 baseline_stock_outflow = self._get_dynamic_stock_outflow_value(baseline_dsm, year)
@@ -644,9 +687,10 @@ class FlowSolver(object):
                 # then there is user error with the data
                 outflows_abs = self._get_process_outflows_abs(process_id, year)
                 outflows_rel = self._get_process_outflows_rel(process_id, year)
-                total_outflows_abs = np.sum([outflow.evaluated_value for outflow in outflows_abs])
-                total_outflows_rel = baseline_stock_outflow - total_outflows_abs
 
+                # Get all outflows except prioritized outflows
+                total_outflows_abs = np.sum([flow.evaluated_value for flow in outflows_abs if not flow.is_prioritized])
+                total_outflows_rel = baseline_stock_outflow - total_outflows_abs
                 if total_outflows_rel < 0.0:
                     # This is error: Total absolute outflows are greater than stock outflow.
                     # It means that there is not enough flows to distribute between remaining
@@ -683,8 +727,6 @@ class FlowSolver(object):
                         process = self.get_process(process_id, year)
                         v_process = self._create_virtual_process_ex(process)
                         v_flow = self._create_virtual_flow_ex(v_process, process, abs(diff))
-
-                        # TODO: NEW
                         v_flow.evaluate_indicator_values_from_baseline_value()
 
                         # Create virtual Flows and Processes to current year data
@@ -721,10 +763,8 @@ class FlowSolver(object):
         self._current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[self._year_current]
         self._current_process_id_to_process = self._year_to_process_id_to_process[self._year_current]
 
-        # Check if any flow constraints should be applied at the start of each timestep
-        self._apply_flow_constraints()
-
-        # Mark all absolute flows as evaluated at the start of each timestep
+        # Mark all absolute flows as evaluated at the start of each timestep and also
+        # mark all flows that have target process ID in prioritized transform stage as prioritized
         self._prepare_flows_for_timestep(self._current_flow_id_to_flow)
 
         # Each year evaluate dynamic stock outflows and related outflows as evaluated
@@ -734,6 +774,7 @@ class FlowSolver(object):
         self._evaluate_dynamic_stock_outflows(self._year_current)
 
         # TODO: At the start of the second timestep there already is Virtual process in list of Processes to evaluate
+        # TODO: Is this still the case?
 
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
@@ -907,7 +948,7 @@ class FlowSolver(object):
                 # then there is user error with the data
                 outflows_abs = self._get_process_outflows_abs(process_id, year)
                 outflows_rel = self._get_process_outflows_rel(process_id, year)
-                total_outflows_abs = np.sum([flow.evaluated_value for flow in outflows_abs])
+                total_outflows_abs = np.sum([flow.evaluated_value for flow in outflows_abs if not flow.is_prioritized])
                 total_outflows_rel = np.sum([flow.evaluated_value for flow in outflows_rel])
                 process_mass_balance = baseline_stock_outflow - total_outflows_abs - total_outflows_rel
             else:
@@ -996,9 +1037,6 @@ class FlowSolver(object):
 
                 if stock.stock_distribution_type in [ParameterLandfillDecayType.Wood, ParameterLandfillDecayType.Paper]:
                     condition = stock.stock_distribution_params[ParameterLandfillKey.Condition]
-
-            print(stock.stock_distribution_type)
-
 
             # Stock parameters
             stock_years = np.array(self._years)
@@ -1167,11 +1205,11 @@ class FlowSolver(object):
                     new_values = np.linspace(start=value_start, stop=flow_modifier.target_value, num=len(year_range))
 
                 if flow_modifier.function_type == FunctionType.Exponential:
-                    # TODO: Is this function working properly with target value?
+                    # NOTE: Is this function working properly with target value?
                     new_values = np.logspace(start=0, stop=1, num=len(year_range))
 
                 if flow_modifier.function_type == FunctionType.Sigmoid:
-                    # TODO: Is this function working properly with target value?
+                    # NOTE: Is this function working properly with target value?
                     new_values = np.linspace(start=-flow_modifier.change_in_value,
                                              stop=flow_modifier.change_in_value,
                                              num=len(year_range))
@@ -1202,13 +1240,27 @@ class FlowSolver(object):
                         value_old, value_new = self._apply_relative_change_to_flow(
                             source_to_target_flow, new_values[year_index])
 
+                    print(value_old, value_new)
+
                     # Clamp flow values:
                     if source_to_target_flow.is_unit_absolute_value:
                         # NOTE: Clamp only lower bound [0.0, no limits] to prevent absolute becoming negative
+                        value_old = source_to_target_flow.value
                         value_new = self._clamp_flow_value(source_to_target_flow, 0.0, None)
+                        if value_old < value_new:
+                            s = "Clamped absolute target flow '{}' to 0.0 at year {}"
+                            s += " because flow value was negative ({})"
+                            s = s.format(source_to_target_flow_id, year, value_old)
+                            print(s)
                     else:
                         # NOTE: Clamp relative flow value between [0, 100] % (here flow value = flow share)
+                        value_old = source_to_target_flow.value
                         value_new = self._clamp_flow_value(source_to_target_flow, 0.0, 100.0)
+                        if value_old < value_new:
+                            s = "Clamped relative target flow '{}' to 0.0 at year {}"
+                            s += " because flow value was negative ({})"
+                            s = s.format(source_to_target_flow_id, year, value_old)
+                            print(s)
 
                 # Apply target value to the flow
                 if flow_modifier.use_target_value:
@@ -1217,9 +1269,12 @@ class FlowSolver(object):
                     # Clamp flow values:
                     if source_to_target_flow.is_unit_absolute_value:
                         # NOTE: Clamp only lower bound [0.0, no limits] to prevent absolute becoming negative
+                        # TODO: Inform user that the value if the value is clamped
                         value_new = self._clamp_flow_value(source_to_target_flow, 0.0, None)
+
                     else:
                         # NOTE: Clamp relative flow value between [0, 100] % (here flow value = flow share)
+                        # TODO: Inform user that the value if the value is clamped
                         value_new = self._clamp_flow_value(source_to_target_flow, 0.0, 100.0)
 
                 value_diff = value_new - value_old
@@ -1448,6 +1503,3 @@ class FlowSolver(object):
 
         return flow.value
 
-    def _apply_flow_constraints(self):
-        # TODO:
-        pass

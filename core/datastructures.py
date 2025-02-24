@@ -1,6 +1,6 @@
 import copy
 from builtins import float
-from typing import Tuple, List, Union, Dict
+from typing import Tuple, List, Union, Dict, Any
 
 from core.parameters import ParameterLandfillKey
 from core.types import FunctionType, ChangeType
@@ -430,6 +430,9 @@ class Flow(ObjectBase):
         self._indicator_name_to_indicator = {}
         self._indicator_name_to_evaluated_value = {}
 
+        # Flow prioritization
+        self._is_prioritized = False
+
         if params is None:
             return
 
@@ -528,11 +531,11 @@ class Flow(ObjectBase):
         return True
 
     @property
-    def source_process(self) -> Process:
+    def source_process(self) -> str:
         """
-        Get source Process.
+        Get source Process name.
 
-        :return: Source Process (Process)
+        :return: Source Process name (str)
         """
         return self._source_process
 
@@ -545,10 +548,10 @@ class Flow(ObjectBase):
         return self._source_process_location
 
     @property
-    def target_process(self) -> Process:
+    def target_process(self) -> str:
         """
-        Get target Process.
-        :return: Target Process (Process)
+        Get target Process name.
+        :return: Target Process name (str)
         """
         return self._target_process
 
@@ -685,6 +688,14 @@ class Flow(ObjectBase):
     @evaluated_share.setter
     def evaluated_share(self, value: float):
         self._evaluated_share = value
+
+    @property
+    def is_prioritized(self) -> bool:
+        return self._is_prioritized
+
+    @is_prioritized.setter
+    def is_prioritized(self, is_prioritized: bool):
+        self._is_prioritized = is_prioritized
 
     @property
     def indicator_name_to_indicator(self) -> Dict[str, Indicator]:
@@ -1250,17 +1261,21 @@ class Scenario(object):
     happening in the scenario
     """
 
-    def __init__(self, definition: ScenarioDefinition = None, data: ScenarioData = None):
+    def __init__(self, definition: ScenarioDefinition = None, data: ScenarioData = None, model_params = None):
         if definition is None:
             definition = ScenarioDefinition()
 
         if data is None:
             data = ScenarioData()
 
+        if model_params is None:
+            model_params = {}
+
         self._scenario_definition = definition
         self._scenario_data = data
         self._flow_solver = None
         self._odym_data = None
+        self._model_params = model_params
 
     @property
     def name(self) -> str:
@@ -1286,6 +1301,10 @@ class Scenario(object):
     @flow_solver.setter
     def flow_solver(self, flow_solver):
         self._flow_solver = flow_solver
+
+    @property
+    def model_params(self) -> Dict[str, Any]:
+        return self._model_params
 
     def copy_from_baseline_scenario_data(self, scenario_data: ScenarioData):
         """

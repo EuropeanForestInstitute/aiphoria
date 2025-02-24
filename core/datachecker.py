@@ -312,7 +312,9 @@ class DataChecker(object):
                                               )
 
         baseline_scenario_definition = ScenarioDefinition(name="Baseline", flow_modifiers=[])
-        baseline_scenario = Scenario(definition=baseline_scenario_definition, data=baseline_scenario_data)
+        baseline_scenario = Scenario(definition=baseline_scenario_definition,
+                                     data=baseline_scenario_data,
+                                     model_params=model_params)
         scenarios.append(baseline_scenario)
 
         # Create alternative Scenarios
@@ -320,7 +322,9 @@ class DataChecker(object):
         print("Building {} alternative scenarios...".format(num_alternative_scenarios))
         for index, scenario_definition in enumerate(self._scenario_definitions):
             # Alternative scenarios do not have ScenarioData at this point, data is filled from the FlowSolver later
-            new_alternative_scenario = Scenario(definition=scenario_definition, data=ScenarioData())
+            new_alternative_scenario = Scenario(definition=scenario_definition,
+                                                data=ScenarioData(),
+                                                model_params=model_params)
             scenarios.append(new_alternative_scenario)
 
         return scenarios
@@ -1306,9 +1310,6 @@ class DataChecker(object):
                 if not is_float:
                     if isinstance(param, ParameterLandfillKey):
                         param = param.value
-
-                    print(process.stock_distribution_params)
-                    print(type(process.stock_distribution_params))
 
                     if param not in process.stock_distribution_params:
                         errors.append("Stock distribution type '{}' needs following additional parameters:".format(
