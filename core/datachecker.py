@@ -6,7 +6,7 @@ import pandas as pd
 
 from core.dataprovider import DataProvider
 from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color, ProcessEntry
-from core.parameters import ParameterName, ParameterFillMethod
+from core.parameters import ParameterName, ParameterFillMethod, ParameterLandfillDecayType, ParameterLandfillKey
 from core.types import FunctionType, ChangeType
 
 
@@ -1234,7 +1234,8 @@ class DataChecker(object):
         """
         errors = []
         print("Checking stock distribution types...")
-        allowed_distribution_types = ["Fixed", "Simple", "Normal", "LogNormal", "FoldedNormal", "Weibull"]
+        allowed_distribution_types = ["Fixed", "Simple", "Normal", "LogNormal", "FoldedNormal", "Weibull", "Weibull",
+                                      ParameterLandfillDecayType.Wood, ParameterLandfillDecayType.Paper]
         for process in processes:
             if process.stock_distribution_type not in allowed_distribution_types:
                 msg = "Process {} has invalid stock distribution type '{}' in row {} in sheet '{}'".format(
@@ -1287,6 +1288,8 @@ class DataChecker(object):
                 "FoldedNormal": ['stddev'],
                 "LogNormal": ['stddev'],
                 "Weibull": ['shape', 'scale'],
+                ParameterLandfillDecayType.Wood.value: [ParameterLandfillKey.Condition.value],
+                ParameterLandfillDecayType.Paper.value: [ParameterLandfillKey.Condition.value],
             }
 
             is_float = type(process.stock_distribution_params) is float
@@ -1301,6 +1304,12 @@ class DataChecker(object):
                         errors.append("\t{}".format(p))
 
                 if not is_float:
+                    if isinstance(param, ParameterLandfillKey):
+                        param = param.value
+
+                    print(process.stock_distribution_params)
+                    print(type(process.stock_distribution_params))
+
                     if param not in process.stock_distribution_params:
                         errors.append("Stock distribution type '{}' needs following additional parameters:".format(
                             process.stock_distribution_type))

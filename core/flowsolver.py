@@ -7,6 +7,7 @@ import tqdm as tqdm
 from pandas import DataFrame
 
 from core.datastructures import Process, Flow, Stock, ScenarioData, Scenario, Indicator
+from core.parameters import ParameterLandfillDecayType, ParameterLandfillKey
 from core.types import FunctionType
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
 
@@ -987,10 +988,17 @@ class FlowSolver(object):
             if type(stock.stock_distribution_params) is float:
                 stddev = stock.stock_distribution_params
 
+            condition = None
             if type(stock.stock_distribution_params) is dict:
                 stddev = stock.stock_distribution_params.get("stddev", 1.0)
                 shape = stock.stock_distribution_params.get("shape", 1.0)
                 scale = stock.stock_distribution_params.get("scale", 1.0)
+
+                if stock.stock_distribution_type in [ParameterLandfillDecayType.Wood, ParameterLandfillDecayType.Paper]:
+                    condition = stock.stock_distribution_params[ParameterLandfillKey.Condition]
+
+            print(stock.stock_distribution_type)
+
 
             # Stock parameters
             stock_years = np.array(self._years)
@@ -1002,6 +1010,7 @@ class FlowSolver(object):
                 'StdDev': [stddev],
                 'Shape': [shape],
                 'Scale': [scale],
+                ParameterLandfillKey.Condition: [condition],
             }
 
             # Baseline DSM

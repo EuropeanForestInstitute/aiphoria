@@ -80,3 +80,15 @@ class ParameterFillMethod(str, Enum):
     Previous: str = "Previous"
     Next: str = "Next"
     Interpolate: str = "Interpolate"
+
+
+class ParameterLandfillDecayType(str, Enum):
+    Wood: str = "LandfillDecayWood"
+    Paper: str = "LandfillDecayPaper"
+
+
+class ParameterLandfillKey(str, Enum):
+    def __str__(self) -> str:
+        return str(self.value)
+
+    Condition: str = "condition"

@@ -484,6 +484,7 @@ class DataProvider(object):
 
         result = []
         for process in processes:
+            # TODO: Enum the new stock decay function name
             if process.stock_lifetime == 0:
                 continue
 

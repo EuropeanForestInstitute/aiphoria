@@ -2,6 +2,7 @@ import copy
 from builtins import float
 from typing import Tuple, List, Union, Dict
 
+from core.parameters import ParameterLandfillKey
 from core.types import FunctionType, ChangeType
 
 
@@ -350,6 +351,7 @@ class Process(ObjectBase):
         :param s: String containing distribution parameters
         :return: Tuple (was parsing successful success, error messages)
         """
+
         # Try converting s to float. If successful, set the value and return success
         success = True
         messages = []
@@ -360,18 +362,36 @@ class Process(ObjectBase):
         except ValueError:
             pass
 
-        # Try parsing keys from the string, format: key=value, key1=value1, etc.
         params = {}
-        for entry in s.split(","):
-            key, value = entry.strip().split("=")
+        if s.find(',') >= 0:
+            # Try parsing keys from the string, format: key=value, key1=value1, etc.
+            for entry in s.split(","):
+                key, value = entry.strip().split("=")
+                try:
+                    param_name = key.lower()
+                    param_value = float(value)
+                    params[param_name] = param_value
+                except ValueError as ex:
+                    success = False
+                    messages.append("No value defined for distribution parameter key '{}' for Process {} in row {}!".format(
+                        key, id, row_number))
+        else:
+            # Try parsing keys from the string, format: key=value, key1=value1, etc.
             try:
-                param_name = key.lower()
-                param_value = float(value)
-                params[param_name] = param_value
+                key, value = s.split("=")
+                if key == ParameterLandfillKey.Condition:
+                    param_name = key.lower()
+                    params[param_name] = value
+                else:
+                    param_name = key.lower()
+                    param_value = float(value)
+                    params[param_name] = param_value
+
             except ValueError as ex:
                 success = False
                 messages.append("No value defined for distribution parameter key '{}' for Process {} in row {}!".format(
                     key, id, row_number))
+
 
         # Parsing keys was not successful
         if not success:

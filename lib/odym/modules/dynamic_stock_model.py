@@ -271,6 +271,33 @@ class DynamicStockModel(object):
                     if self.lt['Shape'][m] != 0:  # For products with lifetime of 0, sf == 0
                         self.sf[m::,m] = scipy.stats.weibull_min.sf(np.arange(0,len(self.t)-m), c=self.lt['Shape'][m], loc = 0, scale=self.lt['Scale'][m])
 
+            elif self.lt['Type'] in ['LandfillDecayWood', 'LandfillDecayPaper']:
+                decay_rates = {'LandfillDecayWood': 0.05, 'LandfillDecayPaper': 0.025}
+                doc_values = {'LandfillDecayWood': 0.5, 'LandfillDecayPaper': 0.4}
+                doc_f_values = {'LandfillDecayWood': 0.77, 'LandfillDecayPaper': 0.5}
+
+                landfill_adjustments = {'Dry': 1.0, 'Wet': 1.2, 'Managed': 1.5}
+
+                # Get the value for landfill type
+                lt_type = self.lt['Type']
+                landfill_type = self.lt["condition"][0]
+
+                k_base = decay_rates[lt_type]
+                k_adjusted = k_base * landfill_adjustments.get(landfill_type, 1.0)
+
+                DOC = self.lt.get('DOC', doc_values[lt_type])
+                DOC_f = self.lt.get('DOC_f', doc_f_values[lt_type])
+                MCF = self.lt.get('MCF', 1.0)
+                F = self.lt.get('F', 0.5)
+                R = self.lt.get('R', 0.0)
+                OX = self.lt.get('OX', 0.0)
+
+                for m in range(len(self.t)):
+                    decay_factors = np.exp(-k_adjusted * np.arange(len(self.t) - m))
+                    DDOCm_decomposed = 1 - decay_factors
+                    CH4_generated = DDOCm_decomposed * DOC * DOC_f * MCF * F * (16 / 12)
+
+                    self.sf[m:, m] = decay_factors * DOC * DOC_f * MCF * (1 - R) * (1 - OX)
 
             return self.sf
         else:
