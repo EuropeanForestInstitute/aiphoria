@@ -545,6 +545,12 @@ class DataChecker(object):
         return [year for year in range(self._year_start, self._year_end + 1)]
 
     def _check_if_data_is_outside_year_range(self, flows: List[Flow]) -> Tuple[bool, List[str]]:
+        """
+        Check if data is outside year range.
+
+        :param flows: List of Flows
+        :return: Tuple (has errors (bool), list of errors (list[str])
+        """
         errors = []
 
         # Get year range defined in settings (= simulation years)
@@ -1306,6 +1312,11 @@ class DataChecker(object):
                 # Check if parameter has proper value type
                 for found_param_name, found_param_value in found_params.items():
                     allowed_parameter_values = AllowedStockDistributionParameterValues[found_param_name]
+
+                    # If allowed_parameter_values is empty then skip to next, nothing to check against
+                    if not allowed_parameter_values:
+                        continue
+
                     if found_param_value not in allowed_parameter_values:
                         s = "Stock distribution parameter '{}' needs following parameters for process '{}' in row {}:".format(
                             process.stock_distribution_type, process.id, process.row_number)
@@ -1592,10 +1603,6 @@ class DataChecker(object):
                     # Relative flow:
                     # Absolute change here means that e.g. original value = 100 %
                     pass
-
-
-
-
 
         return not errors, errors
 

@@ -175,7 +175,7 @@ class RequiredStockDistributionParameters(object):
     # NOTE: Key = StockDistributionType, Value: Dictionary (str -> required type)
     stock_distribution_to_required_params = {
         StockDistributionType.Fixed: {},
-        StockDistributionType.Normal: {"stddev": str},
+        StockDistributionType.Normal: {"stddev": float},
         StockDistributionType.LogNormal: {"stddev": float},
         StockDistributionType.FoldedNormal: {"stddev": float},
         StockDistributionType.Weibull: {"shape": float, "scale": float},
