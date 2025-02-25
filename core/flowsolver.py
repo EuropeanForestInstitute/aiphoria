@@ -6,7 +6,8 @@ import tqdm as tqdm
 from pandas import DataFrame
 
 from core.datastructures import Process, Flow, Stock, ScenarioData, Scenario, Indicator
-from core.parameters import ParameterName, ParameterLandfillDecayType, ParameterLandfillKey
+from core.parameters import ParameterName, ParameterLandfillDecayType, ParameterLandfillKey, StockDistributionType, \
+    StockDistributionParameter
 from core.types import FunctionType
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
 
@@ -61,7 +62,7 @@ class FlowSolver(object):
 
         # Prepare flows for all timesteps
         for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
-            self._prepare_flows_for_timestep(flow_id_to_flow)
+            self._prepare_flows_for_timestep(flow_id_to_flow, year)
 
         # Get and store indicator names from scenario.scenario_data
         self._indicator_name_to_indicator = scenario.scenario_data.indicator_name_to_indicator
@@ -606,7 +607,7 @@ class FlowSolver(object):
             total += flow.get_evaluated_value_for_indicator(indicator_name)
         return total
 
-    def _prepare_flows_for_timestep(self, flow_id_to_flow: Dict[str, Flow]):
+    def _prepare_flows_for_timestep(self, flow_id_to_flow: Dict[str, Flow], year: int):
         """
         Prepare flows for timestep:
         - Mark all absolute flows as evaluated and set flow.value to flow.evaluated_value
@@ -630,7 +631,7 @@ class FlowSolver(object):
                 flow.evaluated_value = 0.0
 
             # Mark flow prioritized
-            process = self.get_process(flow.target_process_id)
+            process = self.get_process(flow.target_process_id, year)
             if process.location in self._prioritized_locations:
                 flow.is_prioritized = True
 
@@ -676,7 +677,6 @@ class FlowSolver(object):
 
                 # Reduce total inflows to baseline stock by total prioritized outflows
                 total_inflows_to_stock = total_inflows - total_outflows_prioritized
-                print("Total inflows to stock:", total_inflows_to_stock)
 
                 # Update baseline DSM
                 baseline_dsm = self.get_baseline_dynamic_stocks()[process_id]
@@ -790,7 +790,7 @@ class FlowSolver(object):
 
         # Mark all absolute flows as evaluated at the start of each timestep and also
         # mark all flows that have target process ID in prioritized transform stage as prioritized
-        self._prepare_flows_for_timestep(self._current_flow_id_to_flow)
+        self._prepare_flows_for_timestep(self._current_flow_id_to_flow, self._year_current)
 
         # Each year evaluate dynamic stock outflows and related outflows as evaluated
         # NOTE: All outflows from process with stocks are initialized as evaluated relative flows
@@ -1060,8 +1060,10 @@ class FlowSolver(object):
                 shape = stock.stock_distribution_params.get("shape", 1.0)
                 scale = stock.stock_distribution_params.get("scale", 1.0)
 
-                if stock.stock_distribution_type in [ParameterLandfillDecayType.Wood, ParameterLandfillDecayType.Paper]:
-                    condition = stock.stock_distribution_params[ParameterLandfillKey.Condition]
+                # For new decay functions
+                landfill_decay_types = [StockDistributionType.LandfillDecayWood, StockDistributionType.LandfillDecayWood]
+                if stock.stock_distribution_type in landfill_decay_types:
+                    condition = stock.stock_distribution_params[StockDistributionParameter.Condition]
 
             # Stock parameters
             stock_years = np.array(self._years)
@@ -1073,7 +1075,7 @@ class FlowSolver(object):
                 'StdDev': [stddev],
                 'Shape': [shape],
                 'Scale': [scale],
-                ParameterLandfillKey.Condition: [condition],
+                StockDistributionParameter.Condition: [condition],
             }
 
             # Baseline DSM

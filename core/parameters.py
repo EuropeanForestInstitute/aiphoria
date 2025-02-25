@@ -2,6 +2,8 @@
 # and DataProvider file provides the default
 # values for each parameter
 from enum import Enum
+from typing import Dict, Any
+
 
 class ParameterName(str, Enum):
     """
@@ -93,3 +95,172 @@ class ParameterLandfillKey(str, Enum):
         return str(self.value)
 
     Condition: str = "condition"
+
+# Parameters used for Process/Flows/Stocks in settings file
+
+
+class StockDistributionType(str, Enum):
+    """
+    Stock distribution types and decay functions
+    """
+    Fixed: str = "Fixed"
+    Normal: str = "Normal"
+    LogNormal: str = "LogNormal"
+    FoldedNormal: str = "FoldedNormal"
+    Weibull: str = "Weibull"
+    Simple: str = "Simple"
+    LandfillDecayWood: str = "LandfillDecayWood"
+    LandfillDecayPaper: str = "LandfillDecayPaper"
+
+
+class LandfillDecayParameter(str, Enum):
+    """
+    Parameter names for LandFillDecay* types
+    """
+    Condition: str = "condition"
+
+
+# *********************************
+# * Stock distribution parameters *
+# *********************************
+
+class StockDistributionParameter(str, Enum):
+    """
+    Stock distribution parameters.
+    """
+    StdDev: str = "stddev"
+    Shape: str = "shape"
+    Scale: str = "scale"
+    Condition: str = "condition"
+
+
+class StockDistributionParameterValueType(object):
+    """
+    Storage class for stock distribution parameters.
+    Emulates Dictionary behaviour allowing to get value using
+    the [] notation e.g.
+        StockDistributionParameterValueType[StockDistributionParameter.StdDev]
+        StockDistributionParameterValueType["stddev"]
+    """
+    parameter_to_value_type = {
+        StockDistributionParameter.StdDev: float,
+        StockDistributionParameter.Shape: float,
+        StockDistributionParameter.Scale: float,
+        StockDistributionParameter.Condition: str,
+    }
+
+    def __class_getitem__(cls, item):
+        """
+        Get value type for StockDistributionParameter
+
+        :param item: Item (str or StockDistributionParameter)
+        :return:
+        """
+        item_enum = None
+        if isinstance(item, str):
+            try:
+                item_enum = StockDistributionParameter(item)
+            except ValueError:
+                pass
+
+        if item_enum is None:
+            #raise Exception("{} is not valid StockDistributionParameter".format(item_enum))
+            pass
+
+        value_type = cls.parameter_to_value_type.get(item_enum, None)
+        if value_type is None:
+            #raise Exception("No value type for {}!".format(item_enum))
+            pass
+
+        return value_type
+
+
+class RequiredStockDistributionParameters(object):
+    """
+    Storage class for required stock distribution parameters.
+    Emulates Dictionary behaviour allowing to get value using
+    the [] notation e.g.
+        RequiredStockDistributionParameters[StockDistributionType.Fixed]
+        RequiredStockDistributionParameters["Fixed"]
+    """
+
+    # NOTE: value must be dictionary
+    # NOTE: Key = StockDistributionType, Value: Dictionary (str -> required type)
+    stock_distribution_to_required_params = {
+        StockDistributionType.Fixed: {},
+        StockDistributionType.Normal: {"stddev": str},
+        StockDistributionType.LogNormal: {"stddev": float},
+        StockDistributionType.FoldedNormal: {"stddev": float},
+        StockDistributionType.Weibull: {"shape": float, "scale": float},
+        StockDistributionType.Simple: {},
+        StockDistributionType.LandfillDecayWood: {"condition": str},
+        StockDistributionType.LandfillDecayPaper: {"condition": str},
+    }
+
+    def __class_getitem__(cls, item) -> Dict[str, Any]:
+        """
+        Get required parameters for StockDistributionType.
+        Parameter 'item' can be either string or StockDistributionType-instance.
+
+        :param item: String or instance of StockDistributionType
+        :return: Dictionary of required parameters (key = parameter name, value = type of required parameter e.g. float)
+        """
+
+        # Convert string to StockDistributionType Enum
+        item_enum = None
+        if isinstance(item, str):
+            try:
+                item_enum = StockDistributionType(item)
+            except ValueError:
+                pass
+
+        if item_enum is None:
+            # raise Exception("{} is not in RequiredStockDistributionParameters".format(item_name))
+            pass
+
+        params = cls.stock_distribution_to_required_params.get(item_enum, None)
+        if params is None:
+            # raise Exception("{} is not valid StockDistributionType!".format(item_enum))
+            pass
+
+        return params
+
+
+class AllowedStockDistributionParameterValues(object):
+    """
+    Storage class for required stock distribution parameter values.
+    Emulates Dictionary behaviour allowing to get value using
+    the [] notation e.g.
+        AllowedStockDistributionParameterValues[StockDistributionType.Fixed]
+        AllowedStockDistributionParameterValues["Fixed"]
+    """
+
+    # NOTE: value must be dictionary
+    # NOTE: Key = StockDistributionType, Value: Dictionary (str -> required type)
+    stock_distribution_param_to_allowed_values = {
+        StockDistributionParameter.Condition: {"Dry": str, "Wet": str, "Managed": str}
+    }
+
+    def __class_getitem__(cls, item) -> Dict[str, Any]:
+        """
+        Get allowed parameters for StockDistributionParameter.
+        Parameter 'item' can be either string or StockDistributionParameter-instance.
+
+        :param item: String or instance of StockDistributionParameter
+        :return: Dictionary of allowed entries (key: StockDistributionParameter-instance, value: type)
+        """
+
+        # Convert string to StockDistributionParameter Enum
+        item_enum = None
+        if isinstance(item, str):
+            try:
+                item_enum = StockDistributionParameter(item)
+            except ValueError:
+                pass
+
+        # If item_enum is not found in list of allowed values then return empty Dictionary
+        params = cls.stock_distribution_param_to_allowed_values.get(item_enum, None)
+        if params is None:
+            params = {}
+
+        return params

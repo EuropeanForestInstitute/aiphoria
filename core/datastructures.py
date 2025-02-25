@@ -1,8 +1,7 @@
 import copy
 from builtins import float
 from typing import Tuple, List, Union, Dict, Any
-
-from core.parameters import ParameterLandfillKey
+from core.parameters import ParameterLandfillKey, StockDistributionParameter, StockDistributionParameterValueType
 from core.types import FunctionType, ChangeType
 
 
@@ -164,10 +163,10 @@ class Process(ObjectBase):
         self._stock_distribution_type = params.iloc[6]
         self._stock_distribution_params = params.iloc[7]
 
-        success, messages = self._parse_and_set_distribution_params(s=params.iloc[7], row_number=row_number)
-        if not success:
-            for msg in messages:
-                print("{}".format(msg))
+        # Parse stock distribution parameters
+        # NOTE: Event invalid key-value -pairs are stored to _stock_distribution_params after parsin
+        # and those are checked in datachecker
+        self._parse_and_set_distribution_params(params.iloc[7])
 
         self._wood_content = params.iloc[8]
         self._wood_content_source = params.iloc[9]
@@ -340,67 +339,64 @@ class Process(ObjectBase):
     def label_in_graph(self, value: str):
         self._label_in_graph = value
 
-    def _parse_and_set_distribution_params(self, s: str, row_number: int = -1) -> Tuple[bool, list[str]]:
+    def _parse_and_set_distribution_params(self, s: str):
         """
         Parse keys from string for distribution parameters.
-        Valid keys for distribution parameters are:
-        - stddev
-        - shape
-        - scale
-
-        :param s: String containing distribution parameters
-        :return: Tuple (was parsing successful success, error messages)
         """
 
-        # Try converting s to float. If successful, set the value and return success
-        success = True
-        messages = []
         try:
             # Check if cell contains only value
             self._stock_distribution_params = float(s)
-            return success, messages
-        except ValueError:
-            pass
+            return
+        except (ValueError, TypeError):
+            if s is None:
+                return
 
         params = {}
-        if s.find(',') >= 0:
-            # Try parsing keys from the string, format: key=value, key1=value1, etc.
-            for entry in s.split(","):
-                key, value = entry.strip().split("=")
-                try:
-                    param_name = key.lower()
-                    param_value = float(value)
-                    params[param_name] = param_value
-                except ValueError as ex:
-                    success = False
-                    messages.append("No value defined for distribution parameter key '{}' for Process {} in row {}!".format(
-                        key, id, row_number))
+        has_multiple_params = s.find(',') > 0
+        if not has_multiple_params:
+            # Single parameter
+            entry = s
+            k = None
+            v = None
+            if entry.find("=") >= 0:
+                # Has key=value
+                k, v = entry.split("=")
+                k = k.strip()
+                v = v.strip()
+            else:
+                # Only key, no value
+                k = entry.strip()
+                v = None
+
+            # Convert to target value type if definition exists
+            value_type = StockDistributionParameterValueType[k]
+            if value_type is not None:
+                v = value_type(v)
+
+            params[k] = v
+
         else:
-            # Try parsing keys from the string, format: key=value, key1=value1, etc.
-            try:
-                key, value = s.split("=")
-                if key == ParameterLandfillKey.Condition:
-                    param_name = key.lower()
-                    params[param_name] = value
+            # Multiple parameters, separated by ','
+            for entry in s.split(","):
+                k = None
+                v = None
+                if entry.find("=") >= 0:
+                    k, v = entry.split("=")
+                    k = k.strip()
+                    v = v.strip()
                 else:
-                    param_name = key.lower()
-                    param_value = float(value)
-                    params[param_name] = param_value
+                    k = entry.strip()
+                    v = None
 
-            except ValueError as ex:
-                success = False
-                messages.append("No value defined for distribution parameter key '{}' for Process {} in row {}!".format(
-                    key, id, row_number))
+                # Convert to target value type if definition exists
+                value_type = StockDistributionParameterValueType[k]
+                if value_type is not None:
+                    v = value_type(v)
 
+                params[k] = v
 
-        # Parsing keys was not successful
-        if not success:
-            return success, messages
-
-        # Update the stock distribution params to instance
         self._stock_distribution_params = params
-        return success, messages
-
 
 class Flow(ObjectBase):
     def __init__(self, params=None, row_number=-1):

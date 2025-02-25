@@ -1,4 +1,5 @@
 import copy
+from enum import Enum
 from typing import List, Dict, Tuple, Set, Any
 
 import numpy as np
@@ -6,7 +7,8 @@ import pandas as pd
 
 from core.dataprovider import DataProvider
 from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color, ProcessEntry
-from core.parameters import ParameterName, ParameterFillMethod, ParameterLandfillDecayType, ParameterLandfillKey
+from core.parameters import ParameterName, ParameterFillMethod, ParameterLandfillDecayType, ParameterLandfillKey, \
+    StockDistributionType, RequiredStockDistributionParameters, AllowedStockDistributionParameterValues
 from core.types import FunctionType, ChangeType
 
 
@@ -1227,8 +1229,8 @@ class DataChecker(object):
         """
         errors = []
         print("Checking stock distribution types...")
-        allowed_distribution_types = ["Fixed", "Simple", "Normal", "LogNormal", "FoldedNormal", "Weibull", "Weibull",
-                                      ParameterLandfillDecayType.Wood, ParameterLandfillDecayType.Paper]
+        allowed_distribution_types = set([name.value for name in StockDistributionType])
+
         for process in processes:
             if process.stock_distribution_type not in allowed_distribution_types:
                 msg = "Process {} has invalid stock distribution type '{}' in row {} in sheet '{}'".format(
@@ -1269,44 +1271,52 @@ class DataChecker(object):
                 errors.append(msg)
                 continue
 
-            # Fixed uses Mean
-            # Simple uses Mean
-            # Normal uses Mean and StdDev
-            # FoldedNormal uses Mean and StdDev
-            # LogNormal uses Mean and StdDev
-            required_params_for_distribution_type = {
-                "Fixed": [""],
-                "Simple": [""],
-                "Normal": ['stddev'],
-                "FoldedNormal": ['stddev'],
-                "LogNormal": ['stddev'],
-                "Weibull": ['shape', 'scale'],
-                ParameterLandfillDecayType.Wood.value: [ParameterLandfillKey.Condition.value],
-                ParameterLandfillDecayType.Paper.value: [ParameterLandfillKey.Condition.value],
-            }
-
+            # Check that all required stock distribution parameters are present and have valid type
+            found_params = process.stock_distribution_params
+            required_params = RequiredStockDistributionParameters[process.stock_distribution_type]
             is_float = type(process.stock_distribution_params) is float
-            required_params = required_params_for_distribution_type[process.stock_distribution_type]
             num_required_params = len(required_params)
-            for param in required_params:
-                if num_required_params > 1 and is_float:
-                    msg = "Stock distribution parameters was number, following parameters are required "
-                    msg += "for distribution type '{}'".format(process.stock_distribution_type)
-                    errors.append(msg)
-                    for p in required_params:
+            if (not num_required_params) and (not is_float):
+                s = "Stock distribution parameter must be float for distribution type '{}' for process '{}' in row {}".format(
+                    process.stock_distribution_type, process.id, process.row_number)
+                errors.append(s)
+                continue
+
+            for required_param_name, required_param_value_type in required_params.items():
+                # Check if only float was provided
+                if num_required_params and is_float:
+                    s = "Stock distribution parameters was number, following parameters are required "
+                    s += "for distribution type '{}' for process '{}' in row {}".format(
+                        process.stock_distribution_type, process.id, process.row_number)
+                    errors.append(s)
+                    for p in required_params.keys():
                         errors.append("\t{}".format(p))
 
-                if not is_float:
-                    if isinstance(param, ParameterLandfillKey):
-                        param = param.value
+                    continue
 
-                    if param not in process.stock_distribution_params:
-                        errors.append("Stock distribution type '{}' needs following additional parameters:".format(
-                            process.stock_distribution_type))
-                        errors.append("\t{}".format(param))
+                # Check if required parameter name is found in stock distribution parameters
+                if required_param_name not in found_params:
+                    s = "Stock distribution type '{}' needs following parameters for process '{}' in row {}:".format(
+                        process.stock_distribution_type, process.id, process.row_number)
+                    errors.append(s)
+                    for p in required_params:
+                        errors.append("\t{}".format(p))
+                    continue
 
-            if errors:
-                return not errors, errors
+                # Check if parameter has proper value type
+                for found_param_name, found_param_value in found_params.items():
+                    allowed_parameter_values = AllowedStockDistributionParameterValues[found_param_name]
+                    if found_param_value not in allowed_parameter_values:
+                        s = "Stock distribution parameter '{}' needs following parameters for process '{}' in row {}:".format(
+                            process.stock_distribution_type, process.id, process.row_number)
+                        errors.append(s)
+                        for p in allowed_parameter_values:
+                            errors.append("\t{}".format(p))
+
+                if errors:
+                    return not errors, errors
+
+                pass
 
         return not errors, errors
 
