@@ -271,12 +271,13 @@ class DynamicStockModel(object):
                     if self.lt['Shape'][m] != 0:  # For products with lifetime of 0, sf == 0
                         self.sf[m::,m] = scipy.stats.weibull_min.sf(np.arange(0,len(self.t)-m), c=self.lt['Shape'][m], loc = 0, scale=self.lt['Scale'][m])
 
-            elif self.lt['Type'] in ['LandfillDecayWood', 'LandfillDecayPaper']:
-                decay_rates = {'LandfillDecayWood': 0.05, 'LandfillDecayPaper': 0.025}
-                doc_values = {'LandfillDecayWood': 0.5, 'LandfillDecayPaper': 0.4}
-                doc_f_values = {'LandfillDecayWood': 0.77, 'LandfillDecayPaper': 0.5}
+            elif self.lt['Type'] in ['LandfillDecayWood', 'LandfillDecayPaper']: # FOD method IPCC https://www.ipcc-nggip.iges.or.jp/public/2019rf/pdf/5_Volume5/19R_V5_3_Ch03_SWDS.pdf
+                decay_rates = {'LandfillDecayWood': 0.05, 'LandfillDecayPaper': 0.025} # IPCC default decay rates
+                doc_values = {'LandfillDecayWood': 0.5, 'LandfillDecayPaper': 0.4} # IPCC default fraction of degradable organic carbon (DOC) for paper and wood
+                doc_f_values = {'LandfillDecayWood': 0.77, 'LandfillDecayPaper': 0.5} # IPCC default fraction of DOC that decomposes (DOC_f) for paper and wood
 
-                landfill_adjustments = {'Dry': 1.0, 'Wet': 1.2, 'Managed': 1.5}
+                #The landfill adjustments are scaling factors applied to modify the default decay rates (k values) or half-lives (t1/2) of degradable organic carbon (DOC) in landfills under different conditions.
+                landfill_adjustments = {'Dry': 1.0, 'Wet': 1.2, 'Managed': 1.5} # Dry: no adjustment for dry landfills (set to 1); Wet:20% faster decay in wet landfills (k=0.024); Managed:50% faster decay in managed (k=0.03). Note: common k=0.02 is used as the ratios relative to the dry condition
 
                 # Get the value for landfill type
                 lt_type = self.lt['Type']
@@ -287,13 +288,17 @@ class DynamicStockModel(object):
 
                 DOC = self.lt.get('DOC', doc_values[lt_type])
                 DOC_f = self.lt.get('DOC_f', doc_f_values[lt_type])
+                # IPCC default methane correction factor (MCF)
                 MCF = self.lt.get('MCF', 1.0)
+                # IPCC default fraction of methane in landfill gas (F)
                 F = self.lt.get('F', 0.5)
+                # IPCC default fraction of methane recovered (R)
                 R = self.lt.get('R', 0.0)
+                # IPCC default oxidation factor (OX)
                 OX = self.lt.get('OX', 0.0)
 
-                for m in range(len(self.t)):
-                    decay_factors = np.exp(-k_adjusted * np.arange(len(self.t) - m))
+                for m in range(len(self.t)): # Loop over each cohort index
+                    decay_factors = np.exp(-k_adjusted * np.arange(len(self.t) - m)) # Compute decay factors for this cohort
                     DDOCm_decomposed = 1 - decay_factors
                     CH4_generated = DDOCm_decomposed * DOC * DOC_f * MCF * F * (16 / 12)
 
