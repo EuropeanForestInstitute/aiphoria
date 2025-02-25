@@ -27,6 +27,7 @@ class FlowSolver(object):
 
         # Prioritized transformation stages
         self._model_params = self._scenario.model_params
+        self._prioritized_locations = self._model_params[ParameterName.PrioritizeLocations]
         self._prioritized_transformation_stages = self._model_params[ParameterName.PrioritizeTransformationStages]
 
         # Time
@@ -456,9 +457,31 @@ class FlowSolver(object):
     def _get_year_to_process_id_to_process(self) -> Dict[int, Dict[str, Process]]:
         return self._year_to_process_id_to_process
 
-    # TODO: NEW
+    def _get_current_year_flow_id_to_flow(self) -> Dict[str, Flow]:
+        """
+        Get current year flow ID to Flow mappings.
+
+        :return: Dictionary (Flow ID -> Flow)
+        """
+        return self._year_to_flow_id_to_flow[self._year_current]
+
     def _get_current_year_process_id_to_process(self) -> Dict[str, Process]:
+        """
+        Get current year process ID to Process mappings.
+
+        :return: Dictionary (Process ID -> Process)
+        """
         return self._year_to_process_id_to_process[self._year_current]
+
+    def _get_current_year_process_id_to_to_flow_ids(self) -> Dict[str, List[str]]:
+        """
+        Get current year Process ID to Flow ID mappings.
+
+        :return: Dictionary (Process ID -> List of Flow IDs)
+        """
+        return self._year_to_process_id_to_flow_ids[self._year_to_process_id_to_process]
+
+
 
     # TODO: NEW
     def _get_year_to_flow_id_to_flow(self) -> Dict[int, Dict[str, Flow]]:
@@ -606,7 +629,11 @@ class FlowSolver(object):
                 flow.evaluated_share = flow.value / 100.0
                 flow.evaluated_value = 0.0
 
+            # Mark flow prioritized
             process = self.get_process(flow.target_process_id)
+            if process.location in self._prioritized_locations:
+                flow.is_prioritized = True
+
             if process.transformation_stage in self._prioritized_transformation_stages:
                 flow.is_prioritized = True
 
@@ -628,8 +655,6 @@ class FlowSolver(object):
 
                 # Flow prioritization:
                 # Ignore inflow amount to stock for outflows that are prioritized.
-                # Flow prioritization is defined by flow having target process with transformation stage
-                # defined in "prioritized_transformation_stages" parameter
                 total_outflows_prioritized = 0.0
                 prioritized_outflows = {}
                 for flow in outflows:

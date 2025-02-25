@@ -164,13 +164,20 @@ class DataProvider(object):
              "Each process ID must be separated by comma (',')",
              [],
              ],
-            [ParameterName.PrioritizeTransformationStages,
+            [ParameterName.PrioritizeLocations,
              list,
-             "Prioritize transformation stages. If stock is outflowing to prioritized transformation stage, then "
+             "Prioritize process locations. If stock is outflowing to prioritized location, then "
              "ignore that amount as inflows to stock. This is to simulate trade flows happening during the timestep "
              "which should not go in to the stock",
              [],
-            ]
+            ],
+            [ParameterName.PrioritizeTransformationStages,
+             list,
+             "Prioritize process transformation stages. If stock is outflowing to prioritized transformation stage, "
+             "then ignore that amount as inflows to stock. This is to simulate trade flows happening during "
+             "the timestep which should not go in to the stock",
+             [],
+             ]
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}
@@ -484,7 +491,6 @@ class DataProvider(object):
 
         result = []
         for process in processes:
-            # TODO: Enum the new stock decay function name
             if process.stock_lifetime == 0:
                 continue
 

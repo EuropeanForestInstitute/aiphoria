@@ -149,14 +149,6 @@ class DataChecker(object):
             if not ok:
                 raise Exception(errors)
 
-        # # Create and propagate flow data for missing years
-        # df_year_to_flows = self._create_flow_data_for_missing_years(
-        #     df_year_to_flows,
-        #     fill_missing_absolute_flows=fill_missing_absolute_flows,
-        #     fill_missing_relative_flows=fill_missing_relative_flows,
-        #     fill_method=fill_method
-        # )
-
         # Create and propagate flow data for missing years
         df_year_to_flows = self._create_flow_data_for_missing_years(
             df_year_to_flows,
@@ -208,6 +200,11 @@ class DataChecker(object):
 
         print("Checking isolated/unconnected processes...")
         ok, errors = self._check_for_isolated_processes(df_year_to_process_flows)
+        if not ok:
+            raise Exception(errors)
+
+        print("Checking prioritized locations...")
+        ok, errors = self._check_prioritized_locations(self._processes, model_params)
         if not ok:
             raise Exception(errors)
 
@@ -452,6 +449,28 @@ class DataChecker(object):
         for transformation_stage in prioritized_transform_stages:
             if transformation_stage not in found_transformation_stages:
                 s = "Transformation stage '{}' is not used in any Processes".format(transformation_stage)
+                errors.append(s)
+
+        return not errors, errors
+
+    def _check_prioritized_locations(self, processes: List[Process], model_params: Dict[str, Any])\
+            -> Tuple[bool, List[str]]:
+        """
+        Check that prioritized locations are valid location names.
+
+        :param processes: List of Processes
+        :param model_params: Model parameters (Dictionary)
+        :return: Tuple (has errors (bool), list of errors (str))
+        """
+        errors = []
+        prioritized_locations = model_params[ParameterName.PrioritizeLocations]
+        found_locations = set()
+        for process in processes:
+            found_locations.add(process.location)
+
+        for location in prioritized_locations:
+            if location not in prioritized_locations:
+                s = "Location '{}' is not used in any Processes".format(location)
                 errors.append(s)
 
         return not errors, errors
@@ -844,36 +863,6 @@ class DataChecker(object):
                         errors.append(s)
 
         return not errors, errors
-
-    # def _check_flow_type_changes(self, df_year_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
-    #     """
-    #     Check that flows do not change the type during the simulation.
-    #
-    #     :param df_year_to_flows: DataFrame
-    #     :return: Tuple (bool, list of errors)
-    #     """
-    #     errors = []
-    #     for flow_id in df_year_to_flows.columns:
-    #         is_flow_abs_entry = []
-    #         flow_data = df_year_to_flows[flow_id]
-    #         for year, flow in flow_data.items():
-    #             if pd.notna(flow):
-    #                 new_entry = [flow.is_unit_absolute_value, year]
-    #                 is_flow_abs_entry.append(new_entry)
-    #
-    #         # Compare the rest of the list for the first state
-    #         initial_entry = is_flow_abs_entry[0]
-    #         is_same_as_initial_state = [entry[0] == initial_entry[0] for entry in is_flow_abs_entry]
-    #         if not all(is_same_as_initial_state):
-    #             source_type_name = "absolute" if initial_entry[0] else "relative"
-    #             target_type_name = "relative" if initial_entry[0] else "absolute"
-    #             for entry in is_flow_abs_entry:
-    #                 if entry[0] != initial_entry[0]:
-    #                     s = "\t- Flow '{}' was defined initially as {} in year {} but changed to {} in year {}".format(
-    #                         flow_id, source_type_name, initial_entry[1], target_type_name, entry[1])
-    #                     errors.append(s)
-    #
-    #     return not errors, errors
 
     def _check_relative_flow_errors(self, df_year_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
         """
@@ -1650,8 +1639,6 @@ class DataChecker(object):
                     s = "INFO: Color definition name '{}' is not transformation stage name (row {})".format(
                         color.name, color.row_number)
                     print(s)
-
-            # TODO: Should all transformation stage colors be defined?
 
             if row_errors:
                 msg = "errors" if len(row_errors) > 1 else "error"
