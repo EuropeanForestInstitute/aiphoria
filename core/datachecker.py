@@ -7,8 +7,8 @@ import pandas as pd
 
 from core.dataprovider import DataProvider
 from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color, ProcessEntry
-from core.parameters import ParameterName, ParameterFillMethod, ParameterLandfillDecayType, ParameterLandfillKey, \
-    StockDistributionType, RequiredStockDistributionParameters, AllowedStockDistributionParameterValues
+from core.parameters import ParameterName, ParameterFillMethod, StockDistributionType,\
+    RequiredStockDistributionParameters, AllowedStockDistributionParameterValues
 from core.types import FunctionType, ChangeType
 
 

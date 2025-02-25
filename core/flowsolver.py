@@ -6,8 +6,7 @@ import tqdm as tqdm
 from pandas import DataFrame
 
 from core.datastructures import Process, Flow, Stock, ScenarioData, Scenario, Indicator
-from core.parameters import ParameterName, ParameterLandfillDecayType, ParameterLandfillKey, StockDistributionType, \
-    StockDistributionParameter
+from core.parameters import ParameterName, StockDistributionType, StockDistributionParameter
 from core.types import FunctionType
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
 

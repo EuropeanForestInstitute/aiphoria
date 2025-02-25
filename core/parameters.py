@@ -85,20 +85,7 @@ class ParameterFillMethod(str, Enum):
     Interpolate: str = "Interpolate"
 
 
-class ParameterLandfillDecayType(str, Enum):
-    Wood: str = "LandfillDecayWood"
-    Paper: str = "LandfillDecayPaper"
-
-
-class ParameterLandfillKey(str, Enum):
-    def __str__(self) -> str:
-        return str(self.value)
-
-    Condition: str = "condition"
-
 # Parameters used for Process/Flows/Stocks in settings file
-
-
 class StockDistributionType(str, Enum):
     """
     Stock distribution types and decay functions
