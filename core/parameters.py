@@ -69,6 +69,7 @@ class ParameterName(str, Enum):
 
     # Flow prioritization
     PrioritizeTransformationStages: str = "prioritize_transformation_stages"
+    PrioritizeLocations: str = "prioritize_locations"
 
 
 class ParameterFillMethod(str, Enum):

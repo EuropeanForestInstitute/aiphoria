@@ -204,9 +204,8 @@ def build_mfa_system_for_scenario(scenario: Scenario):
             # Get all evaluated values and set those to ODYM flow
             solved_flow = flow_solver.get_flow(year=year_index_to_year[year_index], flow_id=flow_id)
 
-            # TODO: NEW, allow making "holes" to DataFrame
+            # If flow is not present this year, use 0.0 value
             if not isinstance(solved_flow, Flow):
-                # Flow is not present this year, fill with empty values
                 for index, indicator_name in enumerate(indicator_names):
                     flow.Values[year_index, index] = 0.0
                 continue

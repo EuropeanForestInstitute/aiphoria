@@ -211,6 +211,11 @@ class DataChecker(object):
         if not ok:
             raise Exception(errors)
 
+        print("Checking prioritized locations...")
+        ok, errors = self._check_prioritized_locations(self._processes, model_params)
+        if not ok:
+            raise Exception(errors)
+
         print("Checking prioritized transformation stages...")
         ok, errors = self._check_prioritized_transformation_stages(self._processes, model_params)
         if not ok:
@@ -452,6 +457,28 @@ class DataChecker(object):
         for transformation_stage in prioritized_transform_stages:
             if transformation_stage not in found_transformation_stages:
                 s = "Transformation stage '{}' is not used in any Processes".format(transformation_stage)
+                errors.append(s)
+
+        return not errors, errors
+
+    def _check_prioritized_locations(self, processes: List[Process], model_params: Dict[str, Any])\
+            -> Tuple[bool, List[str]]:
+        """
+        Check that prioritized locations are valid transformation location names.
+
+        :param processes: List of Processes
+        :param model_params: Model parameters (Dictionary)
+        :return: Tuple (has errors (bool), list of errors (str))
+        """
+        errors = []
+        prioritized_locations = model_params[ParameterName.PrioritizeLocations]
+        found_locations = set()
+        for process in processes:
+            found_locations.add(process.location)
+
+        for location in prioritized_locations:
+            if location not in prioritized_locations:
+                s = "Location '{}' is not used in any Processes".format(location)
                 errors.append(s)
 
         return not errors, errors
@@ -1650,8 +1677,6 @@ class DataChecker(object):
                     s = "INFO: Color definition name '{}' is not transformation stage name (row {})".format(
                         color.name, color.row_number)
                     print(s)
-
-            # TODO: Should all transformation stage colors be defined?
 
             if row_errors:
                 msg = "errors" if len(row_errors) > 1 else "error"
