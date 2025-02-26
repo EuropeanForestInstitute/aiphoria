@@ -696,12 +696,15 @@ class FlowSolver(object):
                         #   flow indicator contributes to the indicator stock
                         total_indicator_inflows_to_stock = 0.0
                         for flow in inflows:
-                            evaluated_indicator_value = flow.get_evaluated_value_for_indicator(indicator_name)
-                            correction_factor = evaluated_indicator_value / total_inflows
-                            corrected_flow_value = correction_factor * total_inflows_to_stock
-                            total_indicator_inflows_to_stock += corrected_flow_value
+                            # Prevent dividing by zero inflows to stock
+                            if total_inflows_to_stock > 0.0:
+                                evaluated_indicator_value = flow.get_evaluated_value_for_indicator(indicator_name)
+                                correction_factor = evaluated_indicator_value / total_inflows
+                                corrected_flow_value = correction_factor * total_inflows_to_stock
+                                total_indicator_inflows_to_stock += corrected_flow_value
 
                         self.accumulate_dynamic_stock_inflows(indicator_dsm, total_indicator_inflows_to_stock, year)
+
 
                 # Distribute baseline total outflow values
                 baseline_stock_outflow = self._get_dynamic_stock_outflow_value(baseline_dsm, year)
@@ -1131,16 +1134,15 @@ class FlowSolver(object):
 
                 flow.is_evaluated = True
                 flow.evaluated_value = flow.evaluated_share * stock_total_outflow
-
-                #flow.evaluate_indicator_values_from_baseline_value()
+                flow.evaluate_indicator_values_from_baseline_value()
 
         # TODO: Indicator stocks are not working properly
         # Get indicator stock outflow for year
         for stock_id, indicator_id_to_dsm in self.get_indicator_dynamic_stocks().items():
             for indicator_id, dsm in indicator_id_to_dsm.items():
-                stock_total_outflow = dsm.compute_outflow_total()[year_index]
-                print(stock_total_outflow)
+                #stock_total_outflow = dsm.compute_outflow_total()[year_index]
                 #outflows = self._get_process_indicator_outflows_total()
+                pass
 
 
 
