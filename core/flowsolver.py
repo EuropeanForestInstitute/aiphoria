@@ -719,8 +719,8 @@ class FlowSolver(object):
                     # This is error: Total absolute outflows are greater than stock outflow.
                     # It means that there is not enough flows to distribute between remaining
                     # relative outflows
-                    s = "Process {}: stock outflow is less than sum of absolute outflows in year {}!".format(
-                        process_id, year)
+                    s = "Process {}: stock outflow ({:.3f}) is less than sum of absolute outflows ({:.3f}) in year {}!".format(
+                        process_id, baseline_stock_outflow, total_outflows_rel, year)
                     raise Exception(s)
 
                 # total_outflows_rel is the remaining outflows to be distributed between all relative outflows
@@ -1055,9 +1055,9 @@ class FlowSolver(object):
 
             condition = None
             if type(stock.stock_distribution_params) is dict:
-                stddev = stock.stock_distribution_params.get("stddev", 1.0)
-                shape = stock.stock_distribution_params.get("shape", 1.0)
-                scale = stock.stock_distribution_params.get("scale", 1.0)
+                stddev = stock.stock_distribution_params.get(StockDistributionParameter.StdDev, 1.0)
+                shape = stock.stock_distribution_params.get(StockDistributionParameter.Shape, 1.0)
+                scale = stock.stock_distribution_params.get(StockDistributionParameter.Scale, 1.0)
 
                 # For new decay functions
                 landfill_decay_types = [StockDistributionType.LandfillDecayWood, StockDistributionType.LandfillDecayWood]
@@ -1131,6 +1131,18 @@ class FlowSolver(object):
 
                 flow.is_evaluated = True
                 flow.evaluated_value = flow.evaluated_share * stock_total_outflow
+
+                #flow.evaluate_indicator_values_from_baseline_value()
+
+        # TODO: Indicator stocks are not working properly
+        # Get indicator stock outflow for year
+        for stock_id, indicator_id_to_dsm in self.get_indicator_dynamic_stocks().items():
+            for indicator_id, dsm in indicator_id_to_dsm.items():
+                stock_total_outflow = dsm.compute_outflow_total()[year_index]
+                print(stock_total_outflow)
+                #outflows = self._get_process_indicator_outflows_total()
+
+
 
     def _get_dynamic_stock_outflow_value(self, dsm: DynamicStockModel, year: int) -> float:
         """
