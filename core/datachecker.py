@@ -1268,6 +1268,12 @@ class DataChecker(object):
                     process.id, process.stock_lifetime, process.row_number, self._dataprovider.sheet_name_processes)
                 errors.append(msg)
 
+            if process.stock_lifetime > len(self._years):
+                msg = "Process {} has stock with lifetime ({}) greater than length of simulation ({}) in row {} in sheet '{}'".format(
+                    process.id, process.stock_lifetime, len(self._years), process.row_number,
+                    self._dataprovider.sheet_name_processes)
+                errors.append(msg)
+
             if errors:
                 return not errors, errors
 
