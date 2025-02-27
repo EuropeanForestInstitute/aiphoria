@@ -276,7 +276,7 @@ class FlowSolver(object):
             total += flow.evaluated_value
         return total
 
-    def get_process_outflows_total(self, process_id: str, year: str = -1) -> float:
+    def get_process_outflows_total(self, process_id: str, year: int = -1) -> float:
         """
         Get total outflows (baseline) for Process ID.
 
@@ -473,21 +473,32 @@ class FlowSolver(object):
         """
         return self._year_to_process_id_to_process[self._year_current]
 
-    def _get_current_year_process_id_to_to_flow_ids(self) -> Dict[str, List[str]]:
+    def _get_current_year_process_id_to_to_flow_ids(self) -> Dict[str, Dict[str, List[str]]]:
         """
         Get current year Process ID to Flow ID mappings.
 
-        :return: Dictionary (Process ID -> List of Flow IDs)
+        :return: Dictionary (Process ID -> Dictionary (keys "in", "out") -> List of Flow IDs)
         """
-        return self._year_to_process_id_to_flow_ids[self._year_to_process_id_to_process]
+        return self._year_to_process_id_to_flow_ids[self._year_current]
 
-
-
-    # TODO: NEW
     def _get_year_to_flow_id_to_flow(self) -> Dict[int, Dict[str, Flow]]:
+        """
+        Get year to Flow ID to Flow mappings
+
+        :return: Dictionary (Year -> Flow ID -> Flow)
+        """
         return self._year_to_flow_id_to_flow
 
     def _get_process_inflow_ids(self, process_id: str, year: int = -1) -> List[str]:
+        """
+        Get list of inflow IDs to Process for target year.
+        If year is not provided then uses the current year.
+
+        :param process_id: Target Process ID
+        :param year: Target year
+
+        :return: List of inflow IDs (Flow)
+        """
         result = []
         if year >= 0:
             result = self._year_to_process_id_to_flow_ids[year][process_id]["in"]
@@ -501,6 +512,16 @@ class FlowSolver(object):
         return result
 
     def _get_process_outflow_ids(self, process_id: str, year: int = -1) -> List[str]:
+        """
+        Get list of outflow IDs from Process for target year.
+        If year is not provided then uses the current year.
+
+        :param process_id: Target Process ID
+        :param year: Target year
+
+        :return: List of outflow IDs (Flow)
+        """
+
         result = []
         if year >= 0:
             result = self._year_to_process_id_to_flow_ids[year][process_id]["out"]
@@ -529,10 +550,10 @@ class FlowSolver(object):
     # Get list of outflows (DataFlows)
     def _get_process_outflows(self, process_id: str, year: int = -1) -> List[Flow]:
         """
-        Get list of Process outflows for the selected year.
+        Get list of Process outflows for the target year.
 
-        :param process_id: Process ID
-        :param year: Selected year
+        :param process_id: Target Process ID
+        :param year: Target year
         :return: List of Flows
         """
         # Get list of outflows for current year
@@ -545,10 +566,10 @@ class FlowSolver(object):
 
     def _get_process_outflows_abs(self, process_id: str, year: int = -1) -> List[Flow]:
         """
-        Get list of absolute outflows from Process for the selected year.
+        Get list of absolute outflows from Process for the target year.
 
-        :param process_id: Process ID
-        :param year: Selected year
+        :param process_id: Target Process ID
+        :param year: Target year
         :return: List of absolute outflows (Flow)
         """
         outflows_abs = []
@@ -558,13 +579,12 @@ class FlowSolver(object):
                 outflows_abs.append(flow)
         return outflows_abs
 
-
     def _get_process_outflows_rel(self, process_id: str, year: int = -1) -> List[Flow]:
         """
-        Get list of relative outflows from Process for the selected year.
+        Get list of relative outflows from Process for the target year.
 
-        :param process_id: Process ID
-        :param year: Selected year
+        :param process_id: Target Process ID
+        :param year: Target year
         :return: List of relative outflows (Flow)
         """
 
@@ -611,6 +631,7 @@ class FlowSolver(object):
         Prepare flows for timestep:
         - Mark all absolute flows as evaluated and set flow.value to flow.evaluated_value
         - Normalize all relative flow values from [0%, 100%] range to [0, 1] range
+        - Mark all flows as prioritized that have target process in prioritized location or transformation stage
 
         :param flow_id_to_flow: Dictionary (Flow ID to Flow)
         """
@@ -638,6 +659,13 @@ class FlowSolver(object):
                 flow.is_prioritized = True
 
     def _evaluate_process(self, process_id: str, year: int) -> tuple[bool, List]:
+        """
+        Evaluate Process and accumulate inflows to DynamicStockModels.
+
+        :param process_id: Target Process ID
+        :param year: Target year
+        :return: Tuple (is all inflows evaluated, list of outflows to check)
+        """
         is_evaluated = False
         outflows = self._get_process_outflows(process_id, year)
 
@@ -695,16 +723,14 @@ class FlowSolver(object):
                         # - Multiply total_inflows_to_stock by this factor to get correct value how much
                         #   flow indicator contributes to the indicator stock
                         total_indicator_inflows_to_stock = 0.0
-                        for flow in inflows:
-                            # Prevent dividing by zero inflows to stock
-                            if total_inflows_to_stock > 0.0:
+                        if total_inflows_to_stock > 0.0:
+                            for flow in inflows:
                                 evaluated_indicator_value = flow.get_evaluated_value_for_indicator(indicator_name)
                                 correction_factor = evaluated_indicator_value / total_inflows
                                 corrected_flow_value = correction_factor * total_inflows_to_stock
                                 total_indicator_inflows_to_stock += corrected_flow_value
 
                         self.accumulate_dynamic_stock_inflows(indicator_dsm, total_indicator_inflows_to_stock, year)
-
 
                 # Distribute baseline total outflow values
                 baseline_stock_outflow = self._get_dynamic_stock_outflow_value(baseline_dsm, year)
@@ -745,10 +771,8 @@ class FlowSolver(object):
                 # Check that virtual flows are actually needed
                 diff = abs(total_inflows - total_outflows_abs)
                 need_virtual_flows = total_inflows < total_outflows_abs and (diff > self._virtual_flows_epsilon)
-                if not is_root and not is_leaf and total_inflows < total_outflows_abs:
+                if (not is_root and not is_leaf) and total_inflows < total_outflows_abs:
                     if self._use_virtual_flows and need_virtual_flows:
-
-                        # TODO: Show error message if inflows are not able to satisfy the defined outflow
                         print("{}: Create virtual inflow".format(year))
                         diff = total_inflows - total_outflows_abs
                         process = self.get_process(process_id, year)
@@ -786,6 +810,9 @@ class FlowSolver(object):
         return is_evaluated, outflows
 
     def _solve_timestep(self) -> None:
+        """
+        Solve current timestep.
+        """
         self._current_flow_id_to_flow = self._year_to_flow_id_to_flow[self._year_current]
         self._current_process_id_to_flow_ids = self._year_to_process_id_to_flow_ids[self._year_current]
         self._current_process_id_to_process = self._year_to_process_id_to_process[self._year_current]
@@ -799,9 +826,6 @@ class FlowSolver(object):
         # Without this mechanism the relative outflows from stocks are not possible, and it
         # would prevent in some cases the whole evaluation of scenarios with stocks.
         self._evaluate_dynamic_stock_outflows(self._year_current)
-
-        # TODO: At the start of the second timestep there already is Virtual process in list of Processes to evaluate
-        # TODO: Is this still the case?
 
         # Add all root processes (= processes with no inflows) to unvisited list
         unevaluated_process_ids = []
@@ -882,31 +906,56 @@ class FlowSolver(object):
                 for flow in unevaluated_inflows:
                     print("\t{}".format(flow))
 
-                # print("Unevaluated process IDs:")
-                # for pid in unevaluated_process_ids:
-                #     print("\t{}".format(pid))
-                raise SystemExit(-100)
+                raise Exception("Unsolvable loop detected")
 
         # Check for unreported inflows or outflows (= process mass balance != 0)
-        # and create virtual flows to balance out those processes
+        # and create virtual flows to balance out those processes.
+        # Epsilon is maximum allowed difference of process inputs and outputs before creating virtual flow
         if self._use_virtual_flows:
-            # epsilon is max allowed difference of input and outputs, otherwise create virtual processes and flows
             self._create_virtual_flows(self._year_current, self._virtual_flows_epsilon)
 
     def _advance_timestep(self) -> None:
+        """
+        Advance to next timestep.
+        """
         self._year_prev = self._year_current
         self._year_current += 1
 
-    def _create_virtual_process_id(self, process: Process):
+    def _create_virtual_process_id(self, process: Process) -> str:
+        """
+        Create virtual Process ID from target Process.
+
+        :param process: Target Process
+        :return: New vrtual Process ID
+        """
         return self._virtual_process_id_prefix + process.id
 
-    def _create_virtual_process_name(self, process: Process):
+    def _create_virtual_process_name(self, process: Process) -> str:
+        """
+        Create virtual Process name from target Process.
+
+        :param process: Target Process
+        :return: New virtual Process name
+        """
         return self._virtual_process_id_prefix + process.name
 
-    def _create_virtual_process_transformation_stage(self):
+    def _create_virtual_process_transformation_stage(self) -> str:
+        """
+        Get virtual process transformation stage.
+
+        :return:
+        """
         return self._virtual_process_transformation_stage
 
     def _create_virtual_process(self, process_id: str, process_name: str, transformation_stage: str) -> Process:
+        """
+        Create virtual Process
+
+        :param process_id: Virtual Process ID
+        :param process_name: Virtual Process name
+        :param transformation_stage: Virtual process transformation stage
+        :return: New virtual Process
+        """
         new_virtual_process = Process()
         new_virtual_process.id = process_id
         new_virtual_process.name = process_name
@@ -917,6 +966,12 @@ class FlowSolver(object):
         return new_virtual_process
 
     def _create_virtual_process_ex(self, process: Process) -> Process:
+        """
+        Create virtual Process (extended).
+
+        :param process: Target Process
+        :return: New virtual Process
+        """
         v_id = self._create_virtual_process_id(process)
         v_name = self._create_virtual_process_name(process)
         v_ts = self._create_virtual_process_transformation_stage()
@@ -924,6 +979,15 @@ class FlowSolver(object):
         return v_process
 
     def _create_virtual_flow(self, source_process_id: str, target_process_id: str, value: float, unit: str) -> Flow:
+        """
+        Create virtual flow
+
+        :param source_process_id: Source Process ID
+        :param target_process_id: Target Process ID
+        :param value: Flow value
+        :param unit: Flow unit (absolute/relative)
+        :return: New virtual Flow
+        """
         new_virtual_flow = Flow()
         new_virtual_flow.source_process_id = source_process_id
         new_virtual_flow.target_process_id = target_process_id
@@ -942,10 +1006,25 @@ class FlowSolver(object):
         return new_virtual_flow
 
     def _create_virtual_flow_ex(self, source_process: Process, target_process: Process, value: float) -> Flow:
+        """
+        Create virtual Flow (extended).
+
+        :param source_process: Source Process
+        :param target_process: Target Process
+        :param value: Flow value
+        :return: New virtual Flow
+        """
         v_flow = self._create_virtual_flow(source_process.id, target_process.id, value, "")
         return v_flow
 
     def _create_virtual_flows(self, year: int, epsilon: float = 0.1) -> None:
+        """
+        Create virtual flows to balance out process inflows and outflows.
+        NOTE: Virtual inflows are not created to processes with stocks.
+        :param year: Target year
+        :param epsilon: Maximum allowed absolute difference between total inflows and total outflows before creating
+                        virtual flow
+        """
         # Virtual outflow is unreported flow of process
         created_virtual_processes = {}
         created_virtual_flows = {}
@@ -965,6 +1044,7 @@ class FlowSolver(object):
             outflows_total = self.get_process_outflows_total(process_id, year)
 
             # If process has stock then consider only the stock outflows
+            process_mass_balance = 0.0
             if process_id in self._process_id_to_stock:
                 # Distribute baseline total outflow values
                 baseline_dsm = self.get_baseline_dynamic_stocks()[process.id]
@@ -981,14 +1061,18 @@ class FlowSolver(object):
             else:
                 # Process has no stock
                 process_mass_balance = inflows_total - outflows_total
-                if abs(process_mass_balance) < epsilon:
-                    # Inflows and outflows are balanced, do nothing and continue to next process
-                    continue
+
+            if abs(process_mass_balance) < epsilon:
+                # Total inflow and outflow difference less than epsilon, continue to next
+                continue
 
             need_virtual_inflow = process_mass_balance < 0.0
             need_virtual_outflow = process_mass_balance > 0.0
             if not need_virtual_inflow and not need_virtual_outflow:
+                # Inflows and outflows are balanced, do nothing and continue to next process
                 continue
+
+            print("{}: Creating virtual flow, inflow={}, outflow={} ({})".format(process_id, need_virtual_inflow, need_virtual_outflow, year))
 
             if need_virtual_inflow:
                 # Create new virtual Process
@@ -1042,7 +1126,7 @@ class FlowSolver(object):
 
             print("")
 
-    def _create_dynamic_stocks(self):
+    def _create_dynamic_stocks(self) -> None:
         """
         Convert Stocks to ODYM DynamicStockModels.
         """
@@ -1113,16 +1197,17 @@ class FlowSolver(object):
                 indicator_name_to_dsm[indicator_name] = indicator_dsm
                 self._stock_id_to_indicator_name_to_dsm[stock.id] = indicator_name_to_dsm
 
-    def _evaluate_dynamic_stock_outflows(self, year: int):
+    def _evaluate_dynamic_stock_outflows(self, year: int) -> None:
         """
         Evaluate dynamic stock outflows and distribute stock outflow among all outflows.
         Marks stock outflows as evaluated.
 
         This method must be called at the beginning of every timestep before starting evaluating Processes.
 
-        :param year: Year
+        :param year: Target year
         """
         # Get stock outflow for year, distribute that to outflows and mark those Flows as evaluated
+        # NOTE: Now also outflows to prioritized flows
         year_index = self._years.index(year)
         for stock_id, dsm in self.get_baseline_dynamic_stocks().items():
             stock_total_outflow = dsm.compute_outflow_total()[year_index]
@@ -1136,15 +1221,14 @@ class FlowSolver(object):
                 flow.evaluated_value = flow.evaluated_share * stock_total_outflow
                 flow.evaluate_indicator_values_from_baseline_value()
 
-        # TODO: Indicator stocks are not working properly
-        # Get indicator stock outflow for year
-        for stock_id, indicator_id_to_dsm in self.get_indicator_dynamic_stocks().items():
-            for indicator_id, dsm in indicator_id_to_dsm.items():
-                #stock_total_outflow = dsm.compute_outflow_total()[year_index]
-                #outflows = self._get_process_indicator_outflows_total()
-                pass
-
-
+        # # NOTE: Is indicator DSM outflow needed? flow.evaluate_indicator_values_from_baseline_value() calculates
+        # # how much is the evaluated indicator value for each flow. Indicator stock inflow is proportional to baseline
+        # # inflow so indicator DSM does not need any processing here.
+        # # Get indicator stock outflow for year
+        # for stock_id, indicator_id_to_dsm in self.get_indicator_dynamic_stocks().items():
+        #     for indicator_id, dsm in indicator_id_to_dsm.items():
+        #         stock_total_outflow = dsm.compute_outflow_total()[year_index]
+        #         indicator_outflows = self._get_process_indicator_outflows_total(stock_id, indicator_id, year)
 
     def _get_dynamic_stock_outflow_value(self, dsm: DynamicStockModel, year: int) -> float:
         """
@@ -1159,6 +1243,11 @@ class FlowSolver(object):
         return stock_outflow_total[year_index]
 
     def get_solved_scenario_data(self) -> ScenarioData:
+        """
+        Get solved ScenarioData.
+
+        :return: Solved ScenarioData
+        """
         # Make deep copies and return ScenarioData containing the data
         years = copy.deepcopy(self._years)
         year_to_process_id_to_process = copy.deepcopy(self._year_to_process_id_to_process)
@@ -1190,11 +1279,10 @@ class FlowSolver(object):
         )
         return scenario_data
 
-    def _apply_flow_modifiers(self):
+    def _apply_flow_modifiers(self) -> None:
         """
         Apply flow modifiers if Scenario has those defined.
-        Baseline scenario does not have those so return immediately
-        if there isn't anything to process.
+        Baseline scenario does not have those so return immediately if there isn't anything to process.
         """
         if not self._scenario.scenario_definition.flow_modifiers:
             # This is the case when dealing with baseline scenario, do nothing and just return
@@ -1309,13 +1397,23 @@ class FlowSolver(object):
                     # Clamp flow values:
                     if source_to_target_flow.is_unit_absolute_value:
                         # NOTE: Clamp only lower bound [0.0, no limits] to prevent absolute becoming negative
-                        # TODO: Inform user that the value if the value is clamped
+                        value_old = source_to_target_flow.value
                         value_new = self._clamp_flow_value(source_to_target_flow, 0.0, None)
+                        if value_old < 0.0:
+                            s = "Clamped absolute target flow '{}' to 0.0 at year {}"
+                            s += " because flow value was negative ({})"
+                            s = s.format(source_to_target_flow.id, year, value_old)
+                            print(s)
 
                     else:
                         # NOTE: Clamp relative flow value between [0, 100] % (here flow value = flow share)
-                        # TODO: Inform user that the value if the value is clamped
+                        value_old = source_to_target_flow.value
                         value_new = self._clamp_flow_value(source_to_target_flow, 0.0, 100.0)
+                        if value_old < 0.0 or value_old > 100.0:
+                            s = "Clamped relative target flow '{}' to 0.0 at year {}"
+                            s += " because flow value was outside [0, 100]% range ({})"
+                            s = s.format(source_to_target_flow.id, year, value_old)
+                            print(s)
 
                 value_diff = value_new - value_old
                 if flow_modifier.has_opposite_targets:
@@ -1464,7 +1562,6 @@ class FlowSolver(object):
 
             if has_error:
                 raise Exception("Flow modifier error")
-
 
     def _apply_absolute_change_to_flow(self, flow: Flow, value: float) -> Tuple[float, float]:
         """

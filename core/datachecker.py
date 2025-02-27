@@ -966,7 +966,6 @@ class DataChecker(object):
         """
         # No filling, convert nan in DataFrame to None
         if (not fill_missing_absolute_flows) and (not fill_missing_relative_flows):
-            # TODO: Convert nan in DataFrame to None
             result = df_year_flows.copy()
             return result
 
@@ -1006,12 +1005,14 @@ class DataChecker(object):
 
             if fill_method == ParameterFillMethod.Zeros:
                 # Fill all missing flow values with zeros
+                # Fill all missing absolute flows with zeros
                 flow_id_min_year = flow_id_to_min_year[flow_data.name]
                 missing_flow_base = copy.deepcopy(flow_data.loc[flow_id_min_year])
                 for year, has_data in flow_has_data.items():
                     if not has_data:
                         new_flow_data = copy.deepcopy(missing_flow_base)
-                        new_flow_data.value = 0.0
+                        if new_flow_data.is_unit_absolute_value:
+                            new_flow_data.value = 0.0
                         new_flow_data.year = year
                         flow_data[year] = new_flow_data
                         flow_has_data[year] = True
@@ -1593,7 +1594,7 @@ class DataChecker(object):
                         s += "Target value must be > 0.0"
                         errors.append(s)
                 else:
-                    # TODO: Implement checking change in delta
+                    # NOTE: Implement checking change in delta
                     # Change in delta, change flow value either by value or by factor
                     # - If target flow is absolute: change_type can be either ChangeType.Value or ChangeType.Proportional
                     # - If target flow is relative: change_type can be only ChangeType.Proportional

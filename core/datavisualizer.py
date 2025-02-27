@@ -329,7 +329,6 @@ class DataVisualizer(object):
             scenario_name_to_data[scenario.name] = scenario_data
 
         if combine_to_one_file:
-            # # TODO: Implement this
             # # Build combined file with all the scenarios included
             # fig, script = self._build_plotly_data_combine(scenario_name_to_data, visualizer_params)
             #
@@ -344,6 +343,18 @@ class DataVisualizer(object):
             # # Open directly in browser
             # #fig.show(renderer="browser", post_script=[script], config={'displayModeBar': False})
             print("Not implemented yet")
+
+            print("Combine")
+            for scenario_name, year_to_data in scenario_name_to_data.items():
+                fig, script = self._build_plotly_data_separate(scenario_name, year_to_data, visualizer_params)
+
+                output_path = os.path.join(model_params[ParameterName.OutputPath], scenario_name)
+                filename = "{}_sankey.html".format(scenario_name)
+                abs_path_to_file = os.path.join(output_path, filename)
+
+                # Write results to file and open the file in browser
+                fig.write_html(file=abs_path_to_file, post_script=[script], config={'displayModeBar': False},
+                               full_html=True, auto_open=True)
 
         else:
             # Build separate files for each scenario

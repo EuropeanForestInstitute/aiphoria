@@ -474,13 +474,12 @@ class Flow(ObjectBase):
 
         # Rest of the elements except last element are indicators
         # There should be even number of indicators because each indicator has value and comment
-        # TODO: Should not raise Exception?
         first_indicator_index = 13
         indicators = params[first_indicator_index:]
         if len(indicators) % 2:
-            print("Not even number of indicator columns in settings file.")
-            print("Each indicator needs two columns (value and comment) in this order.")
-            raise SystemExit(-1)
+            s = "Not even number of indicator columns in settings file.\n"
+            s += "Each indicator needs two columns (value and comment) in this order."
+            raise Exception(s)
 
         # Build indicator name to Indicator mappings
         for i in range(0, len(indicators), 2):
@@ -1101,17 +1100,30 @@ class ScenarioData(object):
 
     @property
     def year_to_process_id_to_process(self) -> Dict[int, Dict[str, Process]]:
-        # TODO: Fill doctext
+        """
+        Get year to Process ID to Process mappings.
+
+        :return: Dictionary (Year -> Process ID -> Process)
+        """
         return self._year_to_process_id_to_process
 
     @property
     def year_to_process_id_to_flow_ids(self) -> Dict[int, Dict[str, Dict[str, List[str]]]]:
-        # TODO: Fill doctext
+        """
+        Get year to Process ID to In/Out to -> List of Flow ID mappings.
+
+        :return: Dictionary (Year -> Process ID -> Dictionary(keys "in", "out") -> List of Flow IDS)
+        """
+
         return self._year_to_process_id_to_flow_ids
 
     @property
     def year_to_flow_id_to_flow(self) -> Dict[int, Dict[str, Flow]]:
-        # TODO: Fill doctext
+        """
+        Get year to Flow ID to Flow mappings.
+
+        :return: Dictionary (Year -> Flow ID -> Flow)
+        """
         return self._year_to_flow_id_to_flow
 
     @property
