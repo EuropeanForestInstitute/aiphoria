@@ -1238,6 +1238,11 @@ class DataChecker(object):
         allowed_distribution_types = set([name.value for name in StockDistributionType])
 
         for process in processes:
+            if process.stock_lifetime == 0:
+                # Default to fixed and continue to next
+                process.stock_distribution_type = StockDistributionType.Fixed
+                continue
+
             if process.stock_distribution_type not in allowed_distribution_types:
                 msg = "Process {} has invalid stock distribution type '{}' in row {} in sheet '{}'".format(
                     process.id, process.stock_distribution_type,
@@ -1270,64 +1275,65 @@ class DataChecker(object):
         errors = []
         print("Checking stock distribution parameters...")
         for process in processes:
-            if process.stock_distribution_params is None:
-                msg = "Process {} has invalid stock distribution parameter '{}' in row {} in sheet '{}'".format(
-                    process.id, process.stock_distribution_params,
-                    process.row_number, self._dataprovider.sheet_name_processes)
-                errors.append(msg)
-                continue
-
             # Check that all required stock distribution parameters are present and have valid type
             found_params = process.stock_distribution_params
             required_params = RequiredStockDistributionParameters[process.stock_distribution_type]
             is_float = type(process.stock_distribution_params) is float
             num_required_params = len(required_params)
-            if (not num_required_params) and (not is_float):
-                s = "Stock distribution parameter must be float for distribution type '{}' for process '{}' in row {}".format(
-                    process.stock_distribution_type, process.id, process.row_number)
-                errors.append(s)
+
+            if not num_required_params:
                 continue
 
-            for required_param_name, required_param_value_type in required_params.items():
-                # Check if only float was provided
-                if num_required_params and is_float:
-                    s = "Stock distribution parameters was number, following parameters are required "
-                    s += "for distribution type '{}' for process '{}' in row {}".format(
-                        process.stock_distribution_type, process.id, process.row_number)
-                    errors.append(s)
-                    for p in required_params.keys():
-                        errors.append("\t{}".format(p))
+            if process.stock_distribution_params is None:
+                # Check if stock has all required parameters
+                s = "Stock distribution parameter '{}' needs following parameters for process '{}' in row {}:".format(
+                    process.stock_distribution_type, process.id, process.row_number)
+                errors.append(s)
+                for p in required_params:
+                    errors.append("\t{}".format(p))
+                continue
 
-                    continue
-
-                # Check if required parameter name is found in stock distribution parameters
-                if required_param_name not in found_params:
-                    s = "Stock distribution type '{}' needs following parameters for process '{}' in row {}:".format(
-                        process.stock_distribution_type, process.id, process.row_number)
-                    errors.append(s)
-                    for p in required_params:
-                        errors.append("\t{}".format(p))
-                    continue
-
-                # Check if parameter has proper value type
-                for found_param_name, found_param_value in found_params.items():
-                    allowed_parameter_values = AllowedStockDistributionParameterValues[found_param_name]
-
-                    # If allowed_parameter_values is empty then skip to next, nothing to check against
-                    if not allowed_parameter_values:
-                        continue
-
-                    if found_param_value not in allowed_parameter_values:
-                        s = "Stock distribution parameter '{}' needs following parameters for process '{}' in row {}:".format(
+            else:
+                for required_param_name, required_param_value_type in required_params.items():
+                    # Check if only float was provided
+                    if num_required_params and is_float:
+                        s = "Stock distribution parameters was number, following parameters are required "
+                        s += "for distribution type '{}' for process '{}' in row {}".format(
                             process.stock_distribution_type, process.id, process.row_number)
                         errors.append(s)
-                        for p in allowed_parameter_values:
+                        for p in required_params.keys():
                             errors.append("\t{}".format(p))
 
-                if errors:
-                    return not errors, errors
+                        continue
 
-                pass
+                    # Check if required parameter name is found in stock distribution parameters
+                    if required_param_name not in found_params:
+                        s = "Stock distribution type '{}' needs following parameters for process '{}' in row {}:".format(
+                            process.stock_distribution_type, process.id, process.row_number)
+                        errors.append(s)
+                        for p in required_params:
+                            errors.append("\t{}".format(p))
+                        continue
+
+                    # Check if parameter has proper value type
+                    for found_param_name, found_param_value in found_params.items():
+                        allowed_parameter_values = AllowedStockDistributionParameterValues[found_param_name]
+
+                        # If allowed_parameter_values is empty then skip to next, nothing to check against
+                        if not allowed_parameter_values:
+                            continue
+
+                        if found_param_value not in allowed_parameter_values:
+                            s = "Stock distribution parameter '{}' needs following parameters for process '{}' in row {}:".format(
+                                process.stock_distribution_type, process.id, process.row_number)
+                            errors.append(s)
+                            for p in allowed_parameter_values:
+                                errors.append("\t{}".format(p))
+
+                    if errors:
+                        return not errors, errors
+
+                    pass
 
         return not errors, errors
 
@@ -1587,6 +1593,7 @@ class DataChecker(object):
                         s += "Target value must be > 0.0"
                         errors.append(s)
                 else:
+                    # TODO: Implement checking change in delta
                     # Change in delta, change flow value either by value or by factor
                     # - If target flow is absolute: change_type can be either ChangeType.Value or ChangeType.Proportional
                     # - If target flow is relative: change_type can be only ChangeType.Proportional

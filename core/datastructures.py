@@ -158,7 +158,10 @@ class Process(ObjectBase):
         self._location = params.iloc[1]
         self._id = params.iloc[2]
         self._transformation_stage = params.iloc[3]
-        self._stock_lifetime = params.iloc[4]
+
+        # Parse stock lifetime, default to zero if None
+        self._stock_lifetime = self._parse_stock_lifetime(params.iloc[4], row_number)
+
         self._stock_lifetime_source = params.iloc[5]
         self._stock_distribution_type = params.iloc[6]
         self._stock_distribution_params = params.iloc[7]
@@ -339,6 +342,24 @@ class Process(ObjectBase):
     def label_in_graph(self, value: str):
         self._label_in_graph = value
 
+    def _parse_stock_lifetime(self, s: str, row_number: int = -1):
+        """
+        Parse stock lifetime from string.
+
+        :param s: String
+        :return: Stock lifetime (int)
+        """
+        lifetime = 0
+        if s is None:
+            return lifetime
+
+        try:
+            lifetime = int(s)
+        except (ValueError, TypeError) as ex:
+            raise Exception("Stock lifetime must be number (row {})".format(row_number))
+
+        return lifetime
+
     def _parse_and_set_distribution_params(self, s: str):
         """
         Parse keys from string for distribution parameters.
@@ -397,6 +418,7 @@ class Process(ObjectBase):
                 params[k] = v
 
         self._stock_distribution_params = params
+
 
 class Flow(ObjectBase):
     def __init__(self, params=None, row_number=-1):
