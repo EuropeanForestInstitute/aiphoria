@@ -264,7 +264,47 @@ def calculate_scenario_mass_balance(mfa_system: msc.MFAsystem) -> pd.DataFrame:
     return df_mass_balance
 
 
+import re
 def shorten_sheet_name(name, max_length=31):
     """Shorten and sanitize Excel sheet names to comply with the 31-character limit."""
-    sanitized_name = name.replace(":", "_").replace("/", "_").replace("\\", "_")
-    return sanitized_name[:max_length]
+    # Sanitize name
+    sanitized_name = re.sub(r'[:/\\]', '_', name)
+
+    # Split by underscores to maintain structure
+    parts = sanitized_name.split('_')
+
+    # Identify fixed parts: these are short words (<= 3 chars) or common connectors
+    fixed_parts = {i: p for i, p in enumerate(parts) if len(p) <= 3 or not p.isalnum()}
+    variable_parts = [p for i, p in enumerate(parts) if i not in fixed_parts]
+
+    # Determine available length for variable parts (accounting for underscores and fixed parts)
+    num_underscores = len(parts) - 1
+    fixed_length = sum(len(p) for p in fixed_parts.values())
+    available_length = max_length - num_underscores - fixed_length
+
+    # Reduce variable parts proportionally
+    total_variable_length = sum(len(p) for p in variable_parts)
+    if total_variable_length <= available_length:
+        return sanitized_name[:max_length]  # Trim if needed
+
+    reduced_parts = []
+    for part in variable_parts:
+        reduced_length = max(1, len(part) * available_length // total_variable_length)
+        reduced_parts.append(part[:reduced_length])
+
+    # Reconstruct the name, preserving fixed parts
+    final_parts = []
+    variable_index = 0
+    for i in range(len(parts)):
+        if i in fixed_parts:
+            final_parts.append(fixed_parts[i])
+        else:
+            final_parts.append(reduced_parts[variable_index])
+            variable_index += 1
+
+    # Ensure final length
+    shortened_name = "_".join(final_parts)
+    return shortened_name[:max_length]
+
+
+
