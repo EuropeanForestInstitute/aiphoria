@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+import re
 from typing import List, Dict, Any
 import numpy as np
 import pandas as pd
@@ -264,7 +265,6 @@ def calculate_scenario_mass_balance(mfa_system: msc.MFAsystem) -> pd.DataFrame:
     return df_mass_balance
 
 
-import re
 def shorten_sheet_name(name, max_length=31):
     """Shorten and sanitize Excel sheet names to comply with the 31-character limit."""
     # Sanitize name
@@ -305,6 +305,3 @@ def shorten_sheet_name(name, max_length=31):
     # Ensure final length
     shortened_name = "_".join(final_parts)
     return shortened_name[:max_length]
-
-
-

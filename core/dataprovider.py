@@ -1,11 +1,12 @@
+import warnings
 from typing import List, Union, Any, Dict
-
 import numpy as np
-import openpyxl
 import pandas as pd
-
 from core.datastructures import Process, Flow, Stock, FlowModifier, ScenarioDefinition, Color
 from core.parameters import ParameterName, ParameterFillMethod
+
+# Suppress openpyxl warnings about Data Validation being suppressed
+warnings.filterwarnings('ignore', category=UserWarning, module="openpyxl")
 
 
 class DataProvider(object):
@@ -181,11 +182,6 @@ class DataProvider(object):
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}
-
-        # Suppress openpyxl warning about the Data Validation removed in the future
-        # We don't care that much about the actual Data Validation inside Excel, only that
-        # the cells contain values
-        openpyxl.reader.excel.warnings.simplefilter(action='ignore')
 
         # Read settings sheet from the file
         param_name_to_value = {}
@@ -613,7 +609,6 @@ class DataProvider(object):
                 result.append(stripped)
 
         return result
-
 
     def _excel_column_name_to_index(self, col_name: str) -> int:
         n = 0
