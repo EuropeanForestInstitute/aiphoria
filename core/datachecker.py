@@ -872,11 +872,13 @@ class DataChecker(object):
 
         return not errors, errors
 
-    def _check_relative_flow_errors(self, df_year_to_flows: pd.DataFrame) -> Tuple[bool, List[str]]:
+    def _check_relative_flow_errors(self, df_year_to_flows: pd.DataFrame, epsilon: float = 0.01) -> Tuple[bool, List[str]]:
         """
         Check that relative flows do not go over 100%.
+        Default epsilon is 0.01.
 
         :param df_year_to_flows: DataFrame
+        :param epsilon: Maximum allowed difference when checking if total outflows > 100.0
         :return: Tuple (bool, list of errors)
         """
         errors = []
@@ -924,7 +926,8 @@ class DataChecker(object):
             # Check if total outflows of the process are > 100%
             for process_id, outflows in process_id_to_rel_outflows.items():
                 total_share = np.sum([flow.value for flow in outflows])
-                if total_share > 100.0:
+                diff = np.abs(total_share - 100.0)
+                if (total_share > 100.0) and (diff > epsilon):
                     s = "Process {} has total relative outflows over 100%".format(process_id)
                     s += " (total={:.3f}%) for year {} in sheet '{}'".format(
                         total_share, year, self._dataprovider.sheet_name_flows)
