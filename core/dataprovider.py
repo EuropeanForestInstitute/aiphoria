@@ -7,6 +7,7 @@ from core.parameters import ParameterName, ParameterFillMethod
 
 # Suppress openpyxl warnings about Data Validation being suppressed
 warnings.filterwarnings('ignore', category=UserWarning, module="openpyxl")
+warnings.filterwarnings('ignore', category=FutureWarning, module="openpyxl")
 
 
 class DataProvider(object):
@@ -585,7 +586,7 @@ class DataProvider(object):
         else:
             return False
 
-    def _to_list(self, value: Any, sep=',') -> List[str]:
+    def _to_list(self, value: Any, sep=',', allowed_chars = [":"]) -> List[str]:
         """
         Check and convert value to list of strings.
         Default separator is comma (',')
@@ -594,6 +595,7 @@ class DataProvider(object):
         :param value: Value to be converted to list
         :return: List of strings
         """
+
         result = []
         if type(value) is not str:
             # float and int are not valid types, just return empty list
@@ -603,7 +605,8 @@ class DataProvider(object):
             splits = value.split(sep)
             for s in splits:
                 stripped = str(s).strip()
-                if not stripped.isalpha():
+                has_allowed_char = np.any([stripped.find(c) < 0 for c in allowed_chars])
+                if not stripped.isalpha() and has_allowed_char:
                     continue
 
                 result.append(stripped)
