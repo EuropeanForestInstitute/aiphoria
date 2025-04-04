@@ -162,6 +162,31 @@ class DataChecker(object):
         # Create process to flow mappings
         df_year_to_process_flows = self._create_process_to_flows_entries(unique_process_ids, df_year_to_flows)
 
+        # NOTE: This is workaround for situation where flow merging removes 0% relative outflow
+        # and that causes root process checking to fail
+        # Evaluate 0.0 % relative flows as 0.0 absolute flows
+        for year in df_year_to_process_flows.index:
+            for process_id in df_year_to_process_flows.columns:
+                entry: ProcessEntry = df_year_to_process_flows.at[year, process_id]
+                inflows = entry.inflows
+                outflows = entry.outflows
+
+                for flow in inflows:
+                    is_relative_flow = not flow.is_unit_absolute_value
+                    is_zero_flow = flow.value < 0.01
+                    if is_relative_flow and is_zero_flow:
+                        flow.evaluated_value = 0.0
+                        flow.evaluated_share = 0.0
+                        flow.is_evaluated = True
+
+                for flow in outflows:
+                    is_relative_flow = not flow.is_unit_absolute_value
+                    is_zero_flow = flow.value < 0.01
+                    if is_relative_flow and is_zero_flow:
+                        flow.evaluated_value = 0.0
+                        flow.evaluated_share = 0.0
+                        flow.is_evaluated = True
+
         print("Merge relative outflows...")
         # NOTE: This is externalized in the future, now go with the hardcoded value
         # min_threshold is value for checking if flow is 100%: any relative flow share greater than min_threshold
@@ -814,14 +839,19 @@ class DataChecker(object):
                 num_abs_outflows = len(abs_outflows)
                 num_rel_outflows = len(rel_outflows)
                 no_outflows = (num_abs_outflows == 0) and (num_rel_outflows == 0)
+
+                # NOTE: This is workaround for situation where flow merging removes 0% relative outflow
+                # and that causes root process checking to fail
+                is_outflows_evaluated = np.all([flow.is_evaluated for flow in rel_outflows])
+
                 if no_outflows:
                     # Error: Root process does not have any outflows
-                    msg = "Root process '{}' has no outflows".format(process)
+                    msg = "{}: Root process '{}' has no outflows".format(year, process)
                     errors.append(msg)
 
-                if num_rel_outflows > 0:
+                if num_rel_outflows > 0 and not is_outflows_evaluated:
                     # Error: root process can have only absolute outflows
-                    msg = "Root process '{}' has relative outflows".format(process)
+                    msg = "{}: Root process '{}' has relative outflows".format(year, process)
                     errors.append(msg)
 
         return not errors, errors
@@ -1422,7 +1452,11 @@ class DataChecker(object):
                 no_inflows = len(flows_in) == 0
                 all_outflows_relative = len(flows_out) > 0 and all([not flow.is_unit_absolute_value for flow in flows_out])
 
-                if no_inflows and all_outflows_relative:
+                # NOTE: This is workaround for situation where flow merging removes 0% relative outflow
+                # and that causes root process checking to fail
+                is_all_evaluated = np.all([flow.is_evaluated for flow in flows_out])
+
+                if no_inflows and all_outflows_relative and not is_all_evaluated:
                     if year not in year_to_errors:
                         year_to_errors[year] = []
                     year_to_errors[year].append("{}".format(process.id))
