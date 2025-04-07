@@ -3,7 +3,7 @@ from typing import List, Union, Any, Dict
 import numpy as np
 import pandas as pd
 from core.datastructures import Process, Flow, Stock, FlowModifier, ScenarioDefinition, Color
-from core.parameters import ParameterName, ParameterFillMethod
+from core.parameters import ParameterName, ParameterFillMethod, StockDistributionType
 
 # Suppress openpyxl warnings about Data Validation being suppressed
 warnings.filterwarnings('ignore', category=UserWarning, module="openpyxl")
@@ -483,11 +483,24 @@ class DataProvider(object):
 
     def _create_stocks_from_processes(self, processes=None) -> List[Stock]:
         # Create stocks only for Processes that have lifetime > 1
+        # NOTE: If stock type is LandfillDecay* then set lifetime to 1 by default
+        # if stock lifetime is not defined
         if processes is None:
             processes = []
 
+        # Ignore stock lifetime if stock distribution type is any of these
+        ignore_stock_lifetime_for_types = {StockDistributionType.LandfillDecayWood,
+                                           StockDistributionType.LandfillDecayPaper}
         result = []
         for process in processes:
+            ignore_stock_lifetime = process.stock_distribution_type in ignore_stock_lifetime_for_types
+
+            # Add stock lifetime if stock type is in ignore_stock_lifetime
+            # This is used for LandfillDecay* stock types and stock lifetime is needed
+            # so that ODYM is able to calculate decays properly
+            if ignore_stock_lifetime and process.stock_lifetime == 0:
+                process.stock_lifetime = 1
+
             if process.stock_lifetime == 0:
                 continue
 
