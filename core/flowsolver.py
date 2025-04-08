@@ -962,7 +962,7 @@ class FlowSolver(object):
         new_virtual_process = Process()
         new_virtual_process.id = process_id
         new_virtual_process.name = process_name
-        new_virtual_process.stock_lifetime = 1
+        new_virtual_process.stock_lifetime = 0
         new_virtual_process.conversion_factor = 1.0
         new_virtual_process.transformation_stage = transformation_stage
         new_virtual_process.is_virtual = True
