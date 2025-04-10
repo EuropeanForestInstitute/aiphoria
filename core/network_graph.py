@@ -1,7 +1,7 @@
 import json
 import os
 import webbrowser
-
+from typing import Dict, Any
 from core.datastructures import ScenarioData
 
 
@@ -21,16 +21,18 @@ class NetworkGraph(object):
         with open(path_network_graph, mode="r", encoding="utf-8") as fs:
             self._visualizer = fs.read()
 
-    def build(self, scenario_data: ScenarioData = None) -> None:
+    def build(self, scenario_data: ScenarioData = None, options: Dict[str, Any] = None) -> None:
         """
         Compile and insert data to HTML file.
 
         :param scenario_data: ScenarioData object
-        :param df_process_to_flows: DataFrame
-        :param years_to_check: List of years that are included
+        :param options: Extra options to be provided to network graph
         """
         if scenario_data is None:
             scenario_data = {}
+
+        if options is None:
+            options = {}
 
         year_to_process_id_to_process = scenario_data.year_to_process_id_to_process
         year_to_process_id_to_flow_ids = scenario_data.year_to_process_id_to_flow_ids
@@ -55,6 +57,15 @@ class NetworkGraph(object):
                     "num_inflows": len(inflow_ids),
                     "num_outflows": len(outflow_ids),
                     "transformation_stage": process.transformation_stage,
+
+                    # Stock related
+                    "is_stock": process.stock_lifetime > 0,
+                    "stock_lifetime": process.stock_lifetime,
+                    "stock_distribution_type": process.stock_distribution_type,
+                    "stock_distribution_params": process.stock_distribution_params,
+
+                    # Virtual flow
+                    "is_virtual": process.is_virtual
                 }
                 node_index_to_data[new_node_index] = new_node_data
                 new_node_index += 1
@@ -67,8 +78,13 @@ class NetworkGraph(object):
                         "source_process_id": flow.source_process_id,
                         "target_process_id": flow.target_process_id,
                         "is_unit_absolute_value": flow.is_unit_absolute_value,
-                        "value": flow.value,
-                        "unit": flow.unit,
+                        "value": flow.value,  # Flow share
+                        "unit": flow.unit,  # Flow unit
+                        "evaluated_value": flow.evaluated_value,
+                        "evaluated_share": flow.evaluated_share,
+
+                        "is_virtual": flow.is_virtual,
+                        "indicators": {k: v for k, v in flow.indicator_name_to_evaluated_value.items()},
                     }
                     edge_index_to_data[new_edge_index] = new_edge_data
                     new_edge_index += 1
@@ -78,9 +94,22 @@ class NetworkGraph(object):
                 "edge_index_to_data": edge_index_to_data,
             }
 
+        # Build graph scenario data: contains data that is used shared between all processes and flows
+        transformation_stage_name_to_color = {}
+        if "transformation_stage_name_to_color" in options:
+            transformation_stage_name_to_color = options["transformation_stage_name_to_color"]
+
+        graph_scenario_data = {
+            "scenario_name": options["scenario_name"],
+            "baseline_unit_name": scenario_data.baseline_unit_name,
+            "baseline_value_name": scenario_data.baseline_value_name,
+            "transformation_stage_name_to_color": transformation_stage_name_to_color,
+        }
+
         # Replace data in visualizer
         script = self._visualizer
         script = script.replace("{year_to_data}", json.dumps(year_to_data))
+        script = script.replace("{scenario_data}", json.dumps(graph_scenario_data))
         self._visualizer = script
 
         path_network_graph = os.path.join(os.path.abspath("."), "core", "network_graph_data", "network_graph.html")
@@ -97,7 +126,6 @@ class NetworkGraph(object):
 
         :param output_filename: Filename for the HTML file
         """
-        filename = output_filename
         with open(output_filename, "w", encoding="utf-8") as fs:
             fs.write(self._html)
         webbrowser.open("file://" + os.path.realpath(output_filename))

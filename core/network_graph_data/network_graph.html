@@ -1,62 +1,76 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Network graph</title>
-    <script type="text/javascript">{echarts_content}</script>
-    <style>
-      .settings-wrapper {
-        display: block;
-        position: fixed;
-        top: 48px;
-        left: 16px;
-        width: 250px;
-        height: auto;
-        font: 14px 'Fira Sans', sans-serif;
-        user-select: auto;
-        z-index: 2000;
-      }
+    <head>
+        <meta charset="utf-8"/>
+            <title>Network graph</title>
+            <script type="text/javascript">{echarts_content}</script>
+            <style>
+                .settings-wrapper {
+                    display: block;
+                    position: fixed;
+                    top: 48px;
+                    left: 16px;
+                    width: 250px;
+                    height: auto;
+                    font: 14px "Fira Sans", sans-serif;
+                    user-select: auto;
+                    z-index: 2000;
+                }
 
-      .settings-item-wrapper {
-        width: auto;
-        height: auto;
-        border: solid 1px #aaa;
-        border-radius: 4px;
-        padding: 0.5rem;
-        margin: 0.5rem;
-        background: #fff;
-      }
-    </style>
-  </head>
-  <body style="width: 100vw; height: 100vh; margin: 0">
-    <div class="settings-wrapper">
-      <div class="settings-item-wrapper">
-        <label for="processLabelType" class="settings-item-label">Process label type</label><br/>
-        <select id="processLabelType" name="processLabelType">
-          <option value="id" selected>Process ID</option>
-          <option value="label">Process label</option>
-        </select>
-      </div>
-      <div class="settings-item-wrapper">
-        <label for="hideUnconnectedProcesses" class="settings-item-label">Hide unconnected processes</label><br/>
-        <select id="hideUnconnectedProcesses" name="hideUnconnectedProcesses">
-          <option value="no" selected>No</option>
-          <option value="yes">Yes</option>
-        </select>
-      </div>
-      <div class="settings-item-wrapper">
-        <label for="freezeNodePositions">Freeze node positions</label><br/>
-        <button id="freezeNodePositions" name="freezeNodePositions">
-          <label id="freezeNodePositionsButtonLabel">Freeze</label>
-        </button>
-      </div>
-      <div class="settings-item-wrapper">
-        <label for="resetView">Reset view</label><br/>
-        <button id="resetView" name="resetView"><label>Reset</label></button>
-      </div>
-    </div>
-    <div id="main" style="width: 100%; height: 100vh">
-    </div>
-    <script type="text/javascript">{visualizer_content}</script>
-  </body>
+                .settings-item-wrapper {
+                    width: auto;
+                    height: auto;
+                    border: solid 1px #aaa;
+                    border-radius: 4px;
+                    padding: 0.5rem;
+                    margin: 0.5rem;
+                    background: #fff;
+                }
+            </style>
+        </head>
+    <body style="width: 100vw; height: 100vh; margin: 0">
+        <div class="settings-wrapper">
+            <div class="settings-item-wrapper">
+                <label for="processLabelType" class="settings-item-label">Process label type</label><br/>
+                <select id="processLabelType" name="processLabelType">
+                    <option value="id" selected>Process ID</option>
+                    <option value="label">Process label</option>
+                </select>
+            </div>
+            <div class="settings-item-wrapper">
+                <label for="flowLabelType">Flow label type</label><br/>
+                <select id="flowLabelType" name="flowLabelType">
+                    <option value="type">Flow type (ABS / %)</option>
+                    <option value="value" selected>Flow value (baseline)</option>
+                </select>
+            </div>
+            <div class="settings-item-wrapper">
+                <label for="useTransformationStageColors" class="settings-item-label">Use transformation stage
+                    colors</label><br/>
+                <select id="useTransformationStageColors" name="useTransformationStageColors">
+                    <option value="yes" selected>Yes</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+            <div class="settings-item-wrapper">
+                <label for="hideUnconnectedProcesses" class="settings-item-label">Hide unconnected processes</label><br/>
+                <select id="hideUnconnectedProcesses" name="hideUnconnectedProcesses">
+                    <option value="yes">Yes</option>
+                    <option value="no" selected>No</option>
+                </select>
+            </div>
+            <div class="settings-item-wrapper">
+                <label for="freezeNodePositions">Freeze node positions</label><br/>
+                <button id="freezeNodePositions" name="freezeNodePositions">
+                    <label id="freezeNodePositionsButtonLabel">Freeze</label>
+                </button>
+            </div>
+            <div class="settings-item-wrapper">
+                <label for="resetView">Reset view</label><br/>
+                <button id="resetView" name="resetView"><label>Reset</label></button>
+            </div>
+        </div>
+        <div id="main" style="width: 100%; height: 100vh"></div>
+        <script type="text/javascript">{visualizer_content}</script>
+    </body>
 </html>
