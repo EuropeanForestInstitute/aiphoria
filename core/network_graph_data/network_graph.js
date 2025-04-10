@@ -80,7 +80,14 @@ const globals = {
 // **************
 // * Formatters *
 // **************
+
+function formatValue(val, options = { numDecimals: 3}) {
+    // Format value to fixed number of digits (defaults to 3)
+    return parseFloat(val.toFixed(options.numDecimals))
+}
+
 function getTooltipFormatter(params) {
+    const isLegend = params.componentType == "legend"
     const isNode = params.dataType == "node"
     const isLink = params.dataType == "edge"
 
@@ -149,7 +156,18 @@ function getTooltipFormatter(params) {
         </style>
     `
 
+    // TODO: Check with || isLegend and show tooltip when hovering over legend items
     if (isNode) {
+        // let nodeData = null
+        // let nodeId = null
+        // if(isNode) {
+        //     nodeData = params.data
+        //     nodeId = nodeData.id
+        // }
+        // if(isLegend) {
+        //     nodeId = params.name
+        // }
+
         const nodeData = params.data
         const nodeId = nodeData.id;
 
@@ -210,7 +228,7 @@ function getTooltipFormatter(params) {
         const inflows = [];
         for (const flowId of inflowIds) {
             const flow = flowIdToFlow.get(flowId)
-            totalInflowsBaseline += flow.value
+            totalInflowsBaseline += flow.evaluated_value
             for (const [k, v] of Object.entries(flow.indicators)) {
                 if (!totalInflowsIndicators.has(k)) {
                     totalInflowsIndicators.set(k, 0.0)
@@ -227,7 +245,7 @@ function getTooltipFormatter(params) {
         const outflows = [];
         for (const flowId of outflowIds) {
             const flow = flowIdToFlow.get(flowId)
-            totalOutflowsBaseline += flow.value
+            totalOutflowsBaseline += flow.evaluated_value
             for (const [k, v] of Object.entries(flow.indicators)) {
                 if (!totalOutflowsIndicators.has(k)) {
                     totalOutflowsIndicators.set(k, 0.0)
@@ -272,9 +290,9 @@ function getTooltipFormatter(params) {
         for (const flow of inflows) {
             inflowItemsHTML += "<tr>"
             inflowItemsHTML += `<td>${flow.source_process_id}</td>`
-            inflowItemsHTML += `<td>${parseFloat(flow.value.toFixed(3))}</td>`
+            inflowItemsHTML += `<td>${formatValue(flow.evaluated_value)}</td>`
             for (const name of indicatorNames) {
-                inflowItemsHTML += `<td>${parseFloat(flow.indicators[name].toFixed(3))}</td>`
+                inflowItemsHTML += `<td>${formatValue(flow.indicators[name])}</td>`
             }
             inflowItemsHTML += "</tr>"
         }
@@ -282,9 +300,9 @@ function getTooltipFormatter(params) {
             // Add total row
             inflowItemsHTML += "<tr>"
             inflowItemsHTML += "<td><span style='font-weight: bold'>Total</span></td>"
-            inflowItemsHTML += `<td><span style='font-weight: bold'>${parseFloat(totalInflowsBaseline.toFixed(3))}</span></td>`
+            inflowItemsHTML += `<td><span style='font-weight: bold'>${formatValue(totalInflowsBaseline)}</span></td>`
             for (const [k, v] of totalInflowsIndicators.entries()) {
-                inflowItemsHTML += `<td><span style='font-weight: bold'>${parseFloat(v.toFixed(3))}</span></td>`
+                inflowItemsHTML += `<td><span style='font-weight: bold'>${formatValue(v)}</span></td>`
             }
             inflowItemsHTML += "</tr>"
         } else {
@@ -304,9 +322,9 @@ function getTooltipFormatter(params) {
         for (const flow of outflows) {
             outflowItemsHTML += "<tr>"
             outflowItemsHTML += `<td>${flow.target_process_id}</td>`
-            outflowItemsHTML += `<td>${parseFloat(flow.value.toFixed(3))}</td>`
+            outflowItemsHTML += `<td>${formatValue(flow.evaluated_value)}</td>`
             for (const name of indicatorNames) {
-                outflowItemsHTML += `<td>${parseFloat(flow.indicators[name].toFixed(3))}</td>`
+                outflowItemsHTML += `<td>${formatValue(flow.indicators[name])}</td>`
             }
             outflowItemsHTML += "</tr>"
         }
@@ -314,9 +332,9 @@ function getTooltipFormatter(params) {
             // Add total row
             outflowItemsHTML += "<tr>"
             outflowItemsHTML += "<td><span style='font-weight: bold'>Total</span></td>"
-            outflowItemsHTML += `<td><span style='font-weight: bold'>${parseFloat(totalOutflowsBaseline.toFixed(3))}</span></td>`
+            outflowItemsHTML += `<td><span style='font-weight: bold'>${formatValue(totalOutflowsBaseline)}</span></td>`
             for (const [k, v] of totalOutflowsIndicators.entries()) {
-                outflowItemsHTML += `<td><span style='font-weight: bold'>${parseFloat(v.toFixed(3))}</span></td>`
+                outflowItemsHTML += `<td><span style='font-weight: bold'>${formatValue(v)}</span></td>`
             }
             outflowItemsHTML += "</tr>"
         } else {
@@ -403,9 +421,9 @@ function getTooltipFormatter(params) {
         let bodyHTML = ""
         bodyHTML += `<td>${flow.source_process_id}</td>`
         bodyHTML += `<td>${flow.target_process_id}</td>`
-        bodyHTML += `<td>${parseFloat(flow.evaluated_value.toFixed(3))}</td>`
+        bodyHTML += `<td>${formatValue(flow.evaluated_value)}</td>`
         for(const [k, v] of indicatorNameToValue.entries()) {
-            bodyHTML += `<td>${parseFloat(v.toFixed(3))}</td>`
+            bodyHTML += `<td>${formatValue(v)}</td>`
         }
 
         // Determine the type of the link
@@ -718,7 +736,7 @@ function getGraphEdgeFromEdgeData(edgeIndex, year) {
                 if (globals.useFlowTypeAsLabel) {
                     return isUnitAbsoluteValue ? "ABS" : "%";
                 } else {
-                    return parseFloat(edgeData.evaluated_value.toFixed(3))
+                    return formatValue(edgeData.evaluated_value)
                 }
             },
         },
@@ -777,6 +795,9 @@ function buildGraphDataForYear(year, updateOptions = {}) {
         graphData.data.push(graphNode);
     }
 
+    // Sort graphs in alphabetical order so legend is also in alphabetical order
+    graphData.data.sort((a, b) => a.name > b.name ? 1 : -1);
+
     const edgeIndexToData = yearData.get("edgeIndexToData");
     for (const [edgeIndex, edgeData] of edgeIndexToData.entries()) {
         const graphEdge = getGraphEdgeFromEdgeData(edgeIndex, year);
@@ -812,7 +833,11 @@ function buildGraphDataForYear(year, updateOptions = {}) {
     for (const node of graphData.data) {
         const newEntry = {
             name: node.id,
-            itemStyle: node.itemStyle
+            itemStyle: node.itemStyle,
+            tooltip: {
+                show: true,
+                formatter: getTooltipFormatter,
+            }
         }
         legendData.push(newEntry)
     }
@@ -1163,7 +1188,15 @@ function initialize() {
             const nodeIndex = nodeIdToIndex.get(nodeId)
             const nodeData = nodeIndexToData.get(nodeIndex)
 
+            // TODO: In year 1963 there is "Dissolving_pulp:Export" but that is not defined
+            // in the original data?
             // Inject properties "color_normal" and "color_transformation_stage" to original node data
+            if(nodeData == undefined) {
+                console.log(nodeId)
+                console.log(nodeIdToIndex.keys())
+                console.log(year)
+            }
+
             const transformationStageName = nodeData.transformation_stage
             nodeData["color_normal"] = nodeColor
             nodeData["color_transformation_stage"] = globals.transformationStageNameToColor.get(transformationStageName)
