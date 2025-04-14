@@ -3,6 +3,7 @@ from builtins import float
 from typing import Tuple, List, Union, Dict, Any
 from core.parameters import StockDistributionParameterValueType
 from core.types import FunctionType, ChangeType
+import pandas as pd
 
 
 class ObjectBase(object):
@@ -123,7 +124,7 @@ class Indicator(object):
 
 
 class Process(ObjectBase):
-    def __init__(self, params=None, row_number=-1):
+    def __init__(self, params: pd.Series = None, row_number=-1):
         super().__init__()
 
         self._name = None
@@ -421,7 +422,7 @@ class Process(ObjectBase):
 
 
 class Flow(ObjectBase):
-    def __init__(self, params=None, row_number=-1):
+    def __init__(self, params: pd.Series = None, row_number=-1):
         super().__init__()
 
         self._source_process = None
@@ -778,9 +779,9 @@ class Flow(ObjectBase):
 
 # Stock is created for each process that has lifetime
 class Stock(ObjectBase):
-    def __init__(self, params=None, row_number=-1):
+    def __init__(self, params: Process = None, row_number=-1):
         super().__init__()
-        self._process: Process = None
+        self._process = None
         self._id = -1
 
         if params is None:
@@ -827,8 +828,9 @@ class Stock(ObjectBase):
 
 
 class FlowModifier(ObjectBase):
-    def __init__(self, params: List[any] = None):
+    def __init__(self, params: pd.Series = None):
         super().__init__()
+
         self._scenario_name: str = ""
         self._source_process_id: str = ""
         self._target_process_id: str = ""
@@ -849,15 +851,15 @@ class FlowModifier(ObjectBase):
             return
 
         # Alias parameters to more readable form
-        param_scenario_name = params[0]
-        param_source_process_id = params[1]
-        param_target_process_id = params[2]
-        param_change_in_value = params[3]
-        param_target_value = params[4]
-        param_change_type = params[5]
-        param_start_year = params[6]
-        param_end_year = params[7]
-        param_function_type = params[8]
+        param_scenario_name = params.iloc[0]
+        param_source_process_id = params.iloc[1]
+        param_target_process_id = params.iloc[2]
+        param_change_in_value = params.iloc[3]
+        param_target_value = params.iloc[4]
+        param_change_type = params.iloc[5]
+        param_start_year = params.iloc[6]
+        param_end_year = params.iloc[7]
+        param_function_type = params.iloc[8]
 
         self._scenario_name = self._parse_as(param_scenario_name, str)[0]
         self._source_process_id = self._parse_as(param_source_process_id, str)[0]
@@ -1291,7 +1293,7 @@ class Scenario(object):
     happening in the scenario
     """
 
-    def __init__(self, definition: ScenarioDefinition = None, data: ScenarioData = None, model_params = None):
+    def __init__(self, definition: ScenarioDefinition = None, data: ScenarioData = None, model_params=None):
         if definition is None:
             definition = ScenarioDefinition()
 
@@ -1347,7 +1349,7 @@ class Scenario(object):
 
 
 class Color(ObjectBase):
-    def __init__(self, params=None, row_number=-1):
+    def __init__(self, params: pd.Series = None, row_number=-1):
         super().__init__()
         self._name: str = ""
         self._value: str = ""
@@ -1356,8 +1358,8 @@ class Color(ObjectBase):
         if params is None:
             return
 
-        self.name = str(params[0])
-        self.value = str(params[1])
+        self.name = str(params.iloc[0])
+        self.value = str(params.iloc[1])
 
     def __str__(self) -> str:
         """
