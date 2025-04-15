@@ -44,6 +44,7 @@ class ParameterName(str, Enum):
     SheetNameScenarios: str = "sheet_name_scenarios"
     SkipNumRowsScenarios: str = "skip_num_rows_scenarios"
     IgnoreColumnsScenarios: str = "ignore_columns_scenarios"
+    ScenarioType: str = "scenario_type"
 
     # Sheet name for colors
     SheetNameColors: str = "sheet_name_colors"
@@ -83,6 +84,15 @@ class ParameterFillMethod(str, Enum):
     Previous: str = "Previous"
     Next: str = "Next"
     Interpolate: str = "Interpolate"
+
+
+class ParameterScenarioType(str, Enum):
+    """
+    Valid values for parameter ScenarioType
+    """
+
+    Constrained: str = "Constrained"
+    Unconstrained: str = "Unconstrained"
 
 
 # Parameters used for Process/Flows/Stocks in settings file

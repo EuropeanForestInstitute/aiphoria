@@ -1,12 +1,17 @@
-import copy
-from builtins import float
 from typing import Tuple, List, Union, Dict, Any
+from builtins import float
+import copy
+import pandas as pd
+from lib.odym.modules.ODYM_Classes import MFAsystem
 from core.parameters import StockDistributionParameterValueType
 from core.types import FunctionType, ChangeType
-import pandas as pd
 
 
 class ObjectBase(object):
+    """
+    Base class for Process, Flow and Stock.
+    Keeps track of row number, validity of read row and virtual state.
+    """
     def __init__(self):
         self._id: Union[str, any] = -1
         self._row_number: int = -1
@@ -505,8 +510,8 @@ class Flow(ObjectBase):
         self._row_number = row_number  # Track Excel file row number
 
     def __str__(self):
-        s = "Flow '{}' -> '{}': Value={} Unit={}," \
-            "is_evaluated={}, evaluated_share={}, evaluated_value={}," \
+        s = "Flow '{}' -> '{}': Value={}, Unit={}, " \
+            "is_evaluated={}, evaluated_share={}, evaluated_value={}, " \
             "year={}, is_virtual={}".format(
                 self.source_process_id, self.target_process_id, self.value, self.unit,
                 self.is_evaluated, self.evaluated_share, self.evaluated_value, self.year,
@@ -1308,6 +1313,7 @@ class Scenario(object):
         self._flow_solver = None
         self._odym_data = None
         self._model_params = model_params
+        self._mfa_system = None
 
     @property
     def name(self) -> str:
@@ -1338,6 +1344,22 @@ class Scenario(object):
     def model_params(self) -> Dict[str, Any]:
         return self._model_params
 
+    @property
+    def mfa_system(self) -> MFAsystem:
+        """
+        Get stored ODYM MFA system.
+        :return: MFAsystem-object
+        """
+        return self._mfa_system
+
+    @mfa_system.setter
+    def mfa_system(self, mfa_system) -> None:
+        """
+        Set new MFAsystem
+        :param mfa_system: Target MFAsystem-object
+        """
+        self._mfa_system = mfa_system
+
     def copy_from_baseline_scenario_data(self, scenario_data: ScenarioData):
         """
         Copy ScenarioData from baseline Scenario.
@@ -1349,7 +1371,7 @@ class Scenario(object):
 
 
 class Color(ObjectBase):
-    def __init__(self, params: pd.Series = None, row_number=-1):
+    def __init__(self, params: Union[List, pd.Series] = None, row_number=-1):
         super().__init__()
         self._name: str = ""
         self._value: str = ""
@@ -1358,8 +1380,19 @@ class Color(ObjectBase):
         if params is None:
             return
 
-        self.name = str(params.iloc[0])
-        self.value = str(params.iloc[1])
+        # Handle processing list and pd.Series differently
+        name_val = ""
+        value_val = ""
+        if isinstance(params, list):
+            name_val = str(params[0])
+            value_val = str(params[1])
+
+        if isinstance(params, pd.Series):
+            name_val = str(params.iloc[0])
+            value_val = str(params.iloc[1])
+
+        self.name = name_val
+        self.value = value_val
 
     def __str__(self) -> str:
         """

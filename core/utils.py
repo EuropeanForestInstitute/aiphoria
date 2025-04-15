@@ -2,7 +2,7 @@ import os
 import shutil
 import sys
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union, Optional
 import numpy as np
 import pandas as pd
 from IPython import get_ipython
@@ -17,8 +17,9 @@ def show_model_parameters(model_params: Dict[str, Any]):
     :param model_params: Dictionary of model parameters
     """
     print("Using following parameters for running the model:")
+    max_param_len = max([len(name) for name in model_params])
     for param_name, param_value in model_params.items():
-        print("\t{:32}= {}".format(param_name, param_value))
+        print("\t{:{}} = {}".format(param_name, max_param_len, param_value))
 
 
 def show_exception_errors(exception: Exception, msg: str = ""):
@@ -107,6 +108,7 @@ def build_mfa_system_for_scenario(scenario: Scenario):
     Build MFA system for scenario.
 
     :param scenario: Scenario-object
+    :param progress_bar: Progress bar instance (optional)
     :return: ODYM MFASystem
     """
 
@@ -161,7 +163,7 @@ def build_mfa_system_for_scenario(scenario: Scenario):
     unique_flows = flow_solver.get_unique_flows()
 
     # Create ODYM objects
-    print("Building ODYM processes...")
+    # print("Building ODYM processes...")
     odym_processes = []
     process_id_to_index = {}
     for process_id, process in unique_processes.items():
@@ -170,7 +172,7 @@ def build_mfa_system_for_scenario(scenario: Scenario):
         new_process = msc.Process(ID=process_index, Name=process.name)
         odym_processes.append(new_process)
 
-    print("Building ODYM flows...")
+    # print("Building ODYM flows...")
     odym_flows = {}
     for flow_id, flow in unique_flows.items():
         source_process_index = process_id_to_index[flow.source_process_id]
@@ -178,7 +180,7 @@ def build_mfa_system_for_scenario(scenario: Scenario):
         new_flow = msc.Flow(ID=flow.id, P_Start=source_process_index, P_End=target_process_index, Indices='t,e', Values=None)
         odym_flows[flow.id] = new_flow
 
-    print("Building ODYM stocks...")
+    # print("Building ODYM stocks...")
     odym_stocks = {}
     for stock in flow_solver.get_all_stocks():
         process_index = process_id_to_index[stock.id]

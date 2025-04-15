@@ -1,13 +1,15 @@
 import copy
+import sys
 from typing import List, Dict, Tuple, Union
 import numpy as np
 import pandas as pd
 import tqdm as tqdm
 from pandas import DataFrame
 
-from core.datastructures import Process, Flow, Stock, ScenarioData, Scenario, Indicator
-from core.parameters import ParameterName, StockDistributionType, StockDistributionParameter
 from core.types import FunctionType
+from core.datastructures import Process, Flow, Stock, ScenarioData, Scenario, Indicator
+from core.flowmodifiersolver import FlowModifierSolver
+from core.parameters import ParameterName, StockDistributionType, StockDistributionParameter, ParameterScenarioType
 from lib.odym.modules.dynamic_stock_model import DynamicStockModel
 
 
@@ -22,7 +24,8 @@ class FlowSolver(object):
     _max_iterations = 100000
     _virtual_process_transformation_stage = "Virtual"
 
-    def __init__(self, scenario: Scenario = None):
+    def __init__(self, scenario: Scenario = None, reset_evaluated_values: bool = True):
+        self._reset_evaluated_values = reset_evaluated_values
         self._scenario = scenario
 
         # Prioritized transformation stages
@@ -77,6 +80,14 @@ class FlowSolver(object):
         # Stock ID -> Indicator name -> DSM
         self._stock_id_to_indicator_name_to_dsm = {}
 
+    def get_scenario(self) -> Scenario:
+        """
+        Get Scenario that FlowSolver is using.
+
+        :return: Scenario-object
+        """
+        return self._scenario
+
     def get_all_stocks(self) -> List[Stock]:
         """
         Get list of all Stocks.
@@ -123,7 +134,7 @@ class FlowSolver(object):
             col_names += ["Total inflows, {} ({})".format(indicator.name, indicator.unit)]
             col_names += ["Total outflows, {} ({})".format(indicator.name, indicator.unit)]
 
-        df = pd.DataFrame({name: [] for name in col_names})
+        rows = []
         for year, process_id_to_process in self._year_to_process_id_to_process.items():
             for process_id, process in process_id_to_process.items():
                 new_row = [year, process_id]
@@ -132,9 +143,9 @@ class FlowSolver(object):
                 for indicator in self.get_indicator_name_to_indicator().values():
                     new_row += [self._get_process_indicator_inflows_total(process_id, indicator.name, year)]
                     new_row += [self._get_process_indicator_outflows_total(process_id, indicator.name, year)]
+                rows.append(new_row)
 
-
-                df.loc[len(df.index)] = new_row
+        df = pd.DataFrame(rows, columns=col_names)
         return df
 
     def get_flows_as_dataframe(self) -> DataFrame:
@@ -154,7 +165,7 @@ class FlowSolver(object):
         col_names += ["{} ({})".format(self._baseline_value_name, self._baseline_unit_name)]
         col_names += ["{} ({})".format(ind.name, ind.unit) for ind in self.get_indicator_name_to_indicator().values()]
 
-        df = pd.DataFrame({name: [] for name in col_names})
+        rows = []
         for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
             for flow_id, flow in flow_id_to_flow.items():
                 if not isinstance(flow, Flow):
@@ -162,7 +173,9 @@ class FlowSolver(object):
 
                 new_row = [year, flow_id, flow.source_process_id, flow.target_process_id]
                 new_row += [evaluated_value for evaluated_value in flow.get_all_evaluated_values()]
-                df.loc[len(df.index)] = new_row
+                rows.append(new_row)
+
+        df = pd.DataFrame(rows, columns=col_names)
         return df
 
     def get_evaluated_flow_values_as_dataframe(self) -> DataFrame:
@@ -206,7 +219,7 @@ class FlowSolver(object):
 
         return self._current_process_id_to_process[process_id]
 
-    def get_flow(self, flow_id: str, year=-1) -> Flow:
+    def get_flow(self, flow_id: str, year: int = -1) -> Flow:
         """
         Get Flow by ID and target year.
 
@@ -646,9 +659,13 @@ class FlowSolver(object):
                 flow.evaluate_indicator_values_from_baseline_value()
             else:
                 # Normalize relative flow value from [0, 100] % range to 0 - 1 range
-                flow.is_evaluated = False
-                flow.evaluated_share = flow.value / 100.0
-                flow.evaluated_value = 0.0
+                if self._reset_evaluated_values:
+                    flow.is_evaluated = False
+                    flow.evaluated_share = flow.value / 100.0
+                    flow.evaluated_value = 0.0
+                else:
+                    flow.is_evaluated = False
+                    flow.evaluated_share = flow.value / 100.0
 
             # Mark flow prioritized
             process = self.get_process(flow.target_process_id, year)
@@ -700,6 +717,7 @@ class FlowSolver(object):
                 if total_outflows_prioritized > total_inflows:
                     s = "Not enough inflows for prioritized outflows at process '{}' in year {}".format(
                         process_id, year)
+                    sys.stdout.flush()
                     raise Exception(s)
 
                 # Reduce total inflows to baseline stock by total prioritized outflows
@@ -1322,355 +1340,7 @@ class FlowSolver(object):
             # This is the case when dealing with baseline scenario, do nothing and just return
             return
 
-        # Keep track of minimum value of flows
-        row_to_opposite_flow_id_to_min_value = {}
-        row_to_target_flow_id_to_min_value = {}
-
-        # Keep track which year the minimum flow happened
-        row_to_opposite_flow_id_to_year = {}
-        row_to_target_flow_id_to_year = {}
-
         print("*** Applying flow modifiers for scenario '{}' ***".format(self._scenario.name))
-        flow_modifiers = self._scenario.scenario_definition.flow_modifiers
-        for flow_modifier in flow_modifiers:
-            year_range = [year for year in range(flow_modifier.start_year, flow_modifier.end_year + 1)]
-            source_process_id = flow_modifier.source_process_id
-            target_process_id = flow_modifier.target_process_id
-            source_to_target_flow_id = flow_modifier.target_flow_id
-
-            new_values = []
-            if flow_modifier.function_type == FunctionType.Constant:
-                # NOTE: Constant replaces the values during the year range
-                new_values = [flow_modifier.target_value for _ in year_range]
-
-            # Change in value (delta)
-            if flow_modifier.use_change_in_value:
-                if flow_modifier.function_type == FunctionType.Linear:
-                    new_values = np.linspace(start=0, stop=flow_modifier.change_in_value, num=len(year_range))
-
-                if flow_modifier.function_type == FunctionType.Exponential:
-                    new_values = np.logspace(start=0, stop=1, num=len(year_range))
-
-                if flow_modifier.function_type == FunctionType.Sigmoid:
-                    new_values = np.linspace(start=-flow_modifier.change_in_value,
-                                               stop=flow_modifier.change_in_value,
-                                               num=len(year_range))
-
-                    new_values = flow_modifier.change_in_value / (1.0 + np.exp(-new_values))
-
-            # Target value (current to target)
-            if flow_modifier.use_target_value:
-                source_to_target_flow = self.get_flow(source_to_target_flow_id, year_range[0])
-                value_start = source_to_target_flow.value
-
-                if flow_modifier.function_type == FunctionType.Linear:
-                    new_values = np.linspace(start=value_start, stop=flow_modifier.target_value, num=len(year_range))
-
-                if flow_modifier.function_type == FunctionType.Exponential:
-                    # NOTE: Is this function working properly with target value?
-                    new_values = np.logspace(start=0, stop=1, num=len(year_range))
-
-                if flow_modifier.function_type == FunctionType.Sigmoid:
-                    # NOTE: Is this function working properly with target value?
-                    new_values = np.linspace(start=-flow_modifier.change_in_value,
-                                             stop=flow_modifier.change_in_value,
-                                             num=len(year_range))
-
-                    new_values = flow_modifier.change_in_value / (1.0 + np.exp(-new_values))
-
-            for year_index, year in enumerate(year_range):
-                source_to_target_flow = self.get_flow(source_to_target_flow_id, year)
-                value_old = 0.0
-                value_new = 0.0
-
-                # Replace the value for the flow value for the year instead of adding the change
-                # Using the Constant-function: replace the value for the year and ignore all the
-                # opposite target nodes
-                if flow_modifier.function_type == FunctionType.Constant:
-                    # NOTE: Using CONSTANT will ignore the opposite target process IDs
-                    source_to_target_flow.value = new_values[year_index]
-                    continue
-
-                # Apply change in value (either absolute or relative) for the flow
-                # and also to target opposite flows
-                if flow_modifier.use_change_in_value:
-                    if flow_modifier.is_change_type_value:
-                        value_old, value_new = self._apply_absolute_change_to_flow(
-                            source_to_target_flow, new_values[year_index])
-
-                    if flow_modifier.is_change_type_proportional:
-                        value_old, value_new = self._apply_relative_change_to_flow(
-                            source_to_target_flow, new_values[year_index])
-
-                    print(value_old, value_new)
-
-                    # Clamp flow values:
-                    if source_to_target_flow.is_unit_absolute_value:
-                        # NOTE: Clamp only lower bound [0.0, no limits] to prevent absolute becoming negative
-                        value_old = source_to_target_flow.value
-                        value_new = self._clamp_flow_value(source_to_target_flow, 0.0, None)
-                        if value_old < value_new:
-                            s = "Clamped absolute target flow '{}' to 0.0 at year {}"
-                            s += " because flow value was negative ({})"
-                            s = s.format(source_to_target_flow_id, year, value_old)
-                            print(s)
-                    else:
-                        # NOTE: Clamp relative flow value between [0, 100] % (here flow value = flow share)
-                        value_old = source_to_target_flow.value
-                        value_new = self._clamp_flow_value(source_to_target_flow, 0.0, 100.0)
-                        if value_old < value_new:
-                            s = "Clamped relative target flow '{}' to 0.0 at year {}"
-                            s += " because flow value was negative ({})"
-                            s = s.format(source_to_target_flow_id, year, value_old)
-                            print(s)
-
-                # Apply target value to the flow
-                if flow_modifier.use_target_value:
-                    value_old, value_new = self._apply_target_value_to_flow(source_to_target_flow, new_values[year_index])
-
-                    # Clamp flow values:
-                    if source_to_target_flow.is_unit_absolute_value:
-                        # NOTE: Clamp only lower bound [0.0, no limits] to prevent absolute becoming negative
-                        value_old = source_to_target_flow.value
-                        value_new = self._clamp_flow_value(source_to_target_flow, 0.0, None)
-                        if value_old < 0.0:
-                            s = "Clamped absolute target flow '{}' to 0.0 at year {}"
-                            s += " because flow value was negative ({})"
-                            s = s.format(source_to_target_flow.id, year, value_old)
-                            print(s)
-
-                    else:
-                        # NOTE: Clamp relative flow value between [0, 100] % (here flow value = flow share)
-                        value_old = source_to_target_flow.value
-                        value_new = self._clamp_flow_value(source_to_target_flow, 0.0, 100.0)
-                        if value_old < 0.0 or value_old > 100.0:
-                            s = "Clamped relative target flow '{}' to 0.0 at year {}"
-                            s += " because flow value was outside [0, 100]% range ({})"
-                            s = s.format(source_to_target_flow.id, year, value_old)
-                            print(s)
-
-                value_diff = value_new - value_old
-                if flow_modifier.has_opposite_targets:
-                    # NOTE: Apply changes to all opposite targets equally
-                    opposite_target_flow_share = 1.0 / len(flow_modifier.opposite_target_process_ids)
-                    for opposite_target_process_id in flow_modifier.opposite_target_process_ids:
-                        opposite_flow_id = "{} {}".format(source_process_id, opposite_target_process_id)
-                        opposite_flow = self.get_flow(opposite_flow_id, year)
-
-                        if flow_modifier.is_change_type_value:
-                            opposite_value = -value_diff
-                            opposite_value *= opposite_target_flow_share
-                            self._apply_absolute_change_to_flow(opposite_flow, opposite_value)
-
-                            # Keep track of minimum value for opposite flows
-                            if opposite_flow.value < 0.0:
-                                row = flow_modifier.row_number
-                                if flow_modifier.row_number not in row_to_opposite_flow_id_to_min_value:
-                                    row_to_opposite_flow_id_to_min_value[row] = {}
-                                    row_to_opposite_flow_id_to_year[row] = {}
-
-                                opposite_flow_id_to_min_value = row_to_opposite_flow_id_to_min_value[row]
-                                opposite_flow_id_to_year = row_to_opposite_flow_id_to_year[row]
-                                if opposite_flow.id not in opposite_flow_id_to_min_value:
-                                    opposite_flow_id_to_min_value[opposite_flow_id] = opposite_flow.value
-                                    opposite_flow_id_to_year[opposite_flow_id] = year
-                                else:
-                                    prev_min_value = opposite_flow_id_to_min_value[opposite_flow_id]
-                                    if opposite_flow.value < prev_min_value:
-                                        opposite_flow_id_to_min_value[opposite_flow_id] = opposite_flow.value
-                                        opposite_flow_id_to_year[opposite_flow_id] = year
-
-                        if flow_modifier.is_change_type_proportional:
-                            opposite_value = -(value_diff / opposite_flow.value) * 100.0
-                            opposite_value *= opposite_target_flow_share
-                            self._apply_relative_change_to_flow(opposite_flow, opposite_value)
-
-                            # Keep track of minimum value for opposite flows
-                            if opposite_flow.value < 0.0:
-                                row = flow_modifier.row_number
-                                if flow_modifier.row_number not in row_to_opposite_flow_id_to_min_value:
-                                    row_to_opposite_flow_id_to_min_value[row] = {}
-                                    row_to_opposite_flow_id_to_year[row] = {}
-
-                                opposite_flow_id_to_min_value = row_to_opposite_flow_id_to_min_value[row]
-                                opposite_flow_id_to_year = row_to_opposite_flow_id_to_year[row]
-                                if opposite_flow.id not in opposite_flow_id_to_min_value:
-                                    opposite_flow_id_to_min_value[opposite_flow_id] = opposite_flow.value
-                                    opposite_flow_id_to_year[opposite_flow_id] = year
-                                else:
-                                    prev_min_value = opposite_flow_id_to_min_value[opposite_flow_id]
-                                    if opposite_flow.value < prev_min_value:
-                                        opposite_flow_id_to_min_value[opposite_flow_id] = opposite_flow.value
-                                        opposite_flow_id_to_year[opposite_flow_id] = year
-
-                else:
-                    # Apply change to all same type outflows as flow_modifier
-                    # NOTE: Apply changes to all opposite targets equally
-                    is_source_flow_abs = source_to_target_flow.is_unit_absolute_value
-                    flows_out = self.get_process_outflows(source_process_id, year)
-
-                    # Get list of same type flows as the source to target Process flow
-                    target_flows = [flow for flow in flows_out if flow.is_unit_absolute_value == is_source_flow_abs
-                                    and flow.target_process_id != target_process_id]
-
-                    for target_flow in target_flows:
-                        target_flow_share = 1.0 / len(target_flows)
-
-                        if flow_modifier.is_change_type_value:
-                            opposite_value = -value_diff
-                            opposite_value *= target_flow_share
-                            self._apply_absolute_change_to_flow(target_flow, opposite_value)
-
-                            # Keep track of minimum value for target flows
-                            if target_flow.value < 0.0:
-                                row = flow_modifier.row_number
-                                if flow_modifier.row_number not in row_to_target_flow_id_to_min_value:
-                                    row_to_target_flow_id_to_min_value[row] = {}
-                                    row_to_target_flow_id_to_year[row] = {}
-
-                                target_flow_to_min_value = row_to_target_flow_id_to_min_value[row]
-                                target_flow_id_to_year = row_to_target_flow_id_to_year[row]
-                                if target_flow.id not in target_flow_to_min_value:
-                                    target_flow_to_min_value[target_flow.id] = target_flow.value
-                                    target_flow_id_to_year[target_flow.id] = year
-                                else:
-                                    prev_min_value = target_flow_to_min_value[target_flow.id]
-                                    if target_flow.value < prev_min_value:
-                                        target_flow_to_min_value[target_flow.id] = target_flow.value
-                                        target_flow_id_to_year[target_flow.id] = year
-
-                        if flow_modifier.is_change_type_proportional:
-                            opposite_value = -(value_diff / target_flow.value) * 100.0
-                            opposite_value *= target_flow_share
-                            self._apply_relative_change_to_flow(target_flow, opposite_value)
-
-                            # Keep track of minimum value for target flows
-                            if target_flow.value < 0.0:
-                                row = flow_modifier.row_number
-                                if flow_modifier.row_number not in row_to_target_flow_id_to_min_value:
-                                    row_to_target_flow_id_to_min_value[row] = {}
-                                    row_to_target_flow_id_to_year[row] = {}
-
-                                target_flow_to_min_value = row_to_target_flow_id_to_min_value[row]
-                                target_flow_id_to_year = row_to_target_flow_id_to_year[row]
-                                if target_flow.id not in target_flow_to_min_value:
-                                    target_flow_to_min_value[target_flow.id] = target_flow.value
-                                    target_flow_id_to_year[target_flow.id] = year
-                                else:
-                                    prev_min_value = target_flow_to_min_value[target_flow.id]
-                                    if target_flow.value < prev_min_value:
-                                        target_flow_to_min_value[target_flow.id] = target_flow.value
-                                        target_flow_id_to_year[target_flow.id] = year
-
-            # Show errors about applied flow modifier if any
-            has_error = False
-            if row_to_opposite_flow_id_to_min_value:
-                has_error = True
-                row = list(row_to_opposite_flow_id_to_min_value.keys())[0]
-
-                print("Following errors happened when applying flow modifier from row {}:".format(row))
-                opposite_flow_id_to_min_value = row_to_opposite_flow_id_to_min_value[row]
-                opposite_flow_id_to_year = row_to_opposite_flow_id_to_year[row]
-                for opposite_flow_id, min_value in opposite_flow_id_to_min_value.items():
-                    year = opposite_flow_id_to_year[opposite_flow_id]
-                    s = "Opposite target flow '{}' reached minimum negative flow value ({:.5f}) at year {}".format(
-                        opposite_flow_id, min_value, year)
-                    print("\t{}".format(s))
-
-                print("\n\tThis is caused by the source process not having enough inflows to satisfy all process outflows")
-
-            if row_to_target_flow_id_to_min_value:
-                has_error = True
-                row = list(row_to_target_flow_id_to_min_value.keys())[0]
-
-                print("Following errors happened when applying flow modifier from row {}:".format(row))
-                target_flow_id_to_min_value = row_to_target_flow_id_to_min_value[row]
-                target_flow_id_to_year = row_to_target_flow_id_to_year[row]
-                for target_flow_id, min_value in target_flow_id_to_min_value.items():
-                    year = target_flow_id_to_year[target_flow_id]
-                    s = "Target flow '{}' reached minimum negative flow value ({:.5f}) at year {}".format(
-                        target_flow_id, min_value, year)
-                    print("\t{}".format(s))
-
-                print("\n\tThis is caused by the source process not having enough inflows to satisfy all process outflows")
-
-            if has_error:
-                raise Exception("Flow modifier error")
-
-    def _apply_absolute_change_to_flow(self, flow: Flow, value: float) -> Tuple[float, float]:
-        """
-        Apply absolute change to Flow.
-
-        :param flow: Target Flow
-        :param value: Value,
-        :return Tuple (old value: float, new value: float)
-        """
-        value_old = flow.value
-        flow.value += value
-        value_new = flow.value
-        return value_old, value_new
-
-    def _apply_relative_change_to_flow(self, flow: Flow, value: float) -> Tuple[float, float]:
-        """
-        Apply relative (= percentual) change to Flow.
-        Value should not be normalized.
-
-        :param flow: Target Flow
-        :param value: Value (not normalized)
-        :return Tuple (old value: float, new value: float)
-        """
-        value_old = flow.value
-        flow.value += flow.value * (value / 100.0)
-        value_new = flow.value
-        return value_old, value_new
-
-    def _apply_target_value_to_flow(self, flow: Flow, value: float) -> Tuple[float, float]:
-        """
-        Appy target value to Flow.
-        Value should not be normalized.
-
-        :param flow:
-        :param value:
-        :return: Tuple (old value: float, new value: float)
-        """
-        value_old = flow.value
-        flow.value = value
-        value_new = flow.value
-        return value_old, value_new
-
-
-    def _clamp_flow_value(self,
-                          flow: Flow,
-                          mini: Union[float, None] = 0.0,
-                          maxi: Union[float, None] = 100.0) -> float:
-        """
-        Clamp Flow value to range [mini, maxi].
-        Mini and maxi are both included in the range.
-        Default range is [0.0, 100.0].
-
-        If mini is None then do not check for lower bound.
-        If maxi is None then do not check for upper bound
-
-        :param flow: Target Flow
-        :param mini: Lower bound value
-        :param maxi: Upper bound value
-        :return Clamped value
-        """
-        has_mini = mini is not None
-        has_maxi = maxi is not None
-        apply_both_bounds = has_mini and has_maxi
-        apply_only_lower_bound = has_mini and not has_maxi
-        apply_only_higher_bound = not has_mini and has_maxi
-        if apply_both_bounds:
-            flow.value = np.clip(flow.value, mini, maxi)
-
-        if apply_only_lower_bound:
-            if flow.value < mini:
-                flow.value = mini
-
-        if apply_only_higher_bound:
-            if flow.value > maxi:
-                flow.value = maxi
-
-        return flow.value
-
+        scenario_type = self._scenario.model_params[ParameterName.ScenarioType]
+        fms = FlowModifierSolver(self, scenario_type)
+        fms.solve()

@@ -1,10 +1,7 @@
 import copy
-from enum import Enum
-from typing import List, Dict, Tuple, Set, Any
-
+from typing import List, Dict, Tuple, Any
 import numpy as np
 import pandas as pd
-
 from core.dataprovider import DataProvider
 from core.datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color, ProcessEntry
 from core.parameters import ParameterName, ParameterFillMethod, StockDistributionType,\
@@ -1632,9 +1629,14 @@ class DataChecker(object):
                         s += "Target value change type must be % for relative flow"
                         errors.append(s)
 
+                    if is_flow_rel and flow_modifier.target_value > 100:
+                        s = "" + error_message_prefix
+                        s += "Target value must be equal or less than 100% for relative flow"
+                        errors.append(s)
+
                     if flow_modifier.target_value is not None and flow_modifier.target_value < 0.0:
                         s = "" + error_message_prefix
-                        s += "Target value must be > 0.0"
+                        s += "Target value must be > 0.0 (no negative values)"
                         errors.append(s)
                 else:
                     # NOTE: Implement checking change in delta
@@ -1654,6 +1656,12 @@ class DataChecker(object):
                     # Relative flow:
                     # Absolute change here means that e.g. original value = 100 %
                     pass
+
+                # Check if both change in value and target value is set
+                if flow_modifier.use_change_in_value and flow_modifier.use_target_value:
+                    s = "" + error_message_prefix
+                    s += "Using both change in value and target value in same row is not allowed"
+                    errors.append(s)
 
         return not errors, errors
 
