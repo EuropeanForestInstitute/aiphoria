@@ -303,6 +303,36 @@ class FlowSolver(object):
             total += flow.evaluated_value
         return total
 
+    def get_process_outflows_total_abs(self, process_id: str, year: int = -1) -> float:
+        """
+        Get total absolute outflows evaluated value (baseline) for Process ID.
+        Includes only absolute outflows.
+
+        :param process_id: Target Process ID (str)
+        :param year: Target year (int)
+        :return: Sum of all absolute outflows' evaluated value (baseline)
+        """
+        total = 0.0
+        outflows = self._get_process_outflows_abs(process_id, year)
+        for flow in outflows:
+            total += flow.evaluated_value
+        return total
+
+    def get_process_outflows_total_rel(self, process_id: str, year: int = -1) -> float:
+        """
+        Get total relative outflows evaluated value (baseline) for Process ID.
+        Includes only relative outflows.
+
+        :param process_id: Target Process ID (str)
+        :param year: Target year (int)
+        :return: Sum of all relative outflows' evaluated value (baseline)
+        """
+        total = 0.0
+        outflows = self._get_process_outflows_rel(process_id, year)
+        for flow in outflows:
+            total += flow.evaluated_value
+        return total
+
     def solve_timesteps(self) -> None:
         """
         Solves all timesteps.

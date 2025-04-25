@@ -37,6 +37,7 @@ class FlowModifierSolver(object):
                     print("\t" + error)
             print("Constrained scenario solved, stopping now...")
 
+            raise Exception("Constrained scenario solving not yet implemented")
         # exit(-200)
 
     def _solve_unconstrained_scenario(self) -> Tuple[bool, List[str]]:
@@ -44,6 +45,7 @@ class FlowModifierSolver(object):
         flow_solver: FlowSolver = self._flow_solver
         scenario: Scenario = self._flow_solver.get_scenario()
 
+        scenario_type = ParameterScenarioType.Unconstrained
         flow_solver._reset_evaluated_values = True
 
         # Evaluate new values for each flow modifier in the requested year range
@@ -80,18 +82,26 @@ class FlowModifierSolver(object):
                                          flow_solver,
                                          flow_modifier_indices_for_abs_flows,
                                          flow_modifiers,
-                                         flow_modifier_index_to_new_values)
+                                         flow_modifier_index_to_new_values,
+                                         scenario_type)
 
             self._process_relative_flows(source_process_id,
                                          flow_solver,
                                          flow_modifier_indices_for_rel_flows,
                                          flow_modifiers,
-                                         flow_modifier_index_to_new_values)
+                                         flow_modifier_index_to_new_values,
+                                         scenario_type)
 
             return not errors, errors
 
     def _solve_constrained_scenario(self) -> Tuple[bool, List[str]]:
-        errors = []
+        errors: List[str] = []
+        flow_solver: FlowSolver = self._flow_solver
+        scenario: Scenario = self._flow_solver.get_scenario()
+
+        scenario_type = ParameterScenarioType.Constrained
+        flow_solver._reset_evaluated_values = True
+
         return not errors, errors
 
     def _make_flow_id(self, source_process_id: str, target_process_id: str) -> str:
@@ -137,7 +147,6 @@ class FlowModifierSolver(object):
                 flow.value = maxi
 
         return flow.value
-
 
     def _get_process_outflow_siblings(self,
                                       process_id: str = None,
@@ -193,7 +202,8 @@ class FlowModifierSolver(object):
                                 flow_solver: FlowSolver,
                                 flow_modifier_indices: List[int],
                                 flow_modifiers: List[FlowModifier],
-                                flow_modifier_index_to_new_values: Dict[int, List[float]]
+                                flow_modifier_index_to_new_values: Dict[int, List[float]],
+                                scenario_type: ParameterScenarioType
                                 ) -> None:
         """
         Process absolute flows for flow modifier.
@@ -223,7 +233,7 @@ class FlowModifierSolver(object):
             flow_modifier_index_to_new_values_offset[flow_modifier_index] = new_values_offset
             flow_modifier_index_to_new_values_actual[flow_modifier_index] = new_values_actual
             for year_index, year in enumerate(year_range):
-                value_offset = new_values_offset[year_index]
+                # value_offset = new_values_offset[year_index]
                 value_actual = new_values_actual[year_index]
 
                 if year not in year_to_required_flow_total:
@@ -231,16 +241,42 @@ class FlowModifierSolver(object):
                 year_to_required_flow_total[year] += value_actual
                 # print("year={}, actual={}, offset={}".format(year, value_actual, value_offset))
 
-        # Store year to source process total relative outflows before applying changes
-        year_to_process_total_outflows_rel = {}
+        # Store year to source process total absolute outflows before applying changes
+        has_errors = False
+        year_to_process_total_outflows = {}
         for flow_modifier_index in flow_modifier_index_to_new_values_actual:
             flow_modifier = flow_modifiers[flow_modifier_index]
             year_range = flow_modifier.get_year_range()
             for year in year_range:
-                if year not in year_to_process_total_outflows_rel:
-                    outflows = flow_solver.get_process_outflows(source_process_id, year)
-                    total = np.sum([flow.evaluated_value for flow in outflows])
-                    year_to_process_total_outflows_rel[year] = total
+                if year not in year_to_process_total_outflows:
+                    # Update the yearly total absolute outflows only once because it stays the
+                    # same for all flow modifiers
+                    total_outflows_abs = flow_solver.get_process_outflows_total_abs(source_process_id, year)
+                    year_to_process_total_outflows[year] = total_outflows_abs
+
+            # Check if there is enough total outflows from the source process to fulfill the flow modifier requirements
+            # before applying the changes
+            # Check if there is enough total outflows from the source process to fulfill the flow modifier requirements
+            # before applying the changes
+            errors = []
+            for year, total_outflows in year_to_process_total_outflows.items():
+                total_outflows_required = year_to_required_flow_total[year]
+                total_left = total_outflows - total_outflows_required
+                if total_left < 0.0:
+                    s = "INFO: Process '{}' does not have enough outflows for absolute flows in year {} (required={}, available={})".format(
+                        source_process_id, year, total_outflows_required, total_outflows)
+                    errors.append(s)
+
+            if errors:
+                has_errors = True
+                print("Following issues found when processing flow modifier in row {} (flow '{}'):".format(
+                    flow_modifier.row_number, flow_modifier.target_flow_id))
+                for error in errors:
+                    print("\t{}".format(error))
+                print("")
+
+        if has_errors and scenario_type == ParameterScenarioType.Constrained:
+            raise Exception()
 
         # Apply changes to source to target flows
         for flow_modifier_index in flow_modifier_indices:
@@ -249,16 +285,15 @@ class FlowModifierSolver(object):
             new_values_actual = flow_modifier_index_to_new_values_actual[flow_modifier_index]
             for year_index, year in enumerate(year_range):
                 flow = flow_solver.get_flow(flow_modifier.target_flow_id, year)
-                total_outflows_rel = year_to_process_total_outflows_rel[year]
 
                 # Evaluated flow share
                 value_actual = new_values_actual[year_index]
                 new_value = value_actual
                 new_evaluated_share = 1.0
-                new_evaluated_value = new_evaluated_share * total_outflows_rel
+                new_evaluated_value = new_value * new_evaluated_share
                 flow.value = new_value
-                flow.evaluated_value = new_evaluated_value
                 flow.evaluated_share = new_evaluated_share
+                flow.evaluated_value = new_evaluated_value
 
         # Apply flow modifiers to opposite targets or to all same type sibling flows
         for flow_modifier_index in flow_modifier_indices:
@@ -271,7 +306,7 @@ class FlowModifierSolver(object):
             if flow_modifier.has_opposite_targets:
                 for year_index, year in enumerate(year_range):
                     value_offset = new_values_offset[year_index]
-                    total_outflows_rel = year_to_process_total_outflows_rel[year]
+                    total_outflows_abs = year_to_process_total_outflows[year]
                     opposite_flow_share = 1.0 / len(flow_modifier.opposite_target_process_ids)
                     for opposite_target_process_id in flow_modifier.opposite_target_process_ids:
                         opposite_flow_id = self._make_flow_id(source_process_id, opposite_target_process_id)
@@ -279,97 +314,93 @@ class FlowModifierSolver(object):
 
                         new_value = opposite_flow.value - value_offset
                         new_evaluated_share = 1.0
-                        new_evaluated_value = new_evaluated_share * total_outflows_rel
+                        new_evaluated_value = new_evaluated_share * total_outflows_abs
                         opposite_flow.value = new_value * opposite_flow_share
                         opposite_flow.evaluated_share = new_evaluated_share * opposite_flow_share
                         opposite_flow.evaluated_value = new_evaluated_value * opposite_flow_share
 
             else:
-                # TODO: Implement proportional distribution to absolute sibling flows
-                pass
+                # *************************************************************************
+                # * Apply changes to proportionally to all siblings outflows of same type *
+                # *************************************************************************
+                errors = []
+                for year_index, year in enumerate(year_range):
+                    value_offset = new_values_offset[year_index]
+                    value_actual = new_values_actual[year_index]
 
-                # # *************************************************************************
-                # # * Apply changes to proportionally to all siblings outflows of same type *
-                # # *************************************************************************
-                # for year_index, year in enumerate(year_range):
-                #     value_offset = new_values_offset[year_index]
-                #     value_actual = new_values_actual[year_index]
-                #
-                #     # flow modifier flow
-                #     total_outflows = flow_solver.get_process_outflows_total(source_process_id)
-                #
-                #     # Get all same type sibling outflows (= outflows that start from same source process
-                #     # and are same type as the source to target flow)
-                #     sibling_outflows = self._get_process_outflow_siblings(source_process_id,
-                #                                                           flow_modifier.target_flow_id,
-                #                                                           year,
-                #                                                           only_same_type=True)
-                #
-                #     # Get total sibling outflows, used to check if there is enough outflows
-                #     # to fulfill the flow_modifier request
-                #     total_sibling_outflows = np.sum([flow.evaluated_value for flow in sibling_outflows])
-                #     source_to_target_flow = flow_solver.get_flow(flow_modifier.target_flow_id, year)
-                #
-                #     value_new = value_actual
-                #     # Source to target flows is relative flow, all sibling_flows are also relative flows
-                #     if flow_modifier.is_change_type_value:
-                #         # Calculate how much new absolute value from source to target flow is
-                #         # and check if total_other_outflows is enough
-                #         new_outflow_source_to_target = total_outflows * (value_new / 100.0)
-                #         outflows_left = total_sibling_outflows - new_outflow_source_to_target
-                #         if outflows_left < 0.0:
-                #             # TODO: Make proper error message
-                #             # Total of all sibling flows is not enough to cover the change in value
-                #
-                #             print("total_other_outflows not able to support request flow_modifier amount")
-                #             print("Requested={}, available={}, missing={}".format(new_outflow_source_to_target,
-                #                                                                   total_sibling_outflows,
-                #                                                                   abs(outflows_left)))
-                #             continue
-                #
-                #         # TODO: Implement
-                #
-                #     if flow_modifier.is_change_type_proportional:
-                #         # Calculate how much new absolute value from source to target flow is
-                #         # and check if total_other_outflows is enough
-                #         outflow_abs = total_outflows * (value_new / 100.0)
-                #         outflows_left = total_sibling_outflows - outflow_abs
-                #         if outflows_left < 0.0:
-                #             # TODO: Make proper error message
-                #             print("total_other_outflows not able to support request flow_modifier amount")
-                #             print("Requested={}, available={}, missing={}".format(outflow_abs,
-                #                                                                   total_sibling_outflows,
-                #                                                                   abs(outflows_left)))
-                #             # self._add_missing_value_error(row_number, year, source_to_target_flow_id, outflows_left)
-                #             continue
-                #
-                #         # Get total sibling share (should be always 100)
-                #         total_sibling_share = np.sum([flow.value for flow in sibling_outflows])
-                #
-                #         # Calculate remaining share that is distributed among sibling flows
-                #         share_left = 100.0 - source_to_target_flow.value
-                #
-                #         # evaluated_left is how much evaluated value is left
-                #         # to distribute among sibling flows
-                #         evaluated_left = (share_left / 100.0) * total_outflows
-                #         for flow in sibling_outflows:
-                #             # Calculate sibling flow share from total sibling share
-                #             sibling_share_factor = flow.value / total_sibling_share
-                #
-                #             # Calculate new evaluated value for sibling flow
-                #             new_sibling_value = sibling_share_factor * evaluated_left
-                #
-                #             # Calculate new evaluated share for sibling fow
-                #             new_sibling_share = (new_sibling_value / total_outflows) * 100.0
-                #
-                #             # Update sibling share
-                #             flow.value = new_sibling_share
+                    # Get total absolute outflows
+                    total_outflows_abs = year_to_process_total_outflows[year]
+
+                    # Get all same type sibling outflows (= outflows that start from same source process
+                    # and are same type as the source to target flow)
+                    sibling_outflows = self._get_process_outflow_siblings(source_process_id,
+                                                                          flow_modifier.target_flow_id,
+                                                                          year,
+                                                                          only_same_type=True)
+
+                    # Get total sibling outflows, used to check if there is enough outflows
+                    # to fulfill the flow_modifier request
+                    total_sibling_outflows = np.sum([flow.evaluated_value for flow in sibling_outflows])
+                    source_to_target_flow = flow_solver.get_flow(flow_modifier.target_flow_id, year)
+                    required_flow_value = source_to_target_flow.evaluated_value
+                    if flow_modifier.is_change_type_value:
+                        outflows_available_to_siblings = total_outflows_abs - required_flow_value
+                        if outflows_available_to_siblings < 0.0:
+                            # Total of all sibling flows is not enough to cover the change in value
+                            s = "INFO: Not enough absolute outflows to fill flow modifier in row {} for year {}".format(
+                                flow_modifier.row_number, year)
+                            errors.append(s)
+
+                            s = "INFO: Total outflows in process '{}' = {}, flow '{}' required={}, available to sibling flows = {}".format(
+                                source_process_id, total_outflows_abs, source_to_target_flow.id, required_flow_value,
+                                outflows_available_to_siblings)
+                            errors.append(s)
+
+                        # Calculate new sibling values and update sibling flows
+                        for flow in sibling_outflows:
+                            sibling_share = flow.value / total_sibling_outflows
+                            new_sibling_value = sibling_share * outflows_available_to_siblings
+                            flow.value = new_sibling_value
+                            flow.evaluated_value = new_sibling_value
+
+                    if flow_modifier.is_change_type_proportional:
+                        outflows_available_to_siblings = total_outflows_abs - required_flow_value
+                        if outflows_available_to_siblings < 0.0:
+                            # Total of all sibling flows is not enough to cover the change in value
+                            s = "INFO: Not enough absolute outflows to fill flow modifier in row {} for year {}".format(
+                                flow_modifier.row_number, year)
+                            errors.append(s)
+
+                            s = "INFO: Total outflows in process '{}' = {}, flow '{}' required={}, available to sibling flows = {}".format(
+                                source_process_id, total_outflows_abs, source_to_target_flow.id, required_flow_value,
+                                outflows_available_to_siblings)
+                            errors.append(s)
+
+                        # Calculate new sibling values and update sibling flows
+                        for flow in sibling_outflows:
+                            sibling_share = flow.value / total_sibling_outflows
+                            new_sibling_value = sibling_share * outflows_available_to_siblings
+                            flow.value = new_sibling_value
+                            flow.evaluated_value = new_sibling_value
+
+                if errors:
+                    print("Following issues found when processing flow modifier in row {}:".format(flow_modifier.row_number))
+                    for error in errors:
+                        print("\t{}".format(error))
+                    print("")
+
+        # NOTE: Clamp all flows to minimum of 0.0 to introduce virtual flows
+        for year, flow_id_to_flow in flow_solver._year_to_flow_id_to_flow.items():
+            for flow_id, flow in flow_id_to_flow.items():
+                if flow.value < 0.0:
+                    flow.value = 0.0
 
     def _process_relative_flows(self, source_process_id: str,
                                 flow_solver: FlowSolver,
                                 flow_modifier_indices: List[int],
                                 flow_modifiers: List[FlowModifier],
-                                flow_modifier_index_to_new_values: Dict[int, List[float]]
+                                flow_modifier_index_to_new_values: Dict[int, List[float]],
+                                scenario_type: ParameterScenarioType
                                 ) -> None:
         """
         Process relative flows for flow modifier.
@@ -399,24 +430,46 @@ class FlowModifierSolver(object):
             flow_modifier_index_to_new_values_offset[flow_modifier_index] = new_values_offset
             flow_modifier_index_to_new_values_actual[flow_modifier_index] = new_values_actual
             for year_index, year in enumerate(year_range):
-                value_offset = new_values_offset[year_index]
                 value_actual = new_values_actual[year_index]
 
                 if year not in year_to_required_flow_total:
                     year_to_required_flow_total[year] = 0.0
                 year_to_required_flow_total[year] += value_actual
-                # print("year={}, actual={}, offset={}".format(year, value_actual, value_offset))
 
         # Store year to source process total relative outflows before applying changes
-        year_to_process_total_outflows_rel = {}
+        has_errors = False
+        year_to_process_total_outflows = {}
         for flow_modifier_index in flow_modifier_indices:
             flow_modifier = flow_modifiers[flow_modifier_index]
             year_range = flow_modifier.get_year_range()
             for year in year_range:
-                if year not in year_to_process_total_outflows_rel:
-                    outflows = flow_solver.get_process_outflows(source_process_id, year)
-                    total = np.sum([flow.evaluated_value for flow in outflows if not flow.is_unit_absolute_value])
-                    year_to_process_total_outflows_rel[year] = total
+                if year not in year_to_process_total_outflows:
+                    # Update the yearly total relative outflows only once because it stays the
+                    # same for all flow modifiers
+                    total_outflows_rel = flow_solver.get_process_outflows_total_rel(source_process_id, year)
+                    year_to_process_total_outflows[year] = total_outflows_rel
+
+            # Check if there is enough total outflows from the source process to fulfill the flow modifier requirements
+            # before applying the changes
+            errors = []
+            for year, total_outflows in year_to_process_total_outflows.items():
+                total_outflows_required = year_to_required_flow_total[year]
+                total_left = total_outflows - total_outflows_required
+                if total_left < 0.0:
+                    s = "INFO: Process '{}' does not have enough outflows for relative flows in year {} (required={}, available={})".format(
+                        source_process_id, year, total_outflows_required, total_outflows)
+                    errors.append(s)
+
+            if errors:
+                has_errors = True
+                print("Following issues found when processing flow modifier in row {} (flow '{}'):".format(
+                    flow_modifier.row_number, flow_modifier.target_flow_id))
+                for error in errors:
+                    print("\t{}".format(error))
+                print("")
+
+        if has_errors and scenario_type == ParameterScenarioType.Constrained:
+            raise Exception()
 
         # Apply changes to source to target flows
         for flow_modifier_index in flow_modifier_indices:
@@ -425,7 +478,7 @@ class FlowModifierSolver(object):
             new_values_actual = flow_modifier_index_to_new_values_actual[flow_modifier_index]
             for year_index, year in enumerate(year_range):
                 flow = flow_solver.get_flow(flow_modifier.target_flow_id, year)
-                total_outflows_rel = year_to_process_total_outflows_rel[year]
+                total_outflows_rel = year_to_process_total_outflows[year]
 
                 # Evaluated flow share
                 value_actual = new_values_actual[year_index]
@@ -433,8 +486,8 @@ class FlowModifierSolver(object):
                 new_evaluated_share = new_value / 100.0
                 new_evaluated_value = new_evaluated_share * total_outflows_rel
                 flow.value = new_value
-                flow.evaluated_value = new_evaluated_value
                 flow.evaluated_share = new_evaluated_share
+                flow.evaluated_value = new_evaluated_value
 
         # Apply flow modifiers to opposite targets or to all same type sibling flows
         for flow_modifier_index in flow_modifier_indices:
@@ -447,12 +500,11 @@ class FlowModifierSolver(object):
             if flow_modifier.has_opposite_targets:
                 for year_index, year in enumerate(year_range):
                     value_offset = new_values_offset[year_index]
-                    total_outflows_rel = year_to_process_total_outflows_rel[year]
+                    total_outflows_rel = year_to_process_total_outflows[year]
                     opposite_flow_share = 1.0 / len(flow_modifier.opposite_target_process_ids)
                     for opposite_target_process_id in flow_modifier.opposite_target_process_ids:
                         opposite_flow_id = self._make_flow_id(source_process_id, opposite_target_process_id)
                         opposite_flow = flow_solver.get_flow(opposite_flow_id, year)
-
                         new_value = opposite_flow.value - value_offset
                         new_evaluated_share = new_value / 100.0
                         new_evaluated_value = new_evaluated_share * total_outflows_rel
@@ -465,91 +517,47 @@ class FlowModifierSolver(object):
                 # * Apply changes to proportionally to all siblings outflows of same type *
                 # *************************************************************************
                 for year_index, year in enumerate(year_range):
-                    pass
+                    value_offset = new_values_offset[year_index]
+                    value_actual = new_values_actual[year_index]
 
-                    # TODO: Implement proportional distribution to relative sibling flows
-                    # NOTE: Take into account only total relative outflows from source process?
-                    # NOTE: Now it's taking both abs + rel flows into account
+                    # Get total relative outflows for process
+                    total_outflows_rel = year_to_process_total_outflows[year]
 
-                    # value_offset = new_values_offset[year_index]
-                    # value_actual = new_values_actual[year_index]
-                    # total_outflows = flow_solver.get_process_outflows_total(source_process_id)
-                    #
-                    # # Get all same type sibling outflows (= outflows that start from same source process
-                    # # and are same type as the source to target flow)
-                    # sibling_outflows = self._get_process_outflow_siblings(source_process_id,
-                    #                                                       flow_modifier.target_flow_id,
-                    #                                                       year,
-                    #                                                       only_same_type=True)
-                    #
-                    # # Get total sibling outflows, used to check if there is enough outflows
-                    # # to fulfill the flow_modifier request
-                    # total_sibling_outflows = np.sum([flow.evaluated_value for flow in sibling_outflows])
-                    # source_to_target_flow = flow_solver.get_flow(flow_modifier.target_flow_id, year)
-                    #
-                    # value_new = value_actual
-                    # if flow_modifier.is_change_type_value:
-                    #     # Calculate how much new absolute value from source to target flow is
-                    #     # and check if total_other_outflows is enough
-                    #     new_outflow_source_to_target = total_outflows * (value_new / 100.0)
-                    #     outflows_left = total_sibling_outflows - new_outflow_source_to_target
-                    #     if outflows_left < 0.0:
-                    #         # TODO: Make proper error message
-                    #         # Total of all sibling flows is not enough to cover the change in value
-                    #
-                    #         print("total_other_outflows not able to support request flow_modifier amount")
-                    #         print("Requested={}, available={}, missing={}".format(new_outflow_source_to_target,
-                    #                                                               total_sibling_outflows,
-                    #                                                               abs(outflows_left)))
-                    #         continue
-                    #
-                    # if flow_modifier.is_change_type_proportional:
-                    #     # Calculate how much new absolute value from source to target flow is
-                    #     # and check if total_other_outflows is enough
-                    #     outflow_abs = total_outflows * (value_new / 100.0)
-                    #     outflows_left = total_sibling_outflows - outflow_abs
-                    #
-                    #     print(outflow_abs, outflows_left, total_sibling_outflows)
-                    #
-                    #     if outflows_left < 0.0:
-                    #         # TODO: Make proper error message
-                    #         print("total_other_outflows not able to support request flow_modifier amount")
-                    #         print("Requested={}, available={}, missing={}".format(outflow_abs,
-                    #                                                               total_sibling_outflows,
-                    #                                                               abs(outflows_left)))
-                    #         # self._add_missing_value_error(row_number, year, source_to_target_flow_id, outflows_left)
-                    #         continue
-                    #
-                    #     # Get total sibling share (should be always 100)
-                    #     total_sibling_share = np.sum([flow.value for flow in sibling_outflows])
-                    #
-                    #     # Calculate remaining share that is distributed among sibling flows
-                    #     share_left = 100.0 - source_to_target_flow.value
-                    #
-                    #     # evaluated_left is how much evaluated value is left
-                    #     # to distribute among sibling flows
-                    #     evaluated_left = (share_left / 100.0) * total_outflows
-                    #     for flow in sibling_outflows:
-                    #         # Calculate sibling flow share from total sibling share
-                    #         sibling_share_factor = flow.value / total_sibling_share
-                    #
-                    #         # Calculate new evaluated value for sibling flow
-                    #         new_sibling_value = sibling_share_factor * evaluated_left
-                    #
-                    #         # Calculate new evaluated share for sibling fow
-                    #         new_sibling_share = (new_sibling_value / total_outflows) * 100.0
-                    #
-                    #         # Update sibling share
-                    #         flow.value = new_sibling_share
+                    # Get all same type sibling outflows (= outflows that start from same source process
+                    # and are same type as the source to target flow)
+                    sibling_outflows = self._get_process_outflow_siblings(source_process_id,
+                                                                          flow_modifier.target_flow_id,
+                                                                          year,
+                                                                          only_same_type=True)
 
-        # for flow_modifier_index in flow_modifier_indices:
-        #     flow_modifier = flow_modifiers[flow_modifier_index]
-        #     year_range = flow_modifier.get_year_range()
-        #     for year in year_range:
-        #         for opposite_target_process_id in flow_modifier.opposite_target_process_ids:
-        #             opposite_flow_id = self._make_flow_id(source_process_id, opposite_target_process_id)
-        #             opposite_flow = flow_solver.get_flow(opposite_flow_id, year)
-        #             print(opposite_flow)
+                    # Get total sibling outflows, used to check if there is enough outflows
+                    # to fulfill the flow_modifier request
+                    total_sibling_outflows = np.sum([flow.evaluated_value for flow in sibling_outflows])
+                    source_to_target_flow = flow_solver.get_flow(flow_modifier.target_flow_id, year)
+                    required_flow_value = source_to_target_flow.evaluated_value
+                    outflows_available_to_siblings = total_outflows_rel - required_flow_value
+                    if outflows_available_to_siblings < 0.0:
+                        # Total of all sibling flows is not enough to cover the change in value
+
+                        print("total_other_outflows not able to support request flow_modifier amount")
+                        print("Requested={}, available={}, missing={}".format(required_flow_value,
+                                                                              total_outflows_rel,
+                                                                              abs(outflows_available_to_siblings)))
+
+                    total_sibling_share = np.sum([flow.value for flow in sibling_outflows])
+                    for flow in sibling_outflows:
+                        sibling_share_factor = flow.value / total_sibling_share
+                        new_sibling_value = sibling_share_factor * outflows_available_to_siblings
+                        new_sibling_share = (new_sibling_value / total_outflows_rel) * 100.0
+                        flow.value = new_sibling_share
+                        flow.evaluated_value = new_sibling_value
+
+
+        # NOTE: Clamp all flows to minimum of 0.0 to introduce virtual flows
+        for year, flow_id_to_flow in flow_solver._year_to_flow_id_to_flow.items():
+            for flow_id, flow in flow_id_to_flow.items():
+                if flow.value < 0.0:
+                    flow.value = 0.0
 
     def _calculate_new_flow_values(self, flow_modifier: FlowModifier):
         """

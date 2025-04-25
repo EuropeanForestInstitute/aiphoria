@@ -1024,6 +1024,14 @@ class FlowModifier(ObjectBase):
     def opposite_target_process_ids(self) -> List[str]:
         return self._opposite_target_process_ids
 
+    def get_year_range(self) -> List[int]:
+        """
+        Get list of years FlowModifier is used.
+
+        :return: List of years (integers)
+        """
+        return [year for year in range(self.start_year, self.end_year + 1)]
+
 
 class ScenarioData(object):
     """

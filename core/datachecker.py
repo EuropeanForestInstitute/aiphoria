@@ -856,13 +856,14 @@ class DataChecker(object):
     def _check_process_inflows_and_outflows_mismatch(self,
                                                      df_process_to_flows: pd.DataFrame,
                                                      epsilon: float = 0.1) -> Tuple[bool, List[str]]:
+
         errors = []
         sheet_name_flows = self._dataprovider.sheet_name_flows
         for year in df_process_to_flows.index:
             for process_id in df_process_to_flows.columns:
-                entry = df_process_to_flows.at[year, process_id]
-                inflows = entry["flows"]["in"]
-                outflows = entry["flows"]["out"]
+                entry: ProcessEntry = df_process_to_flows.at[year, process_id]
+                inflows = entry.inflows
+                outflows = entry.outflows
 
                 if not inflows:
                     continue
@@ -896,6 +897,33 @@ class DataChecker(object):
 
                         s = ""
                         errors.append(s)
+
+                # Check if process has more outflows than inflows
+                inflows_abs = [flow for flow in inflows if flow.is_unit_absolute_value]
+                outflows_abs = [flow for flow in outflows if flow.is_unit_absolute_value]
+                inflows_total_abs = np.sum([flow.value for flow in inflows_abs if flow.is_unit_absolute_value])
+                outflows_total_abs = np.sum([flow.value for flow in outflows_abs if flow.is_unit_absolute_value])
+                if outflows_total_abs > inflows_total_abs:
+                    s = "Total outflows are greater than total inflows for process '{}'".format(process_id)
+                    errors.append(s)
+
+                    s = "Year {}, total absolute inflows={}, total absolute outflows={}".format(
+                        year, inflows_total_abs, outflows_total_abs)
+                    errors.append(s)
+
+                    s = "Check following inflows in Excel sheet '{}':".format(sheet_name_flows)
+                    errors.append(s)
+                    for flow in inflows_abs:
+                        s = "- flow '{}' in row {} (value: {})".format(flow.id, flow.row_number, flow.value)
+                        errors.append(s)
+
+                    errors.append("Check following outflows:")
+                    for flow in outflows_abs:
+                        s = "- flow '{}' in row {} (value: {})".format(flow.id, flow.row_number, flow.value)
+                        errors.append(s)
+
+                    s = ""
+                    errors.append(s)
 
         return not errors, errors
 
@@ -1636,7 +1664,7 @@ class DataChecker(object):
 
                     if flow_modifier.target_value is not None and flow_modifier.target_value < 0.0:
                         s = "" + error_message_prefix
-                        s += "Target value must be > 0.0 (no negative values)"
+                        s += "Target value must be >= 0.0 (no negative values)"
                         errors.append(s)
                 else:
                     # NOTE: Implement checking change in delta
