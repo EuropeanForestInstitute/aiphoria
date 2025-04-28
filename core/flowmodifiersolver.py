@@ -13,10 +13,6 @@ class FlowModifierSolver(object):
         self._flow_solver: FlowSolver = flow_solver
         self._scenario_type: ParameterScenarioType = scenario_type
 
-        # Errors
-        self._row_to_flow_id_to_missing_value = {}
-        self._row_to_flow_id_to_year = {}
-
     def solve(self):
         if self._scenario_type == ParameterScenarioType.Unconstrained:
             log("Solving unconstrained scenario...")
@@ -37,8 +33,6 @@ class FlowModifierSolver(object):
                 for error in errors:
                     print("\t" + error)
                 log("Unconstrained scenario contained errors, stopping now...", level="error")
-
-            raise Exception("Constrained scenario solving not yet implemented")
 
         log("Scenario solving done")
 
@@ -97,6 +91,7 @@ class FlowModifierSolver(object):
             return not errors, errors
 
     def _solve_constrained_scenario(self) -> Tuple[bool, List[str]]:
+        log("Constrained scenario solving not yet implemented, using Unconstrained-mode now", level="error")
         errors: List[str] = []
         flow_solver: FlowSolver = self._flow_solver
         scenario: Scenario = self._flow_solver.get_scenario()
@@ -104,7 +99,51 @@ class FlowModifierSolver(object):
         scenario_type = ParameterScenarioType.Constrained
         flow_solver._reset_evaluated_values = True
 
-        return not errors, errors
+        # Evaluate new values for each flow modifier in the requested year range
+        # and group flow modifiers by source process ID. This is needed when multiple
+        # flow modifiers are affecting the same source process.
+        source_process_id_to_flow_modifier_indices = {}
+        flow_modifier_index_to_new_values = {}
+        flow_modifiers = scenario.scenario_definition.flow_modifiers
+        for flow_modifier_index, flow_modifier in enumerate(flow_modifiers):
+            new_values = self._calculate_new_flow_values(flow_modifier)
+            flow_modifier_index_to_new_values[flow_modifier_index] = new_values
+
+            source_process_id = flow_modifier.source_process_id
+            if source_process_id not in source_process_id_to_flow_modifier_indices:
+                source_process_id_to_flow_modifier_indices[source_process_id] = []
+            source_process_id_to_flow_modifier_indices[source_process_id].append(flow_modifier_index)
+
+        # Separate into entries that affect relative and absolute flows by
+        # checking what type of flow (absolute/relative) flow_modifier is targeting.
+        # This is needed because the FlowModifiers only affect the same type of flows
+        # as the source-to-target flow is.
+        for source_process_id, flow_modifier_indices in source_process_id_to_flow_modifier_indices.items():
+            flow_modifier_indices_for_abs_flows = []
+            flow_modifier_indices_for_rel_flows = []
+            for flow_modifier_index in flow_modifier_indices:
+                flow_modifier = flow_modifiers[flow_modifier_index]
+                flow = flow_solver.get_flow(flow_modifier.target_flow_id, flow_modifier.start_year)
+                if flow.is_unit_absolute_value:
+                    flow_modifier_indices_for_abs_flows.append(flow_modifier_index)
+                else:
+                    flow_modifier_indices_for_rel_flows.append(flow_modifier_index)
+
+            self._process_absolute_flows(source_process_id,
+                                         flow_solver,
+                                         flow_modifier_indices_for_abs_flows,
+                                         flow_modifiers,
+                                         flow_modifier_index_to_new_values,
+                                         scenario_type)
+
+            self._process_relative_flows(source_process_id,
+                                         flow_solver,
+                                         flow_modifier_indices_for_rel_flows,
+                                         flow_modifiers,
+                                         flow_modifier_index_to_new_values,
+                                         scenario_type)
+
+            return not errors, errors
 
     def _make_flow_id(self, source_process_id: str, target_process_id: str) -> str:
         """
@@ -114,41 +153,6 @@ class FlowModifierSolver(object):
         :return: Flow ID
         """
         return "{} {}".format(source_process_id, target_process_id)
-
-    def _clamp_flow_value(self,
-                          flow: Flow,
-                          mini: Union[float, None] = 0.0,
-                          maxi: Union[float, None] = 100.0) -> float:
-        """
-        Clamp Flow value to range [mini, maxi].
-        Mini and maxi are both included in the range.
-        Default range is [0.0, 100.0].
-
-        If mini is None then do not check for lower bound.
-        If maxi is None then do not check for upper bound
-
-        :param flow: Target Flow
-        :param mini: Lower bound value
-        :param maxi: Upper bound value
-        :return Clamped value
-        """
-        has_mini = mini is not None
-        has_maxi = maxi is not None
-        apply_both_bounds = has_mini and has_maxi
-        apply_only_lower_bound = has_mini and not has_maxi
-        apply_only_higher_bound = not has_mini and has_maxi
-        if apply_both_bounds:
-            flow.value = np.clip(flow.value, mini, maxi)
-
-        if apply_only_lower_bound:
-            if flow.value < mini:
-                flow.value = mini
-
-        if apply_only_higher_bound:
-            if flow.value > maxi:
-                flow.value = maxi
-
-        return flow.value
 
     def _get_process_outflow_siblings(self,
                                       process_id: str = None,
@@ -179,27 +183,6 @@ class FlowModifierSolver(object):
                 sibling_outflows.append(outflow)
         return sibling_outflows
 
-    def _add_missing_value_error(self, row_number: int, year: int, flow_id: str, value: float):
-        # Update min value
-        value_abs = abs(value)
-
-        # Keep track of maximum missing value
-        if row_number not in self._row_to_flow_id_to_missing_value:
-            self._row_to_flow_id_to_missing_value[row_number] = {}
-
-        if flow_id not in self._row_to_flow_id_to_missing_value[row_number]:
-            self._row_to_flow_id_to_missing_value[row_number][flow_id] = value_abs
-
-        if value_abs > self._row_to_flow_id_to_missing_value[row_number][flow_id]:
-            self._row_to_flow_id_to_missing_value[row_number][flow_id] = value_abs
-
-        # Keep track of year
-        if row_number not in self._row_to_flow_id_to_year:
-            self._row_to_flow_id_to_year[row_number] = {}
-
-        if flow_id not in self._row_to_flow_id_to_year[row_number]:
-            self._row_to_flow_id_to_year[row_number][flow_id] = year
-
     def _process_absolute_flows(self, source_process_id: str,
                                 flow_solver: FlowSolver,
                                 flow_modifier_indices: List[int],
@@ -217,6 +200,8 @@ class FlowModifierSolver(object):
         :param flow_modifier_index_to_new_values: Mapping of flow modifier index to list of new values
         :return: None
         """
+
+        # TODO: Implement handling of constrained scenarios here, now targeting only Unconstrained
 
         flow_modifier_index_to_new_values_offset = {}
         flow_modifier_index_to_new_values_actual = {}
@@ -415,6 +400,8 @@ class FlowModifierSolver(object):
         :return:
         """
 
+        # TODO: Implement handling of constrained scenarios here, now targeting only Unconstrained
+
         flow_modifier_index_to_new_values_offset = {}
         flow_modifier_index_to_new_values_actual = {}
         year_to_required_flow_total = {}
@@ -553,7 +540,6 @@ class FlowModifierSolver(object):
                         new_sibling_share = (new_sibling_value / total_outflows_rel) * 100.0
                         flow.value = new_sibling_share
                         flow.evaluated_value = new_sibling_value
-
 
         # NOTE: Clamp all flows to minimum of 0.0 to introduce virtual flows
         for year, flow_id_to_flow in flow_solver._year_to_flow_id_to_flow.items():
