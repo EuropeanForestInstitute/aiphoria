@@ -5,6 +5,7 @@ import core.flowsolver as FlowSolver
 from core.datastructures import Flow, Scenario, FlowModifier
 from core.parameters import ParameterScenarioType
 from core.types import FunctionType
+from core.logger import log
 
 
 class FlowModifierSolver(object):
@@ -18,27 +19,28 @@ class FlowModifierSolver(object):
 
     def solve(self):
         if self._scenario_type == ParameterScenarioType.Unconstrained:
-            print("Solving unconstrained scenario...")
+            log("Solving unconstrained scenario...")
             ok, errors = self._solve_unconstrained_scenario()
             if not ok:
                 sys.stdout.flush()
-                print("\nErrors in unconstrained scenario:")
+                log("Errors in unconstrained scenario:", level="error")
                 for error in errors:
                     print("\t" + error)
-                print("Unconstrained scenario contained errors, stopping now...")
+                log("Unconstrained scenario contained errors, stopping now...", level="error")
 
         if self._scenario_type == ParameterScenarioType.Constrained:
-            print("Solving constrained scenario...")
+            log("Solving constrained scenario...")
             ok, errors = self._solve_constrained_scenario()
             if not ok:
                 sys.stdout.flush()
-                print("\nErrors in constrained scenario:")
+                log("Errors in constrained scenario:", level="error")
                 for error in errors:
                     print("\t" + error)
-            print("Constrained scenario solved, stopping now...")
+                log("Unconstrained scenario contained errors, stopping now...", level="error")
 
             raise Exception("Constrained scenario solving not yet implemented")
-        # exit(-200)
+
+        log("Scenario solving done")
 
     def _solve_unconstrained_scenario(self) -> Tuple[bool, List[str]]:
         errors: List[str] = []

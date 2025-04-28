@@ -32,6 +32,7 @@ def log(msg: str, level: str = "info", show_timestamp: bool = False):
     :param show_timestamp: True to show timestamp in message
     :return:
     """
+    color = bcolors.OKGREEN
 
     prefix = ""
     target = sys.stdout
@@ -39,10 +40,17 @@ def log(msg: str, level: str = "info", show_timestamp: bool = False):
     if level == "info":
         prefix = "INFO {}: " if show_timestamp else "INFO: "
         target = sys.stdout
+        color = bcolors.OKGREEN
+
+    if level == 'error':
+        prefix = "ERROR: {}" if show_timestamp else "ERROR: "
+        target = sys.stdout
+        color = bcolors.FAIL
 
     if level == "debug":
         prefix = "DEBUG {}: " if show_timestamp else "INFO: "
         target = sys.stderr
+        color = bcolors.FAIL
 
     if show_timestamp:
         prefix = prefix.format(timestamp)
@@ -51,7 +59,7 @@ def log(msg: str, level: str = "info", show_timestamp: bool = False):
         prefix = ""
 
     text = prefix + msg
-    print(bcolors.OKGREEN + text + bcolors.ENDC, file=target)
+    print(color + text + bcolors.ENDC, file=target)
     target.flush()
 
 
