@@ -161,7 +161,7 @@ class FlowSolver(object):
 
         :return: DataFrame
         """
-        col_names = ["Year", "Flow ID", "Source Process ID", "Target Process ID"]
+        col_names = ["Year", "Flow ID", "Source Process ID", "Target Process ID", "Flow share"]
         col_names += ["{} ({})".format(self._baseline_value_name, self._baseline_unit_name)]
         col_names += ["{} ({})".format(ind.name, ind.unit) for ind in self.get_indicator_name_to_indicator().values()]
 
@@ -171,7 +171,7 @@ class FlowSolver(object):
                 if not isinstance(flow, Flow):
                     continue
 
-                new_row = [year, flow_id, flow.source_process_id, flow.target_process_id]
+                new_row = [year, flow_id, flow.source_process_id, flow.target_process_id, flow.evaluated_share]
                 new_row += [evaluated_value for evaluated_value in flow.get_all_evaluated_values()]
                 rows.append(new_row)
 

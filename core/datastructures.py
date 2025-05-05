@@ -527,9 +527,25 @@ class Flow(ObjectBase):
 
         return self.id == other.id
 
+    @staticmethod
+    def make_flow_id(source_process_id: str, target_process_id: str) -> str:
+        """
+        Make Flow ID from source Process ID and target Process ID.
+
+        :param source_process_id: Source Process ID (string)
+        :param target_process_id: Target Process ID (string)
+        :return: Flow ID (string)
+        """
+        return "{} {}".format(source_process_id, target_process_id)
+
     @property
     def id(self) -> str:
-        return self.source_process_id + " " + self.target_process_id
+        """
+        Returns Flow ID.
+
+        :return: Flow ID (string)
+        """
+        return Flow.make_flow_id(self.source_process_id, self.target_process_id)
 
     def is_valid(self):
         is_valid = True

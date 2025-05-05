@@ -298,6 +298,29 @@ class DataProvider(object):
                         print("")
                         raise Exception(-1)
 
+                elif param_name is ParameterName.ScenarioType:
+                    valid_scenario_type_names = [scenario_type_name for scenario_type_name in ParameterScenarioType]
+                    found_param_value_lower = found_param_value.lower().strip()
+                    valid_method_names_lower = [name.lower().strip() for name in valid_scenario_type_names]
+                    if found_param_value_lower in valid_method_names_lower:
+                        # Get the actual parameter name from ParameterFillMethod-enum
+                        scenario_type_index = valid_method_names_lower.index(found_param_value_lower)
+                        found_param_value = valid_scenario_type_names[scenario_type_index]
+                        self._param_name_to_value[param_name] = found_param_value
+                    else:
+                        print("{} not valid value for {}! ".format(found_param_value, param_name), end="")
+                        print("Valid values are: ", end="")
+                        for index, method_name in enumerate(valid_scenario_type_names):
+                            print(method_name, end="")
+                            if index < len(valid_scenario_type_names) - 1:
+                                print(", ", end="")
+                            else:
+                                print("")
+
+                        self._param_name_to_value[param_name] = param_default_value
+                        print("")
+                        raise Exception(-1)
+
             else:
                 # Use default optional parameter value
                 self._param_name_to_value[param_name] = param_default_value
