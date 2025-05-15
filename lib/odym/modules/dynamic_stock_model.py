@@ -223,16 +223,34 @@ class DynamicStockModel(object):
                     self.sf[m::,m] = np.multiply(1, (np.arange(0,len(self.t)-m) < self.lt['Mean'][m])) # converts bool to 0/1
                 # Example: if Lt is 3.5 years fixed, product will still be there after 0, 1, 2, and 3 years, gone after 4 years.
 
+            # if self.lt['Type'] == 'Simple':  # Implement simple first-order decay
+            #     for m in range(0, len(self.t)):  # Loop over each cohort index
+            #         mean_lifetime = self.lt['Mean'][m]
+            #     # Calculate decay constant k based on mean lifetime
+            #         k = ln(2) / half-life #if half-life is provided; otherwise:
+            #         k = 1 / mean_lifetime  # For mean lifetime-based decay constant
+            #     # Create decay factors for each time step
+            #         decay_factors = np.exp(-k * np.arange(0, len(self.t) - m))
+            #     # Apply the decay factor to each cohort over time
+            #         self.sf[m::, m] = decay_factors
+
             if self.lt['Type'] == 'Simple':  # Implement simple first-order decay
                 for m in range(0, len(self.t)):  # Loop over each cohort index
                     mean_lifetime = self.lt['Mean'][m]
-                # Calculate decay constant k based on mean lifetime
-                # k = ln(2) / half-life if half-life is provided; otherwise:
-                    k = 1 / mean_lifetime  # For mean lifetime-based decay constant
-                # Create decay factors for each time step
+
+                    # Decide on decay constant k
+                    if hasattr(self, 'half_life') and self.half_life is not None:
+                        k = np.log(2) / self.half_life
+                    else:
+                        k = 1 / mean_lifetime  # For mean lifetime-based decay
+
+                    # Create decay factors for each time step
                     decay_factors = np.exp(-k * np.arange(0, len(self.t) - m))
-                # Apply the decay factor to each cohort over time
+
+                    # Apply decay factor to the cohort
                     self.sf[m::, m] = decay_factors
+
+
 
             if self.lt['Type'] == 'Normal': # normally distributed lifetime with mean and standard deviation. Watch out for nonzero values 
                 # for negative ages, no correction or truncation done here. Cf. note below.
