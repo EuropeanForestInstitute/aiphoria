@@ -843,12 +843,12 @@ class DataChecker(object):
 
                 if no_outflows:
                     # Error: Root process does not have any outflows
-                    msg = "{}: Root process '{}' has no outflows".format(year, process)
+                    msg = "{}: Root process '{}' has no inflows and outflows".format(year, process)
                     errors.append(msg)
 
                 if num_rel_outflows > 0 and not is_outflows_evaluated:
                     # Error: root process can have only absolute outflows
-                    msg = "{}: Root process '{}' has relative outflows".format(year, process)
+                    msg = "{}: Root process '{}' has only relative outflows".format(year, process)
                     errors.append(msg)
 
         return not errors, errors
