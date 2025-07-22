@@ -499,13 +499,15 @@ class DataChecker(object):
 
         return not errors, errors
 
-
-    def check_for_errors(self):
+    def check_for_errors(self) -> bool:
         """
         Check for additional errors after building the scenarios.
-        Raises Exception if found errors.
+        Returns True if no errors were found.
+        Raises Exception if:
+            - found errors when checking processes' integrity
+            - found errors when checking flows' integrity
 
-        :raises Exception: Exception
+        :raises Exception: Exception containing error message
         """
         ok, messages_processes = self.check_processes_integrity()
         if not ok:
@@ -514,6 +516,8 @@ class DataChecker(object):
         ok, messages_flows = self.check_flows_integrity()
         if not ok:
             raise Exception(messages_flows)
+
+        return ok
 
     def get_processes(self) -> List[Process]:
         return self._processes
