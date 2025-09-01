@@ -142,3 +142,4 @@ ui-tests/.pnp.*
 # Ignore all SVG output files
 data/*.svg
 output/
+/cache/

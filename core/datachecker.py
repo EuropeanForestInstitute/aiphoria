@@ -43,6 +43,9 @@ class DataChecker(object):
         baseline_value_name = model_params[ParameterName.BaselineValueName]
         baseline_unit_name = model_params[ParameterName.BaselineUnitName]
 
+        # Mapping of year -> Process ID -> Process position (normalized)
+        year_to_process_id_to_position = self._dataprovider.get_process_positions()
+
         # Default optional values
         # The default values are set inside DataProvider but
         # in this is to ensure that the optional parameters have default
@@ -270,6 +273,14 @@ class DataChecker(object):
 
                 new_entry = copy.deepcopy(entry)
                 process = new_entry.process
+
+                # Update process position
+                if year in year_to_process_id_to_position:
+                    process_id_to_position = year_to_process_id_to_position[year]
+                    if process_id in process_id_to_position:
+                        position = process_id_to_position[process_id]
+                        process.position_x = position[0]
+                        process.position_y = position[1]
 
                 year_to_process_id_to_process[year][process_id] = process
 

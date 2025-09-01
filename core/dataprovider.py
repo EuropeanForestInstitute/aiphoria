@@ -28,6 +28,8 @@ class DataProvider(object):
         self._sheet_name_flows: Union[None, str] = None
         self._sheet_name_scenarios: Union[None, str] = None
         self._sheet_name_colors: Union[None, str] = None
+        self._sheet_name_process_positions: Union[None, str] = None
+        self._year_to_process_id_to_position = {}
 
         # Check that all required keys exists
         required_params = [
@@ -178,14 +180,19 @@ class DataProvider(object):
              "ignore that amount as inflows to stock. This is to simulate trade flows happening during the timestep "
              "which should not go in to the stock",
              [],
-            ],
+             ],
             [ParameterName.PrioritizeTransformationStages,
              list,
              "Prioritize process transformation stages. If stock is outflowing to prioritized transformation stage, "
              "then ignore that amount as inflows to stock. This is to simulate trade flows happening during "
              "the timestep which should not go in to the stock",
              [],
-             ]
+             ],
+            [ParameterName.SheetNameProcessPositions,
+             str,
+             "Sheet name that contains data for process positions in normalized format (position data in range [0,1])",
+             None,
+             ],
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}
@@ -342,9 +349,14 @@ class DataProvider(object):
         ignore_columns_scenarios = self._param_name_to_value.get(ParameterName.IgnoreColumnsScenarios, [])
         skip_num_rows_scenarios = self._param_name_to_value.get(ParameterName.SkipNumRowsScenarios, None)
 
+        # Optional
+        # Colors
         sheet_name_colors = self._param_name_to_value.get(ParameterName.SheetNameColors, None)
         ignore_columns_colors = self._param_name_to_value.get(ParameterName.IgnoreColumnsColors, [])
         skip_num_rows_colors = self._param_name_to_value.get(ParameterName.SkipNumRowsColors, None)
+
+        # Process positions
+        sheet_name_process_positions = self._param_name_to_value.get(ParameterName.SheetNameProcessPositions, None)
 
         use_scenarios = self._param_name_to_value[ParameterName.UseScenarios]
         if not use_scenarios:
@@ -393,6 +405,12 @@ class DataProvider(object):
                 except ValueError:
                     pass
 
+                try:
+                    sheet_process_positions = pd.read_excel(xls, sheet_name=sheet_name_process_positions)
+                    sheets[sheet_name_process_positions] = sheet_process_positions
+                except ValueError:
+                    pass
+
         except FileNotFoundError:
             raise Exception("Settings file '{}' not found".format(filename))
 
@@ -409,7 +427,7 @@ class DataProvider(object):
         self._sheet_name_flows = sheet_name_flows
 
         # Check that all optional sheets exists (only if optional sheets have been defined)
-        optional_sheet_names = [sheet_name_colors]
+        optional_sheet_names = [sheet_name_colors, sheet_name_process_positions]
 
         if sheet_name_scenarios:
             optional_sheet_names.append(sheet_name_scenarios)
@@ -426,6 +444,7 @@ class DataProvider(object):
 
         self._sheet_name_scenarios = sheet_name_scenarios
         self._sheet_name_colors = sheet_name_colors
+        self._sheet_name_process_positions = sheet_name_process_positions
 
         # Create Processes
         rows_processes = []
@@ -471,6 +490,29 @@ class DataProvider(object):
                 rows_colors.append(row)
 
             self._colors = self._create_colors(rows_colors)
+
+        # Read and update detailed Process positions (optional)
+        if sheet_name_process_positions:
+
+            # Map year -> Process ID -> position
+            year_to_process_id_to_position = {}
+            df_process_positions = sheets[sheet_name_process_positions]
+            for (row_index, row) in df_process_positions.iterrows():
+                year = row.iloc[0]
+                process_id = row.iloc[1]
+                x = self._to_normalized_float(row.iloc[2], 3)
+                y = self._to_normalized_float(row.iloc[3], 3)
+                normalized_x = np.clip(x, 0.001, 0.999)
+                normalized_y = np.clip(y, 0.001, 0.999)
+
+                if year not in year_to_process_id_to_position:
+                    year_to_process_id_to_position[year] = {}
+
+                process_id_to_position = year_to_process_id_to_position[year]
+                if process_id not in process_id_to_position:
+                    process_id_to_position[process_id] = [normalized_x, normalized_y]
+
+            self._year_to_process_id_to_position = year_to_process_id_to_position
 
     @property
     def sheet_name_processes(self):
@@ -628,6 +670,23 @@ class DataProvider(object):
         else:
             return False
 
+    def _to_normalized_float(self, val: Any, decimals: int = 3) -> float:
+        """
+        Check and convert val to normalized float [0, 1] with optional precision.
+        Returns -1 if conversion fails.
+
+        :param val: Target value
+        :param decimals: Number of decimals to keep (default = 3)
+        :return: Float
+        """
+        result = -1.0
+        try:
+            result = round(float(val), decimals)
+        except ValueError as ex:
+            pass
+
+        return result
+
     def _to_list(self, value: Any, sep=',', allowed_chars = [":"]) -> List[str]:
         """
         Check and convert value to list of strings.
@@ -732,3 +791,11 @@ class DataProvider(object):
 
     def get_color_definitions(self) -> List[Color]:
         return self._colors
+
+    def get_process_positions(self) -> Dict[int, Dict[str, List[float]]]:
+        """
+        Get year -> Process ID -> position mappings.
+
+        :return: Dictionary (year -> Dictionary(Process ID, List[x, y]))
+        """
+        return self._year_to_process_id_to_position

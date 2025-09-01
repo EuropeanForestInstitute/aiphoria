@@ -187,6 +187,7 @@ class Process(ObjectBase):
         self._position_y = params.iloc[15]
         self._label_in_graph = params.iloc[16]
         self._row_number = row_number
+        self._meta = {}
 
     def __str__(self) -> str:
         s = "Process '{}': Lifetime: {}".format(self.id, self.stock_lifetime)
@@ -347,6 +348,14 @@ class Process(ObjectBase):
     @label_in_graph.setter
     def label_in_graph(self, value: str):
         self._label_in_graph = value
+
+    @property
+    def meta(self) -> Dict[Any, Any]:
+        return self._meta
+
+    @meta.setter
+    def meta(self, value: Dict[Any, Any]) -> None:
+        self._meta = value
 
     def _parse_stock_lifetime(self, s: str, row_number: int = -1):
         """

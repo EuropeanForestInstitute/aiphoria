@@ -74,6 +74,9 @@ class ParameterName(str, Enum):
     PrioritizeTransformationStages: str = "prioritize_transformation_stages"
     PrioritizeLocations: str = "prioritize_locations"
 
+    # Sheet name for process positions
+    SheetNameProcessPositions: str = "sheet_name_process_positions"
+
 
 class ParameterFillMethod(str, Enum):
     """
