@@ -10,3 +10,5 @@ xlwt
 tqdm
 myst-parser
 sphinx-rtd-theme
+IPython
+xlsxwriter==3.2.5
