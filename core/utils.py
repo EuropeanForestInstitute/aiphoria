@@ -48,7 +48,7 @@ def setup_current_working_directory():
     """
     if get_ipython() is None:
         # Running in terminal
-        os.chdir(os.path.dirname(sys.argv[0]))
+        os.chdir(os.path.dirname(os.path.abspath(sys.argv[0])))
     else:
         # Running Notebook, cwd is already set
         pass
