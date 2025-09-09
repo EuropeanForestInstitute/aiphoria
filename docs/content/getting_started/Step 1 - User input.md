@@ -1,13 +1,20 @@
 Step 1 - User input
 
-To get start with we will develop a very simple MFA system. 
-The system contains nine processes (nodes) including the source process and ten flows. There are two stocks (construction and furniture) which are processes with a given lifetime. You can see that some flows are defined with absolute values and some with relative ones. Here it is critical that the source flow is define as an absolute flow. 
+To get started with aiphoria we will develop a very simple MFA system. 
+The system contains nine processes (nodes) including the source process and ten flows.
+There are two stocks (construction and furniture) which are processes with a given lifetime. 
+You can see that some flows are defined with absolute values and some with relative ones.
 
+> NOTE:<br>
+> Flow from source process to the system must always be absolute, otherwise calculating the actual values for flows is impossible.<br>
+> aiphoria will check data for errors and will show error messages if something is not correct.
+
+The system looks like this:
 ![methods_system.png](methods_system.png)
 
 Below are the model characteristics for the simplified MFA system. 
 
-|                                  | model characteristics                                | 
+|                                  | Model characteristics                                | 
 |----------------------------------|------------------------------------------------------|
 | MFA type                         | inflow driven                                        | 
 | Stock lifetimes                  | construction (lt: 10 years), furniture (lt: 5 years) |
@@ -15,6 +22,9 @@ Below are the model characteristics for the simplified MFA system.
 | End year (last year of flows)    | 2030                                                 |
 | Distribution type for stocks     | Normal                                               |
 | Standard deviation (of lifetime) | 1                                                    |
+
+-----
+
 
 Below are the screenshots of how the above shown system is defined in the input file. 
 
@@ -26,7 +36,6 @@ Processes:
 
 Flows:
 ![methods_flows_input.png](methods_flows_input.png)
-
 
 
 As a first step remember to configure the path for ODYM and install the required packages 

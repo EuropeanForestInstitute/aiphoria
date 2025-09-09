@@ -342,7 +342,6 @@ class FlowModifierSolver(object):
                     print("\tERROR: {}".format(s))
 
             if has_errors:
-                # TODO: Show summary of errors
                 pass
 
         # NOTE: Clamp all flows to minimum of 0.0 to introduce virtual flows
@@ -786,18 +785,6 @@ class FlowModifierSolver(object):
                     # Get total sibling outflows, used to check if there is enough outflows
                     # to fulfill the flow_modifier request
                     total_sibling_outflows = np.sum([flow.evaluated_value for flow in sibling_outflows])
-                    # source_to_target_flow = flow_solver.get_flow(flow_modifier.target_flow_id, year)
-                    # required_flow_value = source_to_target_flow.evaluated_value
-                    # if total_outflows_available < 0.0:
-                    #     # Total of all sibling flows is not enough to cover the change in value
-                    #     s = "INFO: Not enough absolute outflows to fill flow modifier in row {} for year {}".format(
-                    #         flow_modifier.row_number, year)
-                    #     errors.append(s)
-                    #
-                    #     s = "INFO: Total outflows in process '{}' = {}, flow '{}' required={}, available to sibling flows = {}".format(
-                    #         source_process_id, total_outflows_abs, source_to_target_flow.id, required_flow_value,
-                    #         total_outflows_available)
-                    #     errors.append(s)
 
                     # Calculate new sibling values and update sibling flows
                     for flow in sibling_outflows:
@@ -975,7 +962,6 @@ class FlowModifierSolver(object):
             new_values_actual = flow_modifier_index_to_new_values_actual[flow_modifier_index]
             new_values_offset = flow_modifier_index_to_new_values_offset[flow_modifier_index]
             if flow_modifier.has_opposite_targets:
-                # TODO: Does opposite flow have enough flow share to fulfill share change?
                 for year_index, year in enumerate(year_range):
                     value_actual = new_values_actual[year_index]
                     value_offset = new_values_offset[year_index]
@@ -1040,8 +1026,6 @@ class FlowModifierSolver(object):
                             new_evaluated_share = 1.0
                             new_evaluated_value = new_value
                             new_evaluated_offset = sibling_offset * sibling_share
-
-                            # DEV: Flow share offset
                             new_evaluated_share_offset = -(new_values_actual[year_index] - new_values_actual[0]) * sibling_share
 
                         new_entry = FlowModifierSolver.FlowChangeEntry(year,
