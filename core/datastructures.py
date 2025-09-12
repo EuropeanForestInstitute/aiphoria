@@ -512,6 +512,11 @@ class Flow(ObjectBase):
                 indicator_name = indicator_name.replace(unit_name, '').strip()
                 indicator_unit = unit_name[1:-1].strip()
 
+            # NOTE: Set indicator conversion factor to 0.0
+            # if not defined in the settings file
+            if conversion_factor is None:
+                conversion_factor = 0.0
+
             new_indicator = Indicator(indicator_name, conversion_factor, comment, indicator_unit)
             self._indicator_name_to_indicator[indicator_name] = new_indicator
             self._indicator_name_to_evaluated_value[indicator_name] = 0.0

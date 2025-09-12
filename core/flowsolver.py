@@ -965,6 +965,10 @@ class FlowSolver(object):
         # Show summary if virtual processes and flows created this year
         self._show_virtual_flows_summary()
 
+        # Recalculate evaluated values for stock outflows
+        self._recalculate_indicator_dynamic_stock_outflows(self._year_current)
+
+
     def _advance_timestep(self) -> None:
         """
         Advance to next timestep.
@@ -1288,12 +1292,12 @@ class FlowSolver(object):
 
         :param year: Target year
         """
-        # Get stock outflow for year, distribute that to outflows and mark those Flows as evaluated
+        # Get stock outflow for year, distribute that to relative outflows and mark those Flows as evaluated
         # NOTE: Now also outflows to prioritized flows
         year_index = self._years.index(year)
         for stock_id, dsm in self.get_baseline_dynamic_stocks().items():
-            stock_total_outflow = dsm.compute_outflow_total()[year_index]
             outflows = self._get_process_outflows(stock_id)
+            stock_total_outflow = dsm.compute_outflow_total()[year_index]
 
             for flow in outflows:
                 if flow.is_unit_absolute_value:
@@ -1303,14 +1307,23 @@ class FlowSolver(object):
                 flow.evaluated_value = flow.evaluated_share * stock_total_outflow
                 flow.evaluate_indicator_values_from_baseline_value()
 
-        # # NOTE: Is indicator DSM outflow needed? flow.evaluate_indicator_values_from_baseline_value() calculates
-        # # how much is the evaluated indicator value for each flow. Indicator stock inflow is proportional to baseline
-        # # inflow so indicator DSM does not need any processing here.
-        # # Get indicator stock outflow for year
-        # for stock_id, indicator_id_to_dsm in self.get_indicator_dynamic_stocks().items():
-        #     for indicator_id, dsm in indicator_id_to_dsm.items():
-        #         stock_total_outflow = dsm.compute_outflow_total()[year_index]
-        #         indicator_outflows = self._get_process_indicator_outflows_total(stock_id, indicator_id, year)
+    def _recalculate_indicator_dynamic_stock_outflows(self, year: int) -> None:
+        # Recalculate indicator values for stock outflows
+        # NOTE: Relative outflows from indicator stock do not need indicator conversion factor
+        # defined in the settings file because relative share of that flow can be directly calculated
+        # from indicator stock total outflow. Indicator conversion factors are needed when flows enter stock
+        # but in stock outflow it's not mandatory.
+        year_index = self._years.index(year)
+        for stock_id, dsm_indicators in self.get_indicator_dynamic_stocks().items():
+            outflows = self._get_process_outflows(stock_id)
+            for indicator_name, dsm in dsm_indicators.items():
+                stock_total_outflow = dsm.compute_outflow_total()[year_index]
+                for flow in outflows:
+                    if flow.is_unit_absolute_value:
+                        continue
+
+                    evaluated_value = flow.evaluated_share * stock_total_outflow
+                    flow.set_evaluated_value_for_indicator(indicator_name, evaluated_value)
 
     def _get_dynamic_stock_outflow_value(self, dsm: DynamicStockModel, year: int) -> float:
         """

@@ -86,6 +86,11 @@ function formatValue(val, options = { numDecimals: 3}) {
     return parseFloat(val.toFixed(options.numDecimals))
 }
 
+function isSameValue(a, b, eps = 0.001) {
+    // Check if value is same with maximum allowed difference (= epsilon)
+    return Math.abs(a - b) < eps
+}
+
 function getTooltipFormatter(params) {
     const isLegend = params.componentType == "legend"
     const isNode = params.dataType == "node"
@@ -394,16 +399,20 @@ function getTooltipFormatter(params) {
     }
 
     if (isLink) {
-        // console.log(params)
         const linkData = params.data
         const linkId = params.data.id
         const year = globals.currentYear;
         const flow = globals.yearToFlowIdToFlow.get(year).get(linkId)
 
         // Flow indicators
+        // Show flow indicators that have value more than 0.0
+        const epsilon = 0.001
         const indicatorNameToValue = new Map()
         for(const [k, v] of Object.entries(flow.indicators)) {
-            indicatorNameToValue.set(k, v)
+            console.log(k, v)
+            if(!isSameValue(v, 0.0, epsilon))  {
+                indicatorNameToValue.set(k, v)
+            }
         }
 
         const baseline = globals.scenarioData.baseline_value_name
