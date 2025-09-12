@@ -766,6 +766,18 @@ class Flow(ObjectBase):
         """
         return list(self._indicator_name_to_indicator.keys())
 
+    def get_indicator_units(self) -> List[str]:
+        """
+        Get list of Indicator unit names (including baseline indicator unit).
+
+        :return: List of Indicator unit names
+        """
+        indicator_units = []
+        for indicator_name, indicator in self._indicator_name_to_indicator.items():
+            indicator_units.append(indicator.unit)
+
+        return indicator_units
+
     def get_indicator_conversion_factor(self, indicator_name: str) -> float:
         """
 

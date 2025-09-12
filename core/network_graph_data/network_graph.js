@@ -476,6 +476,38 @@ addEventListener("resize", (e) => {
     chart.resize();
 });
 
+addEventListener("keydown", (e) => {
+    // Change year using keyboard
+    // Arrow left = previous year
+    // Arrow right = next year
+    // Home = First year
+    // End = Last year
+    let nextYearIndex = -1
+    if(e.code == "ArrowLeft") {
+        const currentYearIndex = globals.currentYearIndex
+        nextYearIndex = currentYearIndex - 1
+    }
+    if(e.code == "ArrowRight") {
+        const currentYearIndex = globals.currentYearIndex
+        nextYearIndex = currentYearIndex + 1
+    }
+    if(e.code == "Home") {
+        nextYearIndex = 0
+    }
+    if(e.code == "End") {
+        nextYearIndex = globals.years.length - 1
+    }
+
+    if(nextYearIndex < 0 || nextYearIndex >= globals.years.length) {
+        return
+    }
+
+    chart.dispatchAction({
+        type: "timelineChange",
+        currentIndex: nextYearIndex,
+    })
+})
+
 // Listen when user changes process label type
 document
     .getElementById("processLabelType")

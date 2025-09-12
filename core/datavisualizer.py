@@ -171,6 +171,7 @@ class DataVisualizer(object):
                             baseline_value_name=baseline_value_name,
                             unit=flow.unit,
                             indicator_names=flow.get_indicator_names(),
+                            indicator_units=flow.get_indicator_units(),
                             evaluated_indicator_values=flow.get_all_evaluated_values()
                         )
                     )
