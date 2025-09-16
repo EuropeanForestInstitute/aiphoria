@@ -24,7 +24,11 @@ This is a Python library that facilitates the assessment of wood materials flows
 - **Any temporal and spatial situation where material systems want to be assessed**
 - **Product sink/stock effects**
 
+## Documentation
+Online documentation can be found in [wiki](https://github.com/EuropeanForestInstitute/aiphoria/wiki).
+
 ## Support:
+
 If you have any questions or need help, do not hesitate to contact us:
 - [cleo.orfanidou@efi.int](mailto:cleo.orfanidou@efi.int)
 - [janne.jarvikyla@efi.int](mailto:janne.jarvikyla@efi.int)
