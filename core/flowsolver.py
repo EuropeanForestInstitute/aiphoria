@@ -340,6 +340,8 @@ class FlowSolver(object):
         bar = tqdm.tqdm(initial=0)
         self._create_dynamic_stocks()
         self._apply_flow_modifiers()
+        self._remove_virtual_processes_and_flows()
+
         for current_year in self._years:
             bar.set_description("Solving flows for year {}/{}".format(current_year, self._year_end))
             self._solve_timestep()
@@ -963,11 +965,10 @@ class FlowSolver(object):
             self._create_virtual_flows(self._year_current, self._virtual_flows_epsilon)
 
         # Show summary if virtual processes and flows created this year
-        self._show_virtual_flows_summary()
+        #self._show_virtual_flows_summary()
 
         # Recalculate evaluated values for stock outflows
         self._recalculate_indicator_dynamic_stock_outflows(self._year_current)
-
 
     def _advance_timestep(self) -> None:
         """
@@ -1032,6 +1033,51 @@ class FlowSolver(object):
         v_ts = self._create_virtual_process_transformation_stage()
         v_process = self._create_virtual_process(v_id, v_name, v_ts)
         return v_process
+
+    def _remove_virtual_process(self, virtual_process_id: str, year: int) -> bool:
+        """
+        Remove process from year and all related virtual flows. Does nothing if process ID is not found.
+
+        :param virtual_process_id: Target virtual process ID
+        :param year: Target year
+        :return: True if process ID was found, false otherwise
+        """
+        if year not in self._year_to_process_id_to_process:
+            return False
+
+        if virtual_process_id not in self._year_to_process_id_to_process[year]:
+            return False
+
+        # Remove flows related to this virtual process
+        inflows = self.get_process_inflows(virtual_process_id, year)
+        for flow in inflows:
+            source_process_flow_ids = self._year_to_process_id_to_flow_ids[year][flow.source_process_id]["out"]
+            if flow.id in source_process_flow_ids:
+                source_process_flow_ids.remove(flow.id)
+                if flow.id in self._year_to_flow_id_to_flow[year]:
+                    del self._year_to_flow_id_to_flow[year][flow.id]
+                    if flow.id in self._unique_flow_id_to_flow:
+                        del self._unique_flow_id_to_flow[flow.id]
+
+        outflows = self.get_process_outflows(virtual_process_id, year)
+        for flow in outflows:
+            target_process_inflow_ids = self._year_to_process_id_to_flow_ids[year][flow.target_process_id]["in"]
+            if flow.id in target_process_inflow_ids:
+                target_process_inflow_ids.remove(flow.id)
+                if flow.id in self._year_to_flow_id_to_flow[year]:
+                    del self._year_to_flow_id_to_flow[year][flow.id]
+                    if flow.id in self._unique_flow_id_to_flow:
+                        del self._unique_flow_id_to_flow[flow.id]
+
+        # Remove virtual process
+        if virtual_process_id in self._year_to_process_id_to_process[year]:
+            del self._year_to_process_id_to_process[year][virtual_process_id]
+
+        if virtual_process_id in self._year_to_process_id_to_flow_ids[year]:
+            del self._year_to_process_id_to_flow_ids[year][virtual_process_id]
+
+        if virtual_process_id in self._unique_process_id_to_process:
+            del self._unique_process_id_to_process[virtual_process_id]
 
     def _create_virtual_flow(self, source_process_id: str, target_process_id: str, value: float, unit: str) -> Flow:
         """
@@ -1387,3 +1433,14 @@ class FlowSolver(object):
         scenario_type = self._scenario.model_params[ParameterName.ScenarioType]
         fms = FlowModifierSolver(self, scenario_type)
         fms.solve()
+
+    def _remove_virtual_processes_and_flows(self) -> None:
+        # Remove all virtual processes and related flows in all years
+        for year in self._years:
+            virtual_process_ids = []
+            for process_id, process in self._year_to_process_id_to_process[year].items():
+                if process.is_virtual:
+                    virtual_process_ids.append(process_id)
+
+            for process_id in virtual_process_ids:
+                self._remove_virtual_process(process_id, year)

@@ -173,8 +173,6 @@ def build_and_solve_scenarios(datachecker: DataChecker = None, use_cache: Union[
                     baseline_scenario_data = scenarios[0].flow_solver.get_solved_scenario_data()
                     scenario.copy_from_baseline_scenario_data(baseline_scenario_data)
 
-                    a = 0
-
                     # Solve this alternative scenario time steps
                     scenario_flow_solver = FlowSolver(scenario=scenario)
                     scenario_flow_solver.solve_timesteps()
