@@ -1081,7 +1081,8 @@ class FlowSolver(object):
 
     def _create_virtual_flow(self, source_process_id: str, target_process_id: str, value: float, unit: str) -> Flow:
         """
-        Create virtual flow
+        Create virtual flow.
+        All indicator conversion factors are set to 0.0.
 
         :param source_process_id: Source Process ID
         :param target_process_id: Target Process ID
@@ -1101,6 +1102,7 @@ class FlowSolver(object):
         # Copy indicators to virtual flows
         for indicator_name, indicator in self._indicators.items():
             new_indicator = copy.deepcopy(indicator)
+            new_indicator.conversion_factor = 0.0
             new_virtual_flow.indicator_name_to_indicator[new_indicator.name] = new_indicator
             new_virtual_flow.indicator_name_to_evaluated_value[new_indicator.name] = 0.0
 
