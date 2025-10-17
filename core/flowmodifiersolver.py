@@ -139,9 +139,9 @@ class FlowModifierSolver(object):
                 for error in errors:
                     print("\t" + error)
                 log("Unconstrained scenario contained errors, stopping now...", level="error")
+                sys.exit(-1)
 
         log("Scenario solving done")
-        # exit(-100)
 
     def _solve_unconstrained_scenario(self) -> Tuple[bool, List[str]]:
         # ***************************************************************************
@@ -301,6 +301,10 @@ class FlowModifierSolver(object):
                     missing = min_error_entry.outflows_missing
                     flow_modifier = flow_modifiers[min_error_entry.flow_modifier_index]
 
+                    # TODO: Show target relative share that allows to scenario to work in error
+                    # TODO: instead of absolute numbers
+                    # TODO: How to calculate flow share for missing
+
                     s = "Process '{}'".format(source_process_id)
                     s += " "
                     s += "does not have enough outflows for absolute flows in year {}".format(year)
@@ -344,11 +348,17 @@ class FlowModifierSolver(object):
             if has_errors:
                 pass
 
+        # Check if flow modifiers caused negative flows to target opposite flows
+        errors += self._check_flow_modifier_results(flow_solver, flow_modifiers)
+
         # NOTE: Clamp all flows to minimum of 0.0 to introduce virtual flows
         for year, flow_id_to_flow in flow_solver._year_to_flow_id_to_flow.items():
             for flow_id, flow in flow_id_to_flow.items():
                 if flow.value < 0.0:
                     flow.value = 0.0
+
+                if flow.evaluated_value < 0.0:
+                    flow.evaluated_value = 0.0
 
         return not errors, errors
 
@@ -553,7 +563,10 @@ class FlowModifierSolver(object):
         if has_errors:
             # Stop execution of constrained solver
             log("Errors in Constrained scenario solver, stopping execution...", level="error")
-            exit(-1)
+            sys.exit(-1)
+
+        # Check if flow modifiers caused negative flows to target opposite flows
+        errors += self._check_flow_modifier_results(flow_solver, flow_modifiers)
 
         return not errors, errors
 
@@ -977,6 +990,7 @@ class FlowModifierSolver(object):
                         new_evaluated_value = new_value
                         new_evaluated_offset = -value_offset * opposite_flow_share
                         new_evaluated_share_offset = -(new_values_actual[year_index] - new_values_actual[0]) * opposite_flow_share
+
                         new_entry = FlowModifierSolver.FlowChangeEntry(year,
                                                                        opposite_flow_id,
                                                                        new_value,
@@ -1028,6 +1042,12 @@ class FlowModifierSolver(object):
                             new_evaluated_offset = sibling_offset * sibling_share
                             new_evaluated_share_offset = -(new_values_actual[year_index] - new_values_actual[0]) * sibling_share
 
+                            # Handle FunctionType.Constant differently for relative flows
+                            # There is no change in offset because of the offset stays the same during the whole
+                            # year range of the FlowModifier
+                            if flow_modifier.function_type == FunctionType.Constant:
+                                new_evaluated_share_offset = new_evaluated_offset
+
                         new_entry = FlowModifierSolver.FlowChangeEntry(year,
                                                                        sibling_flow_id,
                                                                        new_value,
@@ -1044,7 +1064,7 @@ class FlowModifierSolver(object):
         """
         Calculate new flow values for flow modifier.
         If flow_modifier targets absolute flow, returns tuple of (evaluated values, evaluated offset values)
-        If flow_modifier targest relative flow, returns tuple of (evaluated flow shares, evaluated offset values)
+        If flow_modifier targets relative flow, returns tuple of (evaluated flow shares, evaluated offset values)
 
         Does not modify the target flow.
 
@@ -1179,3 +1199,81 @@ class FlowModifierSolver(object):
                     new_offsets[year_index] = new_evaluated_offset
 
         return new_values, new_offsets
+
+    def _check_flow_modifier_results(self,
+                                     flow_solver: FlowSolver = None,
+                                     flow_modifiers: List[FlowModifier] = None) -> List[str]:
+        """
+        Check if applying flow modifiers caused negative flows in target opposite flows.
+
+        :param flow_solver: Target FlowSolver
+        :param flow_modifiers: List of FlowModifiers
+        :return: List of errors (empty list == no errors)
+        """
+        errors = []
+
+        if flow_modifiers is None:
+            flow_modifiers = []
+
+        if not flow_solver:
+            raise Exception("Parameter flow_solver is None, check calling code")
+
+        # Check that all flows that are affected by the flow modifiers have evaluated value >= 0.0
+        # This could be caused by flow modifier that has opposite target flows that do not have enough flow
+        # and it will cause negative flow
+        affected_flow_id_to_flow_modifier_indices = {}
+        flow_modifier_index_to_year_to_affected_flow_ids = {}
+        for flow_modifier_index, flow_modifier in enumerate(flow_modifiers):
+            if flow_modifier_index not in flow_modifier_index_to_year_to_affected_flow_ids:
+                flow_modifier_index_to_year_to_affected_flow_ids[flow_modifier_index] = {}
+
+            for year in flow_modifier.get_year_range():
+                year_to_affected_flows_ids = flow_modifier_index_to_year_to_affected_flow_ids[flow_modifier_index]
+
+                if year not in year_to_affected_flows_ids:
+                    year_to_affected_flows_ids[year] = []
+                affected_flow_ids = year_to_affected_flows_ids[year]
+
+                if flow_modifier.has_opposite_targets:
+                    # Get list of all opposite flow IDs
+                    for target_process_id in flow_modifier.opposite_target_process_ids:
+                        opposite_flow_id = Flow.make_flow_id(flow_modifier.source_process_id, target_process_id)
+                        affected_flow_ids.append(opposite_flow_id)
+                else:
+                    # Get list of all same type sibling flows and unpack as flow IDs
+                    sibling_flows = self._get_process_outflow_siblings(flow_modifier.source_process_id,
+                                                                       flow_modifier.target_flow_id,
+                                                                       year,
+                                                                       only_same_type=True)
+
+                    affected_flow_ids += [flow.id for flow in sibling_flows]
+
+                for flow_id in affected_flow_ids:
+                    if flow_id not in affected_flow_id_to_flow_modifier_indices:
+                        affected_flow_id_to_flow_modifier_indices[flow_id] = set()
+                    affected_flow_id_to_flow_modifier_indices[flow_id].add(flow_modifier_index)
+
+        # Check if any affected flows is < 0.0 and find year with the smallest flow value
+        for affected_flow_id, flow_modifier_indices in affected_flow_id_to_flow_modifier_indices.items():
+            for flow_modifier_index in flow_modifier_indices:
+                flow_modifier = flow_modifiers[flow_modifier_index]
+                years = flow_modifier.get_year_range()
+                year_to_evaluated_value = {}
+                for year in years:
+                    flow = flow_solver.get_flow(affected_flow_id, year)
+                    year_to_evaluated_value[year] = flow.evaluated_value
+
+                # Find any negative flows
+                negative_flows = [[k, v] for k, v in year_to_evaluated_value.items() if v < 0.0]
+                if not negative_flows:
+                    continue
+
+                # Find entry with the smallest value
+                min_year_entry = min(negative_flows, key=lambda x: x[1])
+                s = "Flow modifier in row {} targets opposite flows that do not have enough flows. ".format(
+                    flow_modifier.row_number)
+                s += "This caused negative flow (evaluated value={}) for flow '{}' in year {}".format(
+                    min_year_entry[1], affected_flow_id, min_year_entry[0])
+                errors.append(s)
+
+        return errors
