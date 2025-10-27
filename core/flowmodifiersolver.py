@@ -752,6 +752,10 @@ class FlowModifierSolver(object):
             flow_modifier = flow_modifiers[flow_modifier_index]
             year_range = flow_modifier.get_year_range()
 
+            # NOTE: Skip applying changes to target flows (either siblings or target opposite flows) if set
+            if not flow_modifier.apply_to_siblings:
+                continue
+
             # Flow value offset from first year flow value
             new_values_offset = flow_modifier_index_to_new_values_offset[flow_modifier_index]
             if flow_modifier.has_opposite_targets:
