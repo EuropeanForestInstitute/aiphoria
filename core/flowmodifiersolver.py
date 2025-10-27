@@ -1264,6 +1264,11 @@ class FlowModifierSolver(object):
                 years = flow_modifier.get_year_range()
                 year_to_evaluated_value = {}
                 for year in years:
+                    # NOTE: Baseline might have some processes that do not exists in the scenarios
+                    # These are mostly virtual processes.
+                    if not flow_solver.has_flow(affected_flow_id, year):
+                        continue
+
                     flow = flow_solver.get_flow(affected_flow_id, year)
                     year_to_evaluated_value[year] = flow.evaluated_value
 
