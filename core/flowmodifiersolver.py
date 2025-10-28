@@ -753,7 +753,7 @@ class FlowModifierSolver(object):
             year_range = flow_modifier.get_year_range()
 
             # NOTE: Skip applying changes to target flows (either siblings or target opposite flows) if set
-            if not flow_modifier.apply_to_siblings:
+            if not flow_modifier.apply_to_targets:
                 continue
 
             # Flow value offset from first year flow value
@@ -1264,7 +1264,7 @@ class FlowModifierSolver(object):
                 years = flow_modifier.get_year_range()
                 year_to_evaluated_value = {}
                 for year in years:
-                    # NOTE: Baseline might have some processes that do not exists in the scenarios
+                    # NOTE: Baseline might have some processes that do not exist in the scenarios
                     # These are mostly virtual processes.
                     if not flow_solver.has_flow(affected_flow_id, year):
                         continue

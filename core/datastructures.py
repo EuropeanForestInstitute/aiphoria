@@ -887,7 +887,7 @@ class FlowModifier(ObjectBase):
         self._start_year: int = 0
         self._end_year: int = 0
         self._function_type: str = ""
-        self._apply_to_siblings: bool = True
+        self._apply_to_targets: bool = True
         self._opposite_target_process_ids = []
 
         if params is None:
@@ -908,7 +908,7 @@ class FlowModifier(ObjectBase):
         param_start_year = params.iloc[6]
         param_end_year = params.iloc[7]
         param_function_type = params.iloc[8]
-        param_apply_to_siblings = params.iloc[9]
+        param_apply_to_targets = params.iloc[9]
 
         self._scenario_name = self._parse_as(param_scenario_name, str)[0]
         self._source_process_id = self._parse_as(param_source_process_id, str)[0]
@@ -941,8 +941,8 @@ class FlowModifier(ObjectBase):
                 self._function_type = function_type
 
         # Apply to siblings
-        if param_apply_to_siblings is not None:
-            self._apply_to_siblings = self._parse_as(param_apply_to_siblings, bool)[0]
+        if param_apply_to_targets is not None:
+            self._apply_to_targets = self._parse_as(param_apply_to_targets, bool)[0]
 
         # Check how many target nodes with opposite effect there is
         for process_id in list(params[10:]):
@@ -1068,8 +1068,9 @@ class FlowModifier(ObjectBase):
     def function_type(self) -> Union[FunctionType, str]:
         return self._function_type
 
-    def apply_to_siblings(self) -> bool:
-        return self._apply_to_siblings
+    @property
+    def apply_to_targets(self) -> bool:
+        return self._apply_to_targets
 
     @property
     def opposite_target_process_ids(self) -> List[str]:
