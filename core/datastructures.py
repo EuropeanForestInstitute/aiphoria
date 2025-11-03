@@ -20,30 +20,69 @@ class ObjectBase(object):
 
     @property
     def is_valid(self) -> bool:
+        """
+        Return validity of object.
+
+        :return: Boolean
+        """
         return False
 
     @property
     def id(self) -> Union[str, any]:
+        """
+        Get ID of the object.
+
+        :return: Object ID (string)
+        """
         return self._id
 
     @id.setter
-    def id(self, new_id: str):
+    def id(self, new_id: str) -> None:
+        """
+        Set Object ID.
+
+        :param new_id: New ID
+        :return: None
+        """
         self._id = new_id
 
     @property
     def row_number(self) -> int:
+        """
+        Get row number where Object was defined.
+        This is valid only for the Flows and Processes defined in settings file.
+
+        :return: Row number where Object was defined
+        """
         return self._row_number
 
     @row_number.setter
-    def row_number(self, value: int):
+    def row_number(self, value: int) -> None:
+        """
+        Set row number where Object was defined.
+
+        :param value: Target row number
+        :return: None
+        """
         self._row_number = value
 
     @property
     def is_virtual(self) -> bool:
+        """
+        Check if Object is virtual.
+
+        :return: True if Object is virtual, False otherwise.
+        """
         return self._is_virtual
 
     @is_virtual.setter
-    def is_virtual(self, value: bool):
+    def is_virtual(self, value: bool) -> None:
+        """
+        Set Object virtual state.
+
+        :param value: State
+        :return: None
+        """
         self._is_virtual = value
 
 
@@ -129,6 +168,11 @@ class Indicator(object):
 
 
 class Process(ObjectBase):
+    """
+    aiphoria Process-object:
+
+    Used to store data for Process.
+    """
     def __init__(self, params: pd.Series = None, row_number=-1):
         super().__init__()
 
@@ -214,11 +258,11 @@ class Process(ObjectBase):
         return self._name
 
     @name.setter
-    def name(self, value: str):
+    def name(self, value: str) -> None:
         self._name = value
 
     @name.setter
-    def name(self, value) -> str:
+    def name(self, value) -> None:
         self._name = value
 
     @property
@@ -242,7 +286,7 @@ class Process(ObjectBase):
         return self._stock_lifetime
 
     @stock_lifetime.setter
-    def stock_lifetime(self, value: int):
+    def stock_lifetime(self, value: int) -> None:
         self._stock_lifetime = value
 
     @property
@@ -436,6 +480,11 @@ class Process(ObjectBase):
 
 
 class Flow(ObjectBase):
+    """
+    aiphoria Flow-object:
+
+    Used to store data for Flow.
+    """
     def __init__(self, params: pd.Series = None, row_number=-1):
         super().__init__()
 
@@ -826,6 +875,11 @@ class Flow(ObjectBase):
 
 # Stock is created for each process that has lifetime
 class Stock(ObjectBase):
+    """
+    aiphoria Stock-object:
+
+    Used to store data for Stock.
+    """
     def __init__(self, params: Process = None, row_number=-1):
         super().__init__()
         self._process = None
@@ -875,6 +929,11 @@ class Stock(ObjectBase):
 
 
 class FlowModifier(ObjectBase):
+    """
+    aiphoria FlowModifier-object:
+
+    Used to store data for scenario related flow modifications.
+    """
     def __init__(self, params: pd.Series = None):
         super().__init__()
 
@@ -1083,6 +1142,18 @@ class FlowModifier(ObjectBase):
         :return: List of years (integers)
         """
         return [year for year in range(self.start_year, self.end_year + 1)]
+
+    def get_opposite_target_flow_ids(self) -> List[str]:
+        """
+        Get list of opposite target flow IDs.
+
+        :return: List of opposite target flow IDs.
+        """
+        opposite_flow_ids = []
+        for opposite_process_id in self.opposite_target_process_ids:
+            flow_id = Flow.make_flow_id(self.source_process_id, opposite_process_id)
+            opposite_flow_ids.append(flow_id)
+        return opposite_flow_ids
 
 
 class ScenarioData(object):
@@ -1347,7 +1418,7 @@ class ScenarioDefinition(object):
         Get list of FlowModifiers.
         These are the rules that are applied to Scenario.
 
-        :return: List of FlowModify-objects
+        :return: List of FlowModifier-objects
         """
         return self._flow_modifiers
 

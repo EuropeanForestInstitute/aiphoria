@@ -193,6 +193,11 @@ class DataProvider(object):
              "Sheet name that contains data for process positions in normalized format (position data in range [0,1])",
              None,
              ],
+            [ParameterName.CheckErrors,
+             bool,
+             "Check errors when building data (development)",
+             True,
+             ]
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}

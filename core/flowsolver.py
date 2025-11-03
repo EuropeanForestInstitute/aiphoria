@@ -499,6 +499,27 @@ class FlowSolver(object):
         dsm.o = None
         dsm.compute_outflow_total()
 
+    def get_year_range(self) -> List[int]:
+        """
+        Get years
+
+        :return: List of years (integer)
+        """
+        return self._years
+
+    def clamp_flow_values_below_zero(self) -> None:
+        """
+        Clamp all flows to minimum of 0.0 if flow value is negative.
+        """
+        # NOTE: Clamp all flows to minimum of 0.0 to introduce virtual flows
+        for year, flow_id_to_flow in self._year_to_flow_id_to_flow.items():
+            for flow_id, flow in flow_id_to_flow.items():
+                if flow.value < 0.0:
+                    flow.value = 0.0
+
+                if flow.evaluated_value < 0.0:
+                    flow.evaluated_value = 0.0
+
     def _get_year_to_process_id_to_process(self) -> Dict[int, Dict[str, Process]]:
         return self._year_to_process_id_to_process
 

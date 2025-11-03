@@ -42,6 +42,7 @@ class DataChecker(object):
         use_virtual_flows = model_params[ParameterName.UseVirtualFlows]
         baseline_value_name = model_params[ParameterName.BaselineValueName]
         baseline_unit_name = model_params[ParameterName.BaselineUnitName]
+        check_errors = model_params[ParameterName.CheckErrors]
 
         # Mapping of year -> Process ID -> Process position (normalized)
         year_to_process_id_to_position = self._dataprovider.get_process_positions()
@@ -114,42 +115,43 @@ class DataChecker(object):
         # * Check invalid parameter values *
         # **********************************
 
-        print("Checking processes for inflow visualization...")
-        process_ids_for_inflow_viz = model_params[ParameterName.VisualizeInflowsToProcesses]
-        ok, errors = self._check_process_ids_for_inflow_visualization(process_ids_for_inflow_viz, unique_process_ids)
-        if not ok:
-            raise Exception(errors)
-
-        # Check that source and target processes for flows are defined
-        print("Checking flow source and target processes...")
-        ok, errors = self._check_flow_sources_and_targets(unique_process_ids, df_year_to_flows)
-        if not ok:
-            raise Exception(errors)
-
-        # Check that there is not multiple definitions for the exact same flow per year
-        # Exact means that source and target processes are the same
-        print("Checking multiple flow definitions in the same year...")
-        ok, errors = self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows, self._years)
-        if not ok:
-            raise Exception(errors)
-
-        # Check if stock distribution type and parameters are set and valid
-        print("Checking process stock parameters...")
-        ok, errors = self._check_process_stock_parameters(processes)
-        if not ok:
-            raise Exception(errors)
-
-        # Check if stocks are defined in processes that do not have any inflows and outflows at any year
-        print("Checking stocks in isolated processes...")
-        ok, errors = self._check_stocks_in_isolated_processes(stocks, unique_process_ids)
-        if not ok:
-            raise Exception(errors)
-
-        if fill_missing_absolute_flows or fill_missing_absolute_flows:
-            print("Checking fill method requirements...")
-            ok, errors = self._check_fill_method_requirements(fill_method, df_year_to_flows)
+        if check_errors:
+            print("Checking processes for inflow visualization...")
+            process_ids_for_inflow_viz = model_params[ParameterName.VisualizeInflowsToProcesses]
+            ok, errors = self._check_process_ids_for_inflow_visualization(process_ids_for_inflow_viz, unique_process_ids)
             if not ok:
                 raise Exception(errors)
+
+            # Check that source and target processes for flows are defined
+            print("Checking flow source and target processes...")
+            ok, errors = self._check_flow_sources_and_targets(unique_process_ids, df_year_to_flows)
+            if not ok:
+                raise Exception(errors)
+
+            # Check that there is not multiple definitions for the exact same flow per year
+            # Exact means that source and target processes are the same
+            print("Checking multiple flow definitions in the same year...")
+            ok, errors = self._check_flow_multiple_definitions_per_year(unique_flow_ids, flows, self._years)
+            if not ok:
+                raise Exception(errors)
+
+            # Check if stock distribution type and parameters are set and valid
+            print("Checking process stock parameters...")
+            ok, errors = self._check_process_stock_parameters(processes)
+            if not ok:
+                raise Exception(errors)
+
+            # Check if stocks are defined in processes that do not have any inflows and outflows at any year
+            print("Checking stocks in isolated processes...")
+            ok, errors = self._check_stocks_in_isolated_processes(stocks, unique_process_ids)
+            if not ok:
+                raise Exception(errors)
+
+            if fill_missing_absolute_flows or fill_missing_absolute_flows:
+                print("Checking fill method requirements...")
+                ok, errors = self._check_fill_method_requirements(fill_method, df_year_to_flows)
+                if not ok:
+                    raise Exception(errors)
 
         # Create and propagate flow data for missing years
         df_year_to_flows = self._create_flow_data_for_missing_years(
@@ -199,64 +201,65 @@ class DataChecker(object):
         # Remove isolated processes caused by the flow merging
         df_year_to_process_flows = self._remove_isolated_processes(df_year_to_process_flows)
 
-        # Check that root flows have no inflows and only absolute outflows
-        print("Checking root processes...")
-        ok, errors = self._check_root_processes(df_year_to_process_flows)
-        if not ok:
-            raise Exception(errors)
-
-        # Check if process only absolute inflows AND absolute outflows so that
-        # the total inflow matches with the total outflows within certain limit
-        if not model_params[ParameterName.UseVirtualFlows]:
-            print("Checking process total inflows and total outflows mismatches...")
-            ok, errors = self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
-                                                                           epsilon=virtual_flows_epsilon)
+        if check_errors:
+            # Check that root flows have no inflows and only absolute outflows
+            print("Checking root processes...")
+            ok, errors = self._check_root_processes(df_year_to_process_flows)
             if not ok:
                 raise Exception(errors)
 
-        print("Checking relative flow errors...")
-        ok, errors = self._check_relative_flow_errors(df_year_to_flows)
-        if not ok:
-            raise Exception(errors)
+            # Check if process only absolute inflows AND absolute outflows so that
+            # the total inflow matches with the total outflows within certain limit
+            if not model_params[ParameterName.UseVirtualFlows]:
+                print("Checking process total inflows and total outflows mismatches...")
+                ok, errors = self._check_process_inflows_and_outflows_mismatch(df_year_to_process_flows,
+                                                                               epsilon=virtual_flows_epsilon)
+                if not ok:
+                    raise Exception(errors)
 
-        # Check if process has no inflows and only relative outflows:
-        print("Checking processes with no inflows and only relative outflows...")
-        ok, errors = self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows)
-        if not ok:
-            raise Exception(errors)
+            print("Checking relative flow errors...")
+            ok, errors = self._check_relative_flow_errors(df_year_to_flows)
+            if not ok:
+                raise Exception(errors)
 
-        print("Checking isolated/unconnected processes...")
-        ok, errors = self._check_for_isolated_processes(df_year_to_process_flows)
-        if not ok:
-            raise Exception(errors)
+            # Check if process has no inflows and only relative outflows:
+            print("Checking processes with no inflows and only relative outflows...")
+            ok, errors = self._check_process_has_no_inflows_and_only_relative_outflows(df_year_to_process_flows)
+            if not ok:
+                raise Exception(errors)
 
-        print("Checking prioritized locations...")
-        ok, errors = self._check_prioritized_locations(self._processes, model_params)
-        if not ok:
-            raise Exception(errors)
+            print("Checking isolated/unconnected processes...")
+            ok, errors = self._check_for_isolated_processes(df_year_to_process_flows)
+            if not ok:
+                raise Exception(errors)
 
-        print("Checking prioritized transformation stages...")
-        ok, errors = self._check_prioritized_transformation_stages(self._processes, model_params)
-        if not ok:
-            raise Exception(errors)
+            print("Checking prioritized locations...")
+            ok, errors = self._check_prioritized_locations(self._processes, model_params)
+            if not ok:
+                raise Exception(errors)
 
-        # Check that the sheet ParameterName.SheetNameScenarios exists
-        # and that it has properly defined data (source process ID, target process IDs, etc.)
-        print("Checking scenario definitions...")
-        ok, errors = self._check_scenario_definitions(df_year_to_process_flows)
-        if not ok:
-            raise Exception(errors)
+            print("Checking prioritized transformation stages...")
+            ok, errors = self._check_prioritized_transformation_stages(self._processes, model_params)
+            if not ok:
+                raise Exception(errors)
 
-        # Check that colors have both name and valid value
-        print("Checking color definitions...")
-        ok, errors = self._check_color_definitions(self._color_definitions)
-        if not ok:
-            raise Exception(errors)
+            # Check that the sheet ParameterName.SheetNameScenarios exists
+            # and that it has properly defined data (source process ID, target process IDs, etc.)
+            print("Checking scenario definitions...")
+            ok, errors = self._check_scenario_definitions(df_year_to_process_flows)
+            if not ok:
+                raise Exception(errors)
 
-        print("Checking flow indicators...")
-        ok, errors = self._check_flow_indicators(df_year_to_flows)
-        if not ok:
-            raise Exception(errors)
+            # Check that colors have both name and valid value
+            print("Checking color definitions...")
+            ok, errors = self._check_color_definitions(self._color_definitions)
+            if not ok:
+                raise Exception(errors)
+
+            print("Checking flow indicators...")
+            ok, errors = self._check_flow_indicators(df_year_to_flows)
+            if not ok:
+                raise Exception(errors)
 
         # *************************************
         # * Unpack DataFrames to dictionaries *

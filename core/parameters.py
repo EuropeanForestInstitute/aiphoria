@@ -77,6 +77,9 @@ class ParameterName(str, Enum):
     # Sheet name for process positions
     SheetNameProcessPositions: str = "sheet_name_process_positions"
 
+    # Check errors
+    CheckErrors: str = "check_errors"
+
 
 class ParameterFillMethod(str, Enum):
     """
