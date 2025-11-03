@@ -1,5 +1,5 @@
 import sys
-from typing import Union, Tuple, List, Dict, Any
+from typing import Tuple, List, Dict
 import numpy as np
 import core.flowsolver as FlowSolver
 from core.datastructures import Flow, Scenario, FlowModifier
@@ -31,7 +31,8 @@ class FlowModifierSolver(object):
             self._evaluated_share_offset = evaluated_share_offset
 
         def __str__(self) -> str:
-            return "FlowChangeEntry: year={}, flow_id={}, value={}, evaluated_share={}, evaluated_value={}, evaluated_offset={}, evaluated_share_offset={}".format(
+            return "FlowChangeEntry: year={}, flow_id={}, value={}, evaluated_share={}, evaluated_value={}, " \
+                   "evaluated_offset={}, evaluated_share_offset={}".format(
                 self.year, self.flow_id, self.value, self.evaluated_share, self.evaluated_value, self.evaluated_offset,
                 self.evaluated_share_offset)
 
@@ -304,6 +305,7 @@ class FlowModifierSolver(object):
                     # TODO: Show target relative share that allows to scenario to work in error
                     # TODO: instead of absolute numbers
                     # TODO: How to calculate flow share for missing
+
 
                     s = "Process '{}'".format(source_process_id)
                     s += " "
@@ -975,6 +977,10 @@ class FlowModifierSolver(object):
             flow_modifier = flow_modifiers[flow_modifier_index]
             year_range = flow_modifier.get_year_range()
 
+            # NOTE: Skip applying changes to target flows (either siblings or target opposite flows) if set
+            if not flow_modifier.apply_to_targets:
+                continue
+
             # Flow share offset from first year flow share
             new_values_actual = flow_modifier_index_to_new_values_actual[flow_modifier_index]
             new_values_offset = flow_modifier_index_to_new_values_offset[flow_modifier_index]
@@ -1284,5 +1290,28 @@ class FlowModifierSolver(object):
                 s += "This caused negative flow (evaluated value={}) for flow '{}' in year {}".format(
                     min_year_entry[1], affected_flow_id, min_year_entry[0])
                 errors.append(s)
+
+        # Check that total relative outflows are in range [0, 100]
+        # Using flow modifier solver with apply to targets = False can
+        # make total relative outflows over 100%
+        for flow_modifier_index, flow_modifier in enumerate(flow_modifiers):
+            source_process_id = flow_modifier.source_process_id
+            for year in flow_modifier.get_year_range():
+                outflows = flow_solver.get_process_outflows(source_process_id, year)
+                total_outflows_rel = 0.0
+                for flow in outflows:
+                    if not flow.is_unit_absolute_value:
+                        total_outflows_rel += flow.evaluated_share
+
+                if total_outflows_rel > 1.0:
+                    s = "Flow modifier in row {} targeting flow {} causes the total relative outflows"
+                    s += " of source process '{}' to become over 100% in year {} (evaluated share = {:.1f}%)"
+                    s = s.format(flow_modifier.row_number,
+                                 flow_modifier.target_flow_id,
+                                 flow_modifier.source_process_id,
+                                 year,
+                                 (total_outflows_rel * 100.0)
+                                 )
+                    errors.append(s)
 
         return errors
