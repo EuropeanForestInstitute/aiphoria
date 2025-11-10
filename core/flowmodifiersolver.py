@@ -1534,9 +1534,6 @@ class FlowModifierSolver(object):
                         total_outflows_rel += flow.evaluated_share
 
                 if total_outflows_rel > (1.0 + total_rel_outflow_tolerance):
-                    a = 0
-
-                    a = 0
                     s = "Flow modifier in row {} targeting flow {} causes the total relative outflows"
                     s += " of source process '{}' to become over 100% in year {} (evaluated share = {:.3f}%)"
                     s = s.format(flow_modifier.row_number,
