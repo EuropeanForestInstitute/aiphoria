@@ -1300,10 +1300,6 @@
     // Simulate drag event (= mousedown, mousemove, mouseup) for first
     // Sankey node so node positions are computed
     // @param {Number} nodeIndex Target node index in year data
-    // @param {Number} nodeIndex Target node index in year data
-    /**
-     *
-     */
     function simulateNodeDrag(target, nodeIndex, dx = 0, dy = 0) {
       const sankeyNodes = target.querySelectorAll('.sankey-node')
 
@@ -1907,7 +1903,6 @@
 
       // TODO: Populate menu?
       updateWindowMenu()
-
 
       // Add global event callbacks
       addEventListener("keydown", onKeyDown)
@@ -2920,11 +2915,21 @@
         }],
       }
 
+      const safeTargetName = processId.replace(/[^a-z0-9]/gi, '_')
+      const filename = `Process_${safeTargetName}_inflows_and_outflows`
       const config = {
         editable: false,
         showlegend: false,
-        displayModeBar: false,
+        // displayModeBar: false,
         responsive: true,
+
+        'toImageButtonOptions': {
+          format: 'svg',
+          filename: filename,
+          scale: 1,
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }
       }
 
       Plotly.newPlot(elem, data, layout, config)
@@ -3087,11 +3092,21 @@
         }],
       }
 
+      const safeTargetName = flowId.replace(/[^a-z0-9]/gi, '_')
+      const filename = `Flow_${safeTargetName}_values`
       const config = {
         editable: false,
         showlegend: false,
-        displayModeBar: false,
+        // displayModeBar: false,
         responsive: true,
+
+        'toImageButtonOptions': {
+          format: 'svg',
+          filename: filename,
+          scale: 1,
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }
       }
 
       Plotly.newPlot(elem, data, layout, config)
@@ -3248,11 +3263,21 @@
         }],
       }
 
+      const safeTargetName = stockId.replace(/[^a-z0-9]/gi, '_')
+      const filename = `Stock_${safeTargetName}_values`
       const config = {
         editable: false,
         showlegend: false,
-        displayModeBar: false,
+        // displayModeBar: false,
         responsive: true,
+
+        'toImageButtonOptions': {
+          format: 'svg',
+          filename: filename,
+          scale: 1,
+          width: window.innerWidth,
+          height: window.innerHeight,
+        }
       }
 
       Plotly.newPlot(elem, data, layout, config)
