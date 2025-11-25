@@ -1049,11 +1049,12 @@
       font-weight: bold;
     }
   </style>
+
+  <!-- Included PlotlyJS source -->
   <script src="./plotly-3.0.0.min.js"></script>
 
-  <!-- NOTE: Works only in dev server! -->
+  <!-- Included minified Pako source -->
   <script src="./pako.min.js"></script>
-
 
   <script>
     // aiphoria logo
@@ -1715,8 +1716,6 @@
     }
 
     async function buildAllScenarioVisualizationData() {
-      // TODO: Go through all the scenarios
-
       // Go through all the years and create hidden Sankey graph
       // to automatically calculate node positions.
       // This also enables to precompute node-arrays
@@ -1900,8 +1899,6 @@
       selectYear(globals.getYears()[0], { init: true, calculateNodePositions: true })
       toggleMenu(globals.settings.showMenu)
       populateSelectScenarios()
-
-      // TODO: Populate menu?
       updateWindowMenu()
 
       // Add global event callbacks
