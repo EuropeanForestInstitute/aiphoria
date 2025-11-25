@@ -1,5 +1,7 @@
-import json
 import os
+import json
+import zlib
+import base64
 import webbrowser
 from typing import List, Dict, Any
 
@@ -61,8 +63,8 @@ class DataVisualizer(object):
                 scenario_year_to_data = scenario_name_to_data[scenario_name]
 
                 html = self._build_scenario_graph(scenario_name,
-                                                  scenario_info,
-                                                  scenario_year_to_data,
+                                                  scenario_name_to_info,
+                                                  scenario_name_to_data,
                                                   visualizer_params)
 
                 output_path = os.path.join(model_params[ParameterName.OutputPath], scenario_name)
@@ -288,11 +290,17 @@ class DataVisualizer(object):
 
     def _build_scenario_graph(self,
                               scenario_name: str,
-                              scenario_info: Dict[str, Any],
-                              scenario_data: Dict[str, Dict] = None,
+                              scenario_name_to_info: Dict[str, Any],
+                              scenario_name_to_data: Dict[str, Dict] = None,
                               params: Dict = None):
+
+        # Leave only key with target scenario name
+        target_scenario_name_to_info = {scenario_name: scenario_name_to_info[scenario_name]}
+        target_scenario_name_to_data = {scenario_name: scenario_name_to_data[scenario_name]}
+
         # Add JS script that is run after the Plotly has loaded
         filename_plotly = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/plotly-3.0.0.min.js")
+        filename_pako = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/pako.min.js")
         filename_html = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/datavisualizer_plotly.html")
 
         # Read HTML file contents
@@ -305,19 +313,35 @@ class DataVisualizer(object):
         with open(filename_plotly, "r", encoding="utf-8") as fs:
             plotly_js = fs.read()
 
+        # Read Pako file contents
+        pako_js = ""
+        with open(filename_pako, "r", encoding="utf-8") as fs:
+            pako_js = fs.read()
+
         # Replace contents with data
         # Plotly
         html = html.replace(
             '<script src="./plotly-3.0.0.min.js"></script>',
             f'<script type="text/javascript">{plotly_js}</script>')
 
-        # Scenario info as JSON
-        html = html.replace("// rawScenarioInfo:", "rawScenarioInfo:")
-        html = html.replace("{rawScenarioInfo}", json.dumps(scenario_info))
+        # Pako
+        html = html.replace(
+            '<script src="./pako.min.js"></script>',
+            f'<script type="text/javascript">{pako_js}</script>')
 
-        # Scenario year to data as JSON
-        html = html.replace("// rawYearToData:", "rawYearToData:")
-        html = html.replace("{rawYearToData}", json.dumps(scenario_data))
+        # Encode scenario info data as base64-encoded zlib data
+        info_json = json.dumps(target_scenario_name_to_info)
+        info_compressed = zlib.compress(info_json.encode("utf-8"))
+        info_base64 = base64.b64encode(info_compressed).decode("utf-8")
+        html = html.replace("// rawScenarioInfo:", "rawScenarioInfo:")
+        html = html.replace("{rawScenarioInfo}", json.dumps(info_base64))
+
+        # Encode scenario data as base64-encoded zlib data
+        data_json = json.dumps(target_scenario_name_to_data)
+        data_compressed = zlib.compress(data_json.encode("utf-8"))
+        data_base64 = base64.b64encode(data_compressed).decode("utf-8")
+        html = html.replace("// rawScenarioData:", "rawScenarioData:")
+        html = html.replace("{rawScenarioData}", json.dumps(data_base64))
 
         return html
 
@@ -328,6 +352,7 @@ class DataVisualizer(object):
 
         # Add JS script that is run after the Plotly has loaded
         filename_plotly = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/plotly-3.0.0.min.js")
+        filename_pako = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/pako.min.js")
         filename_html = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/datavisualizer_plotly.html")
 
         # Read HTML file contents
@@ -340,27 +365,35 @@ class DataVisualizer(object):
         with open(filename_plotly, "r", encoding="utf-8") as fs:
             plotly_js = fs.read()
 
+        # Read Pako file contents
+        pako_js = ""
+        with open(filename_pako, "r", encoding="utf-8") as fs:
+            pako_js = fs.read()
+
         # Replace contents with data
         # Plotly
         html = html.replace(
             '<script src="./plotly-3.0.0.min.js"></script>',
             f'<script type="text/javascript">{plotly_js}</script>')
 
-        # # Scenario info as JSON
-        # html = html.replace("// rawScenarioInfo:", "rawScenarioInfo:")
-        # html = html.replace("{rawScenarioInfo}", json.dumps(scenario_info))
+        # Pako
+        html = html.replace(
+            '<script src="./pako.min.js"></script>',
+            f'<script type="text/javascript">{pako_js}</script>')
 
-        # # Scenario year to data as JSON
-        # html = html.replace("// rawYearToData:", "rawYearToData:")
-        # html = html.replace("{rawYearToData}", json.dumps(scenario_data))
+        # Encode scenario info data as base64-encoded zlib data
+        info_json = json.dumps(scenario_name_to_info)
+        info_compressed = zlib.compress(info_json.encode("utf-8"))
+        info_base64 = base64.b64encode(info_compressed).decode("utf-8")
+        html = html.replace("// rawScenarioInfo:", "rawScenarioInfo:")
+        html = html.replace("{rawScenarioInfo}", json.dumps(info_base64))
 
-        # Scenario name to scenario info as JSON
-        html = html.replace("// rawScenarioNameToInfo:", "rawScenarioNameToInfo:")
-        html = html.replace("{rawScenarioNameToInfo}", json.dumps(scenario_name_to_info))
-
-        # Scenario name to scenario data as JSON
-        html = html.replace("// rawScenarioNameToData:", "rawScenarioNameToData:")
-        html = html.replace("{rawScenarioNameToData}", json.dumps(scenario_name_to_data))
+        # Encode scenario data as base64-encoded zlib data
+        data_json = json.dumps(scenario_name_to_data)
+        data_compressed = zlib.compress(data_json.encode("utf-8"))
+        data_base64 = base64.b64encode(data_compressed).decode("utf-8")
+        html = html.replace("// rawScenarioData:", "rawScenarioData:")
+        html = html.replace("{rawScenarioData}", json.dumps(data_base64))
 
         return html
 
