@@ -40,8 +40,6 @@
       box-sizing: border-box;
     }
 
-    * {}
-
     body {
       display: flex;
       box-sizing: border-box;
@@ -1048,6 +1046,14 @@
       box-shadow: var(--box-shadow);
       font-weight: bold;
     }
+
+    .scenario-comparison-wrapper {
+      display: none;
+    }
+
+    .scenario-comparison-wrapper[data-show="true"] {
+      display: block;
+    }
   </style>
 
   <!-- Included PlotlyJS source -->
@@ -1118,6 +1124,12 @@
         // showProcessLabel: true,
         showProcessLabel: false,
 
+        // Arrangement mode ("freeform" / "perpendicular"): movement mode for Sankey plot nodes
+        arrangementMode: "freeform",
+
+        // If true, show comparison of data between scenarios in tooltip (default: false)
+        showScenarioComparison: false,
+
         // Windows related
         showSettings: false,
         showTools: false,
@@ -1138,9 +1150,6 @@
         // Context menu
         showContextMenu: false,
         showInfoWindow: false,
-
-        // Line graph colors
-        colors: [""],
 
         // Sankey graph font size
         fontSize: 12,
@@ -1164,6 +1173,10 @@
 
       getScenarioBaselineUnitName() {
         return this.scenario.baselineUnitName
+      },
+
+      getCurrentYear() {
+        return this.currentYear
       },
 
       // Currently selected yearly data
@@ -1569,152 +1582,6 @@
       }
     }
 
-    async function buildVisualizationData() {
-      // Go through all the years and create hidden Sankey graph
-      // to automatically calculate node positions.
-      // This also enables to precompute node-arrays
-      // so node data can be directly used when generating
-      // Sankey graph later.
-      const years = globals.getYears()
-      for (const [yearIndex, year] of years.entries()) {
-        // Create graph and render once to get find out how many nodes and links
-        // are used in Sankey graph. It will also compute the node positions
-        const yearData = globals.getYearData(year)
-
-        const data = [{
-          type: 'sankey',
-          orientation: 'h',
-          arrangement: 'freeform',
-          node: {
-            label: yearData.labels,
-            color: yearData.nodeColors,
-            customdata: yearData.nodeCustomData,
-            align: "justify",
-            thickness: 20,
-            x: [],
-            y: [],
-            hoverinfo: 'none',
-            line: {
-              color: "#555",
-              width: [0.5],
-            },
-          },
-          link: {
-            source: yearData.sources,
-            target: yearData.targets,
-            value: yearData.values,
-            color: yearData.linkColors,
-            customdata: yearData.linkCustomData,
-            hoverinfo: 'none',
-          },
-        }]
-
-        const layout = {
-          title: {
-            text: "Scenario: " + globals.getScenarioName(),
-            font: {
-              color: "#000",
-              size: 20,
-            }
-          },
-          sliders: [{
-            active: globals.getIndexForYear(year),
-            pad: {
-              t: 30,
-            },
-            currentvalue: {
-              xanchor: 'left',
-              prefix: "Selected year: ",
-              font: {
-                color: '#000',
-                size: 20,
-              }
-            },
-
-            steps: years.map(x => ({
-              label: x,
-              method: 'update',
-              args: [],
-              execute: false,
-            }))
-          }],
-          transition: {
-            duration: 0,
-          },
-          frame: {
-            duration: 0,
-          },
-          font: {
-            size: globals.settings.fontSize,
-          }
-        }
-
-        const config = {
-          editable: false,
-          showlegend: false,
-          displayModeBar: false,
-          responsive: true,
-        }
-
-        // Create graph and simulate node drag to filling node positions
-        const elem = document.getElementById(globals.elemId)
-        await Plotly.newPlot(elem, data, layout, config)
-        simulateNodeDrag(elem, 0, 0, 0)
-
-        // Get computed node X and Y position and update yearly node positions
-        const fullData = elem._fullData[0]
-        const sankey = fullData._sankey
-        const nodes = sankey.graph.nodes
-
-        // Calculated node X and Y positions (available after first render)
-        const computedNodeX = sankey.trace.node.x
-        const computedNodeY = sankey.trace.node.y
-
-        const newNodeX = []
-        const newNodeY = []
-        const graphNodeIds = [] // Order of the node IDs for each year
-        const graphNodeIdToGraphNodeIndex = new Map()
-        for (const [nodeIndex, node] of nodes.entries()) {
-          const nodeId = node.customdata.node_id
-          const targetNodeIndex = yearData.nodeIdToNodeIndex.get(nodeId)
-          let x = yearData.nodePositionsX[targetNodeIndex]
-          let y = yearData.nodePositionsY[targetNodeIndex]
-
-          // Use computed position if position is not defined
-          if (x === undefined || x === null) {
-            x = computedNodeX[nodeIndex]
-          }
-
-          if (y === undefined || y === null) {
-            y = computedNodeY[nodeIndex]
-          }
-
-          newNodeX.push(x)
-          newNodeY.push(y)
-          graphNodeIds.push(nodeId)
-          graphNodeIdToGraphNodeIndex.set(nodeId, nodeIndex)
-        }
-
-        // Store node X and Y positions and array of used node IDs for this year
-        yearData.nodePositionsX = newNodeX
-        yearData.nodePositionsY = newNodeY
-        yearData.graphNodeIds = graphNodeIds
-        yearData.graphNodeIdToGraphNodeIndex = graphNodeIdToGraphNodeIndex
-
-        // Update progress text
-        const progressText = document.getElementById("progress-text")
-        let progressPercent = ((yearIndex / (years.length - 1)) * 100.0).toFixed(0)
-        progressText.textContent = `Building visualizations ${progressPercent}% (${year}/${years[years.length - 1]})`
-
-        // Sleep for one tick to allow updating main thread for UI changes
-        await sleep(1)
-      }
-
-      setTimeout(() => {
-        hideLoadingOverlay()
-      }, 250)
-    }
-
     async function buildAllScenarioVisualizationData() {
       // Go through all the years and create hidden Sankey graph
       // to automatically calculate node positions.
@@ -1913,6 +1780,36 @@
       // Show process label / ID
       const elemShowProcessLabel = document.getElementById("showProcessLabel")
       elemShowProcessLabel.addEventListener("change", toggleShowProcessLabel)
+
+      // Select arrangement mode
+      const elemArrangementMode = document.getElementById("arrangementMode")
+      const selectedArrangementMode = globals.settings.arrangementMode
+      for (const child of elemArrangementMode.children) {
+        child.removeAttribute("selected")
+      }
+      for (const child of elemArrangementMode.children) {
+        if (child.value == selectedArrangementMode) {
+          child.setAttribute("selected", "")
+        }
+      }
+      useArrangementMode({ target: { value: globals.settings.arrangementMode } })
+
+
+      // Select show scenario comparison
+      const elemShowScenarioComparison = document.getElementById("showScenarioComparison")
+      const selectedShowScenarioComparison = globals.settings.showScenarioComparison
+      for (const child of elemShowScenarioComparison.children) {
+        child.removeAttribute("selected")
+      }
+
+      for (const child of elemShowScenarioComparison.children) {
+        if ((child.value == "yes") && (selectedShowScenarioComparison == true)) {
+          child.setAttribute("selected", "")
+        }
+        if ((child.value == "no") && (selectedShowScenarioComparison == false)) {
+          child.setAttribute("selected", "")
+        }
+      }
     }
 
     function initWindows() {
@@ -1995,7 +1892,352 @@
 
     function useArrangementMode(event) {
       // Change Plotly Sankey chart arrangement mode (freeform/perpendicular)
-      Plotly.update(globals.elem, { arrangement: event.target.value })
+      globals.settings.arrangementMode = event.target.value
+      Plotly.update(globals.elem, { arrangement: globals.settings.arrangementMode })
+    }
+
+    function showScenarioComparison(event) {
+      const state = event.target.value == "yes" ? true : false
+      globals.settings.showScenarioComparison = state
+
+      const elems = document.getElementsByClassName("scenario-comparison-wrapper")
+      for (const elem of elems) {
+        elem.dataset.show = state
+      }
+    }
+
+    function buildComparisonNode(nodeCustomData = null) {
+      const nodeId = nodeCustomData.node_id
+
+      const currentYear = globals.getCurrentYear()
+      const selectedScenarioName = globals.getScenarioName()
+      const scenarioNames = globals.getScenarioNames()
+      const scenarioNameToInflowValues = new Map()
+      const scenarioNameToOutflowValues = new Map()
+      const baselineUnitName = globals.getScenarioBaselineUnitName()
+      const baselineValueName = globals.getScenarioBaselineValueName()
+      let hasInflows = true
+      let hasOutflows = true
+      for (const scenarioName of scenarioNames) {
+        const yearToData = globals.getScenarioData(scenarioName)
+        const yearData = yearToData.get(currentYear)
+
+        let inflows = yearData.nodeIdToInflows.get(nodeId)
+        if (inflows === undefined) {
+          hasInflows = false
+          inflows = []
+        }
+
+        let outflows = yearData.nodeIdToOutflows.get(nodeId)
+        if (outflows === undefined) {
+          hasOutflows = false
+          outflows = []
+        }
+
+        const inflowValues = []
+        for (const flow of inflows) {
+          inflowValues.push(flow.evaluated_indicator_values)
+        }
+
+        const outflowValues = []
+        for (const flow of outflows) {
+          outflowValues.push(flow.evaluated_indicator_values)
+        }
+
+        let totalInflows = []
+        for (const values of inflowValues) {
+          if (totalInflows.length == 0) {
+            for (const i of values) {
+              totalInflows.push(0.0)
+            }
+          }
+
+          for (const [i, val] of values.entries()) {
+            totalInflows[i] += val
+          }
+        }
+        scenarioNameToInflowValues.set(scenarioName, totalInflows)
+
+        let totalOutflows = []
+        for (const values of outflowValues) {
+          if (totalOutflows.length == 0) {
+            for (const i of values) {
+              totalOutflows.push(0.0)
+            }
+          }
+
+          for (const [i, val] of values.entries()) {
+            totalOutflows[i] += val
+          }
+        }
+        scenarioNameToOutflowValues.set(scenarioName, totalOutflows)
+      }
+
+      // Build table header
+      const elemTableHead = document.getElementById("scenario-comparison-node-table-head")
+      elemTableHead.replaceChildren()
+
+      const elemHeadRow = document.createElement("tr")
+      elemTableHead.appendChild(elemHeadRow)
+
+      const dataHeadScenario = document.createElement("th")
+      dataHeadScenario.textContent = "Scenario"
+      elemHeadRow.appendChild(dataHeadScenario)
+
+      const dataHeadInflows = document.createElement("th")
+      dataHeadInflows.textContent = "Inflows (baseline)"
+      elemHeadRow.appendChild(dataHeadInflows)
+
+      const dataHeadOutflows = document.createElement("th")
+      dataHeadOutflows.textContent = "Outflows (baseline)"
+      elemHeadRow.appendChild(dataHeadOutflows)
+
+      const elemTableBody = document.getElementById("scenario-comparison-node-table-body")
+
+      // Currently selected scenario values
+      let selectedScenarioTotalInflows = 0.0
+      let selectedScenarioTotalOutflows = 0.0
+      const selectedScenarioInflowValues = scenarioNameToInflowValues.get(selectedScenarioName)
+      const selectedScenarioOutflowValues = scenarioNameToOutflowValues.get(selectedScenarioName)
+      if (selectedScenarioInflowValues.length > 0) {
+        selectedScenarioTotalInflows = selectedScenarioInflowValues[0]
+      }
+      if (selectedScenarioOutflowValues.length > 0) {
+        selectedScenarioTotalOutflows = selectedScenarioOutflowValues[0]
+      }
+
+      const colorPositive = "#228B22"
+      const colorNegative = "#C41E3A"
+      const colorBlack = "#000000"
+
+      elemTableBody.replaceChildren()
+      for (const [index, scenarioName] of scenarioNames.entries()) {
+        let scenarioTotalInflows = 0.0
+        let scenarioTotalOutflows = 0.0
+        const scenarioInflowValues = scenarioNameToInflowValues.get(scenarioName)
+        const scenarioOutflowValues = scenarioNameToOutflowValues.get(scenarioName)
+        if (scenarioInflowValues.length > 0) {
+          scenarioTotalInflows = scenarioInflowValues[0]
+        }
+
+        if (scenarioOutflowValues.length > 0) {
+          scenarioTotalOutflows = scenarioOutflowValues[0]
+        }
+
+        const elemRow = document.createElement("tr")
+
+        // Scenario name
+        const dataScenarioName = document.createElement("td")
+        dataScenarioName.textContent = scenarioName
+        elemRow.appendChild(dataScenarioName)
+
+        // Total inflows
+        const dataScenarioInflows = document.createElement("td")
+        const elemTotalInflows = document.createElement("span")
+        elemTotalInflows.textContent = `${formatValue(scenarioTotalInflows)} ${baselineUnitName}`
+        if (!hasInflows) {
+          elemTotalInflows.textContent = "No inflows"
+        }
+
+        if (scenarioName == selectedScenarioName) {
+          dataScenarioInflows.appendChild(elemTotalInflows)
+        } else {
+          elemTotalInflows.textContent += " "
+          dataScenarioInflows.appendChild(elemTotalInflows)
+
+          let sign = ""
+          const elemDiffPercent = document.createElement("span")
+          let diffPercent = (scenarioTotalInflows - selectedScenarioTotalInflows) / selectedScenarioTotalInflows
+          diffPercent *= 100.0
+          if (diffPercent >= 0.0) {
+            elemDiffPercent.style.color = colorPositive
+            sign = "+"
+          } else {
+            elemDiffPercent.style.color = colorNegative
+          }
+
+          if (selectedScenarioTotalInflows != 0.0) {
+            const elemDiffStart = document.createElement("span")
+            elemDiffStart.textContent = "("
+            dataScenarioInflows.appendChild(elemDiffStart)
+
+            elemDiffPercent.textContent = `${sign}${formatValue(diffPercent)}%`
+            dataScenarioInflows.appendChild(elemDiffPercent)
+
+            const elemDiffEnd = document.createElement("span")
+            elemDiffEnd.textContent = ")"
+            dataScenarioInflows.appendChild(elemDiffEnd)
+          }
+
+          if (!hasInflows) {
+            elemTotalInflows.textContent = "No inflows"
+          }
+        }
+        elemRow.appendChild(dataScenarioInflows)
+
+        // Total outflows
+        const dataScenarioOutflows = document.createElement("td")
+        const elemTotalOutflows = document.createElement("span")
+        elemTotalOutflows.textContent = `${formatValue(scenarioTotalOutflows)} ${baselineUnitName}`
+        if (!hasOutflows) {
+          elemTotalOutflows.textContent = "No outflows"
+        }
+
+        if (scenarioName == selectedScenarioName) {
+          dataScenarioOutflows.appendChild(elemTotalOutflows)
+        } else {
+          elemTotalOutflows.textContent += " "
+          dataScenarioOutflows.appendChild(elemTotalOutflows)
+
+          let sign = ""
+          const elemDiffPercent = document.createElement("span")
+          let diffPercent = (scenarioTotalOutflows - selectedScenarioTotalOutflows) / selectedScenarioTotalOutflows
+          diffPercent *= 100.0
+          if (diffPercent >= 0.0) {
+            elemDiffPercent.style.color = colorPositive
+            sign = "+"
+          } else {
+            elemDiffPercent.style.color = colorNegative
+          }
+
+          if (selectedScenarioTotalOutflows != 0.0) {
+            const elemDiffStart = document.createElement("span")
+            elemDiffStart.textContent = "("
+            dataScenarioOutflows.appendChild(elemDiffStart)
+
+            elemDiffPercent.textContent = `${sign}${formatValue(diffPercent)}%`
+            dataScenarioOutflows.appendChild(elemDiffPercent)
+
+            const elemDiffEnd = document.createElement("span")
+            elemDiffEnd.textContent = ")"
+            dataScenarioOutflows.appendChild(elemDiffEnd)
+          }
+
+          if (!hasOutflows) {
+            elemTotalOutflows.textContent = "No outflows"
+          }
+        }
+        elemRow.appendChild(dataScenarioOutflows)
+
+        elemTableBody.appendChild(elemRow)
+      }
+    }
+
+    function buildComparisonLink(linkCustomData = null) {
+      const currentYear = globals.getCurrentYear()
+      const selectedScenarioName = globals.getScenarioName()
+      const scenarioNames = globals.getScenarioNames()
+      const scenarioNameToIndicatorNames = new Map()
+      const scenarioNameToUnitNames = new Map()
+      const scenarioNameToValues = new Map()
+      const baselineValueName = globals.getScenarioBaselineValueName()
+      const baselineUnitName = globals.getScenarioBaselineUnitName()
+
+      for (const scenarioName of scenarioNames) {
+        const yearToData = globals.getScenarioData(scenarioName)
+        const yearData = yearToData.get(currentYear)
+
+        const linkIndex = yearData.linkCustomData.findIndex((x) => {
+          return (x.source_process_id == linkCustomData.source_process_id) && (x.target_process_id == linkCustomData.target_process_id)
+        })
+        if (linkIndex < 0) {
+          console.log(`Link not found: source_process_id=${linkCustomData.source_process_id}, target_process_id=${linkCustomData.target_process_id}`)
+          return
+        }
+
+        const yearLinkCustomData = yearData.linkCustomData[linkIndex]
+        const scenarioIndicatorNames = [baselineValueName, ...yearLinkCustomData.indicator_names]
+        scenarioNameToIndicatorNames.set(scenarioName, scenarioIndicatorNames)
+
+        const scenarioIndicatorUnits = [baselineUnitName, ...yearLinkCustomData.indicator_units]
+        scenarioNameToUnitNames.set(scenarioName, scenarioIndicatorUnits)
+
+        const scenarioValues = yearLinkCustomData.evaluated_indicator_values
+        scenarioNameToValues.set(scenarioName, scenarioValues)
+      }
+
+      // Build table header
+      const elemTableHead = document.getElementById("scenario-comparison-link-table-head")
+      elemTableHead.replaceChildren()
+
+      const elemHeadRow = document.createElement("tr")
+      elemTableHead.appendChild(elemHeadRow)
+
+      const dataHeadScenario = document.createElement("th")
+      dataHeadScenario.textContent = "Scenario"
+      elemHeadRow.appendChild(dataHeadScenario)
+
+      // Get indicator names and unit names from baseline scenario
+      const keyBaseline = [...scenarioNameToUnitNames.keys()][0]
+      const indicatorNames = scenarioNameToIndicatorNames.get(keyBaseline)
+      const unitNames = scenarioNameToUnitNames.get(keyBaseline)
+      for (let i = 0; i < indicatorNames.length; i++) {
+        const indicatorName = indicatorNames[i]
+        const unitName = unitNames[i]
+        const dataHeadIndicator = document.createElement("th")
+        dataHeadIndicator.textContent = `${indicatorName}`
+        elemHeadRow.appendChild(dataHeadIndicator)
+      }
+
+      const colorPositive = "#228B22"
+      const colorNegative = "#C41E3A"
+      const colorBlack = "#000000"
+
+      // Fill link indicator values
+      const elemTableBody = document.getElementById("scenario-comparison-link-table-body")
+      elemTableBody.replaceChildren()
+      for (const [scenarioIndex, scenarioName] of scenarioNames.entries()) {
+        const elemRow = document.createElement("tr")
+        elemTableBody.appendChild(elemRow)
+
+        const dataScenario = document.createElement("td")
+        dataScenario.textContent = `${scenarioName}`
+        elemRow.appendChild(dataScenario)
+
+        const values = scenarioNameToValues.get(scenarioName)
+        for (let i = 0; i < indicatorNames.length; i++) {
+          const dataIndicatorValue = document.createElement("td")
+          const elemIndicatorValue = document.createElement("span")
+          if (scenarioName == selectedScenarioName) {
+            elemIndicatorValue.textContent = `${formatValue(values[i])} ${unitNames[i]}`
+            dataIndicatorValue.appendChild(elemIndicatorValue)
+          } else {
+            elemIndicatorValue.textContent = `${formatValue(values[i])} ${unitNames[i]}`
+            elemIndicatorValue.textContent += " "
+            dataIndicatorValue.appendChild(elemIndicatorValue)
+
+            // Calculate difference to other scenarios
+            const selectedScenarioValue = scenarioNameToValues.get(selectedScenarioName)[i]
+            const scenarioValue = values[i]
+            let sign = ""
+            const elemDiffPercent = document.createElement("span")
+            let diffPercent = (scenarioValue - selectedScenarioValue) / selectedScenarioValue
+            diffPercent *= 100.0
+            if (diffPercent >= 0.0) {
+              elemDiffPercent.style.color = colorPositive
+              sign = "+"
+            } else {
+              elemDiffPercent.style.color = colorNegative
+            }
+
+            if (selectedScenarioValue != 0.0) {
+              const elemDiffStart = document.createElement("span")
+              elemDiffStart.textContent = "("
+
+              dataIndicatorValue.appendChild(elemDiffStart)
+
+              elemDiffPercent.textContent = `${sign}${formatValue(diffPercent)}%`
+              dataIndicatorValue.appendChild(elemDiffPercent)
+
+              const elemDiffEnd = document.createElement("span")
+              elemDiffEnd.textContent = ")"
+              dataIndicatorValue.appendChild(elemDiffEnd)
+            }
+          }
+
+          elemRow.appendChild(dataIndicatorValue)
+        }
+      }
     }
 
     function toggleTab(event, id = undefined) {
@@ -2065,6 +2307,10 @@
       }
 
       globals.settings.currentTabId = targetId
+    }
+
+    function buildProcessComparison(nodeId) {
+
     }
 
     function populateTabProcesses(id, yearData, filter = null, numDecimals = 3) {
@@ -2869,6 +3115,7 @@
         data.push(dataOutflows)
       }
 
+      const currentYear = globals.getCurrentYear()
       const layout = {
         title: {
           text: `Process ${processId} inflows and outflows`
@@ -2893,8 +3140,8 @@
         autorange: true,
         shapes: [{
           type: "line",
-          x0: globals.currentYear,
-          x1: globals.currentYear,
+          x0: currentYear,
+          x1: currentYear,
           y0: 0,
           y1: 1,
           xref: "x",
@@ -2905,11 +3152,11 @@
         }],
 
         annotations: [{
-          x: globals.currentYear,
+          x: currentYear,
           y: 1.01,
           xref: "x",
           yref: "paper",
-          text: `Selected year: ${globals.currentYear}`,
+          text: `Selected year: ${currentYear}`,
           showarrow: true,
           arrowhead: 2,
           arrowsize: 1,
@@ -3052,6 +3299,7 @@
         data.push(graphData)
       }
 
+      const currentYear = globals.getCurrentYear()
       const layout = {
         title: {
           text: `Flow ${flowId} evaluated values`
@@ -3076,8 +3324,8 @@
         autorange: true,
         shapes: [{
           type: "line",
-          x0: globals.currentYear,
-          x1: globals.currentYear,
+          x0: currentYear,
+          x1: currentYear,
           y0: 0,
           y1: 1,
           xref: "x",
@@ -3088,11 +3336,11 @@
         }],
 
         annotations: [{
-          x: globals.currentYear,
+          x: currentYear,
           y: 1.01,
           xref: "x",
           yref: "paper",
-          text: `Selected year: ${globals.currentYear}`,
+          text: `Selected year: ${currentYear}`,
           showarrow: true,
           arrowhead: 2,
           arrowsize: 1,
@@ -3226,6 +3474,7 @@
         data.push(dataTotals)
       }
 
+      const currentYear = globals.getCurrentYear()
       const layout = {
         title: {
           text: `Stock ${stockId} evaluated values`
@@ -3253,8 +3502,8 @@
 
         shapes: [{
           type: "line",
-          x0: globals.currentYear,
-          x1: globals.currentYear,
+          x0: currentYear,
+          x1: currentYear,
           y0: 0,
           y1: 1,
           xref: "x",
@@ -3265,11 +3514,11 @@
         }],
 
         annotations: [{
-          x: globals.currentYear,
+          x: currentYear,
           y: 1.01,
           xref: "x",
           yref: "paper",
-          text: `Selected year: ${globals.currentYear}`,
+          text: `Selected year: ${currentYear}`,
           showarrow: true,
           arrowhead: 2,
           arrowsize: 1,
@@ -3400,7 +3649,7 @@
           yearData.linkCustomData[dataIndex].is_visible = true
         }
 
-        restyleYear(globals.currentYear)
+        restyleYear(globals.getCurrentYear())
       } else {
         // Hide virtual processes
         for (const graphNodeIndex of virtualNodeIndices) {
@@ -3449,7 +3698,7 @@
         }
       }
 
-      restyleYear(globals.currentYear)
+      restyleYear(globals.getCurrentYear())
     }
 
     function moveMenuStart(event) {
@@ -3639,7 +3888,7 @@
           const parent = ev.target.parentNode
           parent.replaceChildren()
           parent.appendChild(newElemSpan)
-          restyleYear(globals.currentYear)
+          restyleYear(globals.getCurrentYear())
         })
 
         elemInput.addEventListener("change", (ev) => {
@@ -3729,7 +3978,7 @@
     }
 
     function onResize(event) {
-      selectYear(globals.currentYear)
+      selectYear(globals.getCurrentYear())
       updateMenu()
     }
 
@@ -3758,13 +4007,13 @@
 
       if (event.code === 'ArrowLeft') {
         // Go to previous year
-        nextYearIndex = globals.getIndexForYear(globals.currentYear) - 1
+        nextYearIndex = globals.getIndexForYear(globals.getCurrentYear()) - 1
         changedYear = true
       }
 
       if (event.code === 'ArrowRight') {
         // Go to next year
-        nextYearIndex = globals.getIndexForYear(globals.currentYear) + 1
+        nextYearIndex = globals.getIndexForYear(globals.getCurrentYear()) + 1
         changedYear = true
       }
 
@@ -3827,13 +4076,6 @@
       // if (event.code == keyToggleShowVirtualProcesses) {
       //   toggleShowVirtualProcesses(!globals.settings.showVirtualProcesses)
       // }
-
-      //
-      const keyToggleMenu = "KeyM"
-      if (event.code == keyToggleMenu) {
-        toggleMenu()
-        return
-      }
     }
 
     function onContextMenu(event) {
@@ -3891,12 +4133,12 @@
 
     function onFontSizeChanged(event) {
       globals.settings.fontSize = parseInt(event.target.value)
-      restyleYear(globals.currentYear)
+      restyleYear(globals.getCurrentYear())
     }
 
     function onScenarioChanged(event) {
       selectScenario(event.target.value)
-      selectYear(globals.currentYear)
+      selectYear(globals.getCurrentYear())
     }
 
     function selectScenario(scenarioName) {
@@ -3962,6 +4204,10 @@
           customdata: yearData.linkCustomData,
           hoverinfo: 'none',
         },
+        // NOTE: Make process label bold
+        textfont: {
+          weight: 1000,
+        }
       }]
 
       const layout = {
@@ -4039,7 +4285,7 @@
           const sankey = nodeData.trace._sankey
           const nx = (node.x0 + node.dx * 0.5) / sankey.width
           const ny = (node.y0 + node.dy * 0.5) / sankey.height
-          globals.updateNodePosition(globals.currentYear, nodeId, nx, ny)
+          globals.updateNodePosition(globals.getCurrentYear(), nodeId, nx, ny)
         })
 
 
@@ -4147,7 +4393,7 @@
       globals.toast("Applied current year process positions to all years", globals.settings.toastDurationInMs)
 
       // Get and store current yaer node positions
-      refreshNodePositions(globals.currentYear)
+      refreshNodePositions(globals.getCurrentYear())
 
       // Map this years process ID to normalized position
       const sourceYearData = globals.getCurrentYearData()
@@ -4160,7 +4406,7 @@
 
       // Apply position to all others years except current year
       for (const targetYear of globals.yearToData.keys()) {
-        if (targetYear == globals.currentYear) {
+        if (targetYear == globals.getCurrentYear()) {
           continue
         }
 
@@ -4543,6 +4789,12 @@
       tooltipBodySectionNode.dataset.show = true
       tooltipBodySectionLink.dataset.show = false
 
+      // ***********************
+      // * Scenario comparison *
+      // ***********************
+      if (globals.settings.showScenarioComparison) {
+        buildComparisonNode(nodeCustomData)
+      }
       adjustTooltipToSafePosition()
     }
 
@@ -4694,8 +4946,6 @@
         rowBody.appendChild(dataUnit)
       }
 
-
-
       // Flow evaluated value
       const linkEvaluatedValue = document.getElementById("tooltip-link-evaluated-value")
       linkEvaluatedValue.textContent = formatValue(linkValue)
@@ -4712,6 +4962,10 @@
       const tooltipBodySectionLink = document.getElementById("tooltip-body-section-link")
       tooltipBodySectionNode.dataset.show = false
       tooltipBodySectionLink.dataset.show = true
+
+      if (globals.settings.showScenarioComparison) {
+        buildComparisonLink(linkCustomData)
+      }
 
       adjustTooltipToSafePosition()
     }
@@ -4733,6 +4987,12 @@
       if (offsetY > -safePad.y) {
         const newPosY = tooltipRect.y - safePad.y - tooltipRect.height
         tooltip.style.top = `${newPosY}px`
+      }
+
+      // Do not let tooltip Y to go below safePad.y
+      const newY = parseFloat(tooltip.style.top)
+      if (newY < safePad.y) {
+        tooltip.style.top = `${safePad.y}px`
       }
     }
 
@@ -4813,7 +5073,6 @@
 
       globals.init = true
       parseRawData()
-      // await buildVisualizationData()
       await buildAllScenarioVisualizationData()
       init()
       globals.init = false
@@ -4833,10 +5092,6 @@
 
   <!-- Container for toasts -->
   <div id="toast"></div>
-
-  <!-- Button to toggle menu -->
-  <!-- <span class="button-toggle-menu" onclick="toggleMenu()">&#9776</span> -->
-
   <div class="global-menu-wrapper">
     <div class="menu-buttons-wrapper">
       <div id="button-settings" class="menu-button" onclick="toggleWindow('window-settings')" data-show="false">
@@ -4972,6 +5227,22 @@
               <select id="arrangementMode" name="arrangementMode" onchange="useArrangementMode(event)">
                 <option value="freeform" selected>Freeform</option>
                 <option value="perpendicular">Perpendicular</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-window-content">
+          <!-- Sankey chart arrangement mode -->
+          <div class="menu-item-wrapper">
+            <div class="menu-item-title">
+              <label for="arrangementMode">Show scenario comparison in tooltip?</label>
+            </div>
+            <div class="menu-item-content">
+              <select id="showScenarioComparison" name="showScenarioComparison"
+                onchange="showScenarioComparison(event)">
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
               </select>
             </div>
           </div>
@@ -5199,6 +5470,23 @@
 
         <br />
 
+        <!-- Node comparison -->
+        <div class="scenario-comparison-wrapper tooltip-section-row" data-show="true" data-comparison-target="node">
+          <div class="tooltip-section-col">
+            <span class="tooltip-table-title">Scenario comparison</span><br />
+            <div>
+              <span class="tooltip-evaluated-value"></span>
+              <table class="tooltip-table">
+                <thead id="scenario-comparison-node-table-head">
+                </thead>
+                <tbody id="scenario-comparison-node-table-body">
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <br />
+        </div>
+
         <!-- Node total row -->
         <div class="tooltip-section-row">
           <div class="tooltip-section-col">
@@ -5224,6 +5512,23 @@
           </div>
         </div>
         <br />
+
+        <!-- Link comparison -->
+        <div class="scenario-comparison-wrapper tooltip-section-row" data-show="true" data-comparison-target="link">
+          <div class="tooltip-section-col">
+            <span class="tooltip-table-title">Scenario comparison</span><br />
+            <div>
+              <span class="tooltip-evaluated-value"></span>
+              <table class="tooltip-table">
+                <thead id="scenario-comparison-link-table-head">
+                </thead>
+                <tbody id="scenario-comparison-link-table-body">
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <br />
+        </div>
 
         <!-- Flow total row -->
         <div class="tooltip-section-row">
