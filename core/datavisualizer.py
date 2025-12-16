@@ -19,7 +19,7 @@ class DataVisualizer(object):
     def build_and_show(self, scenarios: List[Scenario],
                        visualizer_params: dict,
                        model_params: dict,
-                       combine_to_one_file: bool = False) -> None:
+                       combine_to_one_file: bool = True) -> None:
         """
         Build and show the scenarios in the browser.
 
