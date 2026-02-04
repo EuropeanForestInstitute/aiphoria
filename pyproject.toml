@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aiphoria"
+version = "0.0.1"
+authors = [
+    { name="Janne Järvikylä", email="janne.jarvikyla@efi.int" },
+]
+maintainers = [
+    { name="Janne Järvikylä", email="janne.jarvikyla@efi.int"},
+]
+description = "Dynamic MFA tool"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas==2.2.2",
+    "Pillow>=10.0.0",
+    "plotly==6.0.0",
+    "openpyxl==3.1.3",
+    "scipy",
+    "matplotlib",
+    "xlrd",
+    "xlwt",
+    "tqdm",
+    "myst-parser",
+    "sphinx-rtd-theme",
+    "IPython",
+    "xlsxwriter",
+    "importlib",
+]
+classifiers = [
+    # How mature the project is?
+    # 3 - Alpha
+    # 4 - Beta
+    # 5 - Production/Stable
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/EuropeanForestInstitute/aiphoria"
+Issues = "https://github.com/EuropeanForestInstitute/aiphoria/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Exclude dotfiles
+[tools.setuptools.exclude-package-data]
+"aiphoria.core.datavisualizer_data" = [".*"]
+"aiphoria.core.network_graph_data" = [".*"]
+
+# # Include HTML template files
+[tools.setuptools.package-data]
+"aiphoria.data" = ["example_scenario.xlsx"]
+# aiphoria = ["*.txt", "*.tst"]
+# "aiphoria.core.datavisualizer_data" = ["", "*.*"]
+# "aiphoria.core.network_graph_data" = ["*.*"]
+
+

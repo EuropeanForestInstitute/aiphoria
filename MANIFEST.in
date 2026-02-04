@@ -1,0 +1,19 @@
+recursive-include src/aiphoria/core/datavisualizer_data *
+recursive-include src/aiphoria/core/network_graph_data *
+recursive-include src/aiphoria/data example_scenario.xlsx
+
+prune src/aiphoria/core/datavisualizer_data/.idea
+prune src/aiphoria/core/datavisualizer_data/.vscode
+
+prune src/aiphoria/core/network_graph_data/.idea
+prune src/aiphoria/core/network_graph_data/.vscode
+
+prune .idea
+prune .vscode
+prune .git
+
+# Exclude all dotfiles globally
+global-exclude .*
+global-exclude __pycache__/*
+global-exclude src/aiphoria/__pycache__/*
+global-exclude src/aiphoria/core/__pycache__/*
