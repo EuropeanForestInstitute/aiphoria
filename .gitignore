@@ -143,3 +143,7 @@ ui-tests/.pnp.*
 data/*.svg
 output/
 /cache/
+
+# Ignore virtual environment directory
+venv*/
+dev.py
