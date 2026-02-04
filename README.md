@@ -27,8 +27,6 @@ aiphoria is Python package that facilitates the assessment of wood materials flo
 
 # Installation
 
------
-
 **aiphoria** is available at Python Package Index (PyPi) and as source distribution in [Github](https://github.com/EuropeanForestInstitute/aiphoria/wiki)<br>
 
 ## Install from PyPi
@@ -42,8 +40,6 @@ pip install git+https://github.com/EuropeanForestInstitute/aiphoria.git
 ```
 
 # How to use
-
------
 
 ## Showcase
 **aiphoria** includes helper function to showcase example scenario with visualizations.<br>
@@ -72,16 +68,17 @@ run_scenarios(path_to_settings_file="path/to/scenario/file.xlsx",
 
 Using parameter **path_to_output_dir** overrides the output path defined in scenario file.<br>
 This makes easier to change target from Python script itself or when running multiple scenarios in batch.<br>
+Parameters:
+- path_to_settings_file (string): Path to scenario settings file
+- path_to_output_dir (string): Path to directory where results are saved
+- remove_existing_output_dir: If True then existing output directory is deleted (defaults to False). If directory already exists then error is raised and execution is stopped
 
 ## Documentation
 
------
 Online documentation can be found in [GitHub wiki](https://github.com/EuropeanForestInstitute/aiphoria/wiki).
 
 
 ## Support:
-
------
 
 If you have any questions or need help, do not hesitate to contact us:
 - [cleo.orfanidou@efi.int](mailto:cleo.orfanidou@efi.int)
