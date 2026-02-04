@@ -38,47 +38,25 @@ ch.setLevel(logging.INFO)
 ch.setFormatter(LogFormatter())
 logger.addHandler(ch)
 
-# ******************
-# * Test functions *
-# ******************
-# NOTE: This is for testing if test implementation is not correct
-# NOTE: Uncommenting function below causes the tests fail
-#
-# def test_that_should_fail():
-#     passed = 0
-#     failed = 0
-#     return passed, failed
 
 def test_core_imports() -> Tuple[int, int]:
     """
     Verify core module imports
     """
-    passed = 4
+    passed = 0
     failed = 0
-    logger.info("Verify core-module imports")
-    logger.info("Doing some work")
+    logger.info("Verify importing as package")
 
 
-
+    # TODO: Test importing aiphoria as package inside venv and using it
     return passed, failed
 
-
-def test_() -> Tuple[int, int]:
-    """
-    Test description
-    """
-    passed = 3
-    failed = 0
-    logger.info("Missing return tuple")
-    return passed, failed
 
 if __name__ == "__main__":
     """
     Run all callable test functions inside this script
     that are prefixed by "test_"
     """
-
-    # function name -> {"function": function, "description": description}
     name_to_entry = {}
     module = sys.modules[__name__]
     attribute_names = dir(module)
