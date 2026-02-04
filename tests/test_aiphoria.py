@@ -46,8 +46,6 @@ def test_core_imports() -> Tuple[int, int]:
     passed = 0
     failed = 0
     logger.info("Verify importing as package")
-
-
     # TODO: Test importing aiphoria as package inside venv and using it
     return passed, failed
 
