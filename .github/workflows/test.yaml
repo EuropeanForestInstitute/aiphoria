@@ -49,18 +49,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
           architecture: 'x64'
 
-      - name: Display Python version
-        run: python -c "import sys; print(sys.version)"
+      - name: Update dependencies
+        run: |
+          python -VV
+          python -m pip install --upgrade pip setuptools wheel
 
-      # - name: Update pip & install testing pkgs
-      #   run: |
-      #     python -VV
-      #     python -m pip install --upgrade pip setuptools wheel
-      # # install testing
-      # - name: Install package and test deps
-      #   run: |
-      #     pip install .[testing] # install the package and the testing deps
-      # - name: Test with pytest
-      #   run: |
-      #     pytest
+      - name: Build package
+        run: |
+          python -m build
+
+      - name: Install package
+        run: |
+          pip install .
 
