@@ -1,0 +1,48 @@
+---
+name: Testing Python CI/CD in dev-branch
+
+on:
+  push:
+    branches: [dev]
+    paths-ignore:  # prevents workflow execution when only these types of files are modified
+      - "**.md"  # wildcards prevent file in any repo dir from trigering workflow
+      - "**.ya?ml"  # captures both .yml and .yaml
+      - "LICENSE"
+      - ".gitignore"
+  workflow_dispatch:  # also allow manual trigger, for testing purposes
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]  # TODO: Check building also with windows-latest
+        python-version: ['3.9']  # TODO: Add also "3.10", "3.11", "3.12", "3.13"
+        # exclude:
+        #   - os: macos-latest
+        #     python-version: "3.11"
+        #   - os: windows-latest
+        #     python-version: "3.11"
+    steps:
+      # Setting up Python
+      - name: Set up Python ${{ matrix.python-version}}
+        uses: actions/setup-python@v5 # Version of the action, not Python
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: 'x64'
+
+      - name: Display Python version
+        run: python -c "import sys: print(sys.version)"
+
+      # - name: Update pip & install testing pkgs
+      #   run: |
+      #     python -VV
+      #     python -m pip install --upgrade pip setuptools wheel
+      # # install testing
+      # - name: Install package and test deps
+      #   run: |
+      #     pip install .[testing] # install the package and the testing deps
+      # - name: Test with pytest
+      #   run: |
+      #     pytest
+
