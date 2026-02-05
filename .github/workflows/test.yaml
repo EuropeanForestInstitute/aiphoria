@@ -32,7 +32,7 @@ jobs:
           architecture: 'x64'
 
       - name: Display Python version
-        run: python -c "import sys: print(sys.version)"
+        run: python -c "import sys; print(sys.version)"
 
       # - name: Update pip & install testing pkgs
       #   run: |
