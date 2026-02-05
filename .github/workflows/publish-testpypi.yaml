@@ -40,11 +40,8 @@ jobs:
       - build
     runs-on: ubuntu-latest
 
-    # environment:
-    #   name: testpypi
-    #   url: https://test.pypi.org/p/aiphoria
-
     permissions:
+      contents: read
       id-token: write # NOTE: Mandatory for Trusted publishing
 
     steps:
