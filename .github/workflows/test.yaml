@@ -10,6 +10,23 @@ on:
       - "LICENSE"
       - ".gitignore"
   workflow_dispatch:  # also allow manual trigger, for testing purposes
+    inputs:
+      logLevel: 'Log level'
+      required: true
+      default: 'warning'
+      type: choice
+      options:
+        - info
+        - warning
+        - debug
+      tags:
+        description: 'Test scenario tags'
+        required: false
+        type: boolean
+      environment:
+        description: 'Environment to run tests agains'
+        type: environment
+        required: true        
 
 jobs:
   build:
