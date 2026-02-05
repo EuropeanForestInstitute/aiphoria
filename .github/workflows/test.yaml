@@ -9,25 +9,6 @@ on:
       # - "**.ya?ml"  # captures both .yml and .yaml
       - "LICENSE"
       - ".gitignore"
-  workflow_dispatch:  # also allow manual trigger, for testing purposes
-    inputs:
-      logLevel:
-        description: 'Log level'
-        required: true
-        default: 'warning'
-        type: choice
-        options:
-        - info
-        - warning
-        - debug
-      tags:
-        description: 'Test scenario tags'
-        required: false
-        type: boolean
-      environment:
-        description: 'Environment to run tests agains'
-        type: environment
-        required: true
 
 jobs:
   build:
@@ -42,29 +23,18 @@ jobs:
         #   - os: windows-latest
         #     python-version: "3.11"
     steps:
-      # Setting up Python
       - name: Set up Python ${{ matrix.python-version}}
         uses: actions/setup-python@v5 # Version of the action, not Python
         with:
           python-version: ${{ matrix.python-version }}
           architecture: 'x64'
 
-      - name: Update base packages
+      - name: Install dependencies
         run: |
           python -VV
-          python -m pip install --upgrade pip setuptools wheel
-
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade build
-          python -m pip install --upgrade twine
-
+          python -m pip install --upgrade pip setuptools wheel build twine
 
       - name: Build package
         run: |
-          python -m build
-
-      - name: Install package
-        run: |
-          pip install .
+          python -m build --outdir dist/
 
