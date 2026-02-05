@@ -6,7 +6,7 @@ on:
     branches: [dev]
     paths-ignore:  # prevents workflow execution when only these types of files are modified
       - "**.md"  # wildcards prevent file in any repo dir from trigering workflow
-      - "**.ya?ml"  # captures both .yml and .yaml
+      # - "**.ya?ml"  # captures both .yml and .yaml
       - "LICENSE"
       - ".gitignore"
   workflow_dispatch:  # also allow manual trigger, for testing purposes
