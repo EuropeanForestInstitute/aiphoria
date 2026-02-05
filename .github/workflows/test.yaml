@@ -11,7 +11,7 @@ on:
       - ".gitignore"
 
 jobs:
-  build:
+  release-build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -23,6 +23,9 @@ jobs:
         #   - os: windows-latest
         #     python-version: "3.11"
     steps:
+      # Checkout repo
+      - uses: actions/checkout@v5
+
       - name: Set up Python ${{ matrix.python-version}}
         uses: actions/setup-python@v5 # Version of the action, not Python
         with:
@@ -37,4 +40,18 @@ jobs:
       - name: Build package
         run: |
           python -m build --outdir dist/
+
+  # testpypi-publish:
+  #   runs-on: ubuntu-latest
+  #
+  #   needs:
+  #     - release-build
+  #
+  #   permissions:
+  #     id-token: write
+  #
+  #   environment:
+  #     name: testpypi
+
+
 
