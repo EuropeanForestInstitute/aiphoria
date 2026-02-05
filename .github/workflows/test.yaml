@@ -11,7 +11,8 @@ on:
       - ".gitignore"
   workflow_dispatch:  # also allow manual trigger, for testing purposes
     inputs:
-      logLevel: 'Log level'
+      logLevel:
+        description: 'Log level'
         required: true
         default: 'warning'
         type: choice
