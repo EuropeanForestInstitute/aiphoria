@@ -7,6 +7,8 @@ on:
   release:
     types: [published, released]
 
+    workflow_dispatch:
+
 jobs:
   build:
     name: Build distribution
