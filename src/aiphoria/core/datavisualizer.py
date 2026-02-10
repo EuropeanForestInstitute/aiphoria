@@ -10,6 +10,7 @@ from .datastructures import Scenario, Color
 from .parameters import ParameterName
 from importlib.resources import files
 
+
 class DataVisualizer(object):
     def __init__(self):
         pass
@@ -28,7 +29,7 @@ class DataVisualizer(object):
         :return: None
         """
 
-        scenario_name_to_info = {}  # Scenario name to info
+        scenario_name_to_info = {}
         scenario_name_to_data = {}  # Scenario name to year to data
         for scenario in scenarios:
             scenario_name_to_info[scenario.name] = self._build_scenario_info(scenario)
@@ -395,6 +396,9 @@ class DataVisualizer(object):
         data_base64 = base64.b64encode(data_compressed).decode("utf-8")
         html = html.replace("// rawScenarioData:", "rawScenarioData:")
         html = html.replace("{rawScenarioData}", json.dumps(data_base64))
+
+        # TODO: Add settings metadata field to datavisualizer_data/datavisualizer_plotly.hmtl
+        # TODO: and populate it here. Maybe rawScenarioInfo could be used?
 
         return html
 

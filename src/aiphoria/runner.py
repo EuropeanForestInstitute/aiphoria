@@ -666,6 +666,8 @@ def run_scenarios(path_to_settings_file: str = None,
 
         # Color for virtual flows
         "virtual_flow_color": "#808080",
+
+        "settings_filename": os.path.basename(path_to_settings_file),
     }
 
     if model_params[ParameterName.CreateSankeyCharts]:
