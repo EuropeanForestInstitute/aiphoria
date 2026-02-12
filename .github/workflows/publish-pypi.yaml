@@ -5,7 +5,7 @@ name: Build and publish Python distribution to PyPI and TestPyPI on when new rel
 
 on:
   release:
-    types: [published, released]
+    types: [published]
 
     workflow_dispatch:
 
