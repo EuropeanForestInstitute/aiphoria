@@ -197,7 +197,13 @@ class DataProvider(object):
              bool,
              "Check errors when building data (development)",
              True,
-             ]
+             ],
+            [ParameterName.IncludeMetadata,
+             bool,
+             "Include scenario metadata",
+             # True,
+             False,
+             ],
         ]
 
         param_type_to_str = {int: "integer", float: "float", str: "string", bool: "boolean", list: "list"}
@@ -366,6 +372,9 @@ class DataProvider(object):
         use_scenarios = self._param_name_to_value[ParameterName.UseScenarios]
         if not use_scenarios:
             sheet_name_scenarios = ""
+
+        # Include metadata
+        include_metadata = self._param_name_to_value[ParameterName.IncludeMetadata]
 
         # Sheet name to DataFrame
         sheets = {}

@@ -349,9 +349,6 @@ class DataVisualizer(object):
                                        params: Dict = None):
 
         # Add JS script that is run after the Plotly has loaded
-        # filename_plotly = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/plotly-3.0.0.min.js")
-        # filename_pako = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/pako.min.js")
-        # filename_html = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/datavisualizer_plotly.html")
         filename_plotly = files("aiphoria.core").joinpath("datavisualizer_data/plotly-3.0.0.min.js")
         filename_pako = files("aiphoria.core").joinpath("datavisualizer_data/pako.min.js")
         filename_html = files("aiphoria.core").joinpath("datavisualizer_data/datavisualizer_plotly.html")
@@ -395,6 +392,11 @@ class DataVisualizer(object):
         data_base64 = base64.b64encode(data_compressed).decode("utf-8")
         html = html.replace("// rawScenarioData:", "rawScenarioData:")
         html = html.replace("{rawScenarioData}", json.dumps(data_base64))
+
+        # Metadata
+        metadata_json = params["metadata"]
+        html = html.replace("// rawMetadata:", "rawMetadata:")
+        html = html.replace("{rawMetadata}", json.dumps(metadata_json))
 
         return html
 

@@ -22,7 +22,7 @@ _default_output_dir_name = "output"
 _default_cache_dir_name = "cache"
 
 
-def run_scenarios(path_to_settings_file: str = None,
+def run_scenarios(path_to_settings_file: Union[str, None] = None,
                   path_to_output_dir: Union[str, None] = None,
                   remove_existing_output_dir: bool = False,
                   ) -> bool:
@@ -630,11 +630,9 @@ def run_scenarios(path_to_settings_file: str = None,
             # if model_params[ParameterName.ShowPlots]:
             #     plt.show()
 
-    # %%
     # ***********************************************************
     # * Step 7: Visualize the scenario results as Sankey graphs *
     # ***********************************************************
-
     # Virtual process graph label overrides
     # TODO: Move also this to settings file?
     virtual_process_graph_labels = {}
@@ -666,7 +664,15 @@ def run_scenarios(path_to_settings_file: str = None,
 
         # Color for virtual flows
         "virtual_flow_color": "#808080",
+
+        # NOTE: Data inside metadata is automatically embedded to Sankey visualization
+        "metadata": {},
     }
+
+    if model_params[ParameterName.IncludeMetadata]:
+        visualizer_params["metadata"] = {
+            "filename": os.path.basename(path_to_settings_file)
+        }
 
     if model_params[ParameterName.CreateSankeyCharts]:
         log("Creating Sankey charts for scenarios...")

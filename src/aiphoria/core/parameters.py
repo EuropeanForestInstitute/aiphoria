@@ -80,6 +80,9 @@ class ParameterName(str, Enum):
     # Check errors
     CheckErrors: str = "check_errors"
 
+    # Include scenario file metadata
+    IncludeMetadata: str = "include_metadata"
+
 
 class ParameterFillMethod(str, Enum):
     """
