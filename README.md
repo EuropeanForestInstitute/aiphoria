@@ -83,6 +83,3 @@ If you have any questions or need help, do not hesitate to contact us:
 - Cleo Orfanidou [cleo.orfanidou@efi.int](mailto:cleo.orfanidou@efi.int)
 - Janne Järvikylä [janne.jarvikyla@efi.int](mailto:janne.jarvikyla@efi.int)
 
-## Special thanks
-- Gustavo Ezequiel Martinez (@link to GitHub user?) VITO
-- Arthur Jakobs [@jakobsarthur](https://github.com/jakobsarthur) PSI
