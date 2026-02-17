@@ -83,3 +83,9 @@ If you have any questions or need help, do not hesitate to contact us:
 - Cleo Orfanidou [cleo.orfanidou@efi.int](mailto:cleo.orfanidou@efi.int)
 - Janne Järvikylä [janne.jarvikyla@efi.int](mailto:janne.jarvikyla@efi.int)
 
+## Special thanks
+A huge thank you to the following people who made aiphoria better:
+- Gustavo Ezequiel Martinez (virtual flows, system testing)
+  - GitHub: [GustavoEzMartinez](https://github.com/GustavoEzMartinez)
+  - Email: [gustavoezequiel.martinez@vito.be](mailto:gustavoezequiel.martinez@vito.be) 
+
