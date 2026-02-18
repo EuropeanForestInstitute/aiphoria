@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from typing import Union
+from datetime import datetime
 import matplotlib.pyplot as plt
 from .core.builder import init_builder, build_results
 from .core.utils import (
@@ -670,8 +671,10 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
     }
 
     if model_params[ParameterName.IncludeMetadata]:
+        timestamp = datetime.fromtimestamp(os.stat(path_to_settings_file).st_mtime).strftime("%Y-%m-%d %H:%M")
         visualizer_params["metadata"] = {
-            "filename": os.path.basename(path_to_settings_file)
+            "filename": os.path.basename(path_to_settings_file),
+            "timestamp": timestamp,
         }
 
     if model_params[ParameterName.CreateSankeyCharts]:

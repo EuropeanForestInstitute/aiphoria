@@ -1435,15 +1435,24 @@
 
     function populateMetadata(targetData) {
       const metadata = {}
-      if (targetData.filename !== undefined) {
+      let hasMetadata = false
+
+      if (Object.keys(targetData)) {
+        hasMetadata = true
         metadata.filename = targetData.filename
+        metadata.timestamp = targetData.timestamp
+      }
 
-        const menuItem = document.getElementById("menu-item-metadata")
-        menuItem.dataset.show = true
+      if (hasMetadata) {
+          // Populate also Scenario-button window
+          const menuItem = document.getElementById("menu-item-metadata")
+          menuItem.dataset.show = true
 
-        // Populate also Scenario-button window
-        const elem = document.getElementById("metadata-filename")
-        elem.innerHTML = metadata.filename
+          const elemFilename = document.getElementById("metadata-filename")
+          elemFilename.innerHTML = metadata.filename
+
+          const elemTimestamp = document.getElementById("metadata-timestamp")
+          elemTimestamp.innerHTML = metadata.timestamp
       }
 
       return metadata
@@ -5405,15 +5414,22 @@
               </select>
             </div>
           </div>
+
           <div id="menu-item-metadata" class="menu-item-wrapper" data-show="false">
             <div class="menu-item-title">
               Filename
             </div>
             <div class="menu-item-content">
-              <span id="metadata-filename" style="font-size: 14px; font-weight: normal">TODO: This is filled only if metadata was provided</>
+              <span id="metadata-filename" style="font-size: 14px; font-weight: normal">TODO: This is filled only if metadata was provided</span>
+            </div>
+            <br>
+            <div class="menu-item-title">
+              Timestamp
+            </div>
+            <div class="menu-item-content">
+              <span id="metadata-timestamp" style="font-size: 14px; font-weight: normal">TODO: This is filled only if metadata was provided</span>
             </div>
           </div>
-
         </div>
       </div>
     </div>
