@@ -89,3 +89,7 @@ A huge thank you to the following people who made aiphoria better:
   - GitHub: [GustavoEzMartinez](https://github.com/GustavoEzMartinez)
   - Email: [gustavoezequiel.martinez@vito.be](mailto:gustavoezequiel.martinez@vito.be) 
 
+- Arthur Jakobs (packaging, CI/CD)
+  - GitHub: https://github.com/jakobsarthur
+  - Email: [artos.jakobs@psi.ch](mailto:artos.jakobs@psi.ch)
+
