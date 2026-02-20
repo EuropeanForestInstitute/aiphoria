@@ -87,9 +87,11 @@ If you have any questions or need help, do not hesitate to contact us:
 A huge thank you to the following people who made aiphoria better:
 - Gustavo Ezequiel Martinez (virtual flows, system testing)
   - GitHub: [GustavoEzMartinez](https://github.com/GustavoEzMartinez)
-  - Email: [gustavoezequiel.martinez@vito.be](mailto:gustavoezequiel.martinez@vito.be) 
+  - Email: [gustavoezequiel.martinez@vito.be](mailto:gustavoezequiel.martinez@vito.be)
 
 - Arthur Jakobs (packaging, CI/CD)
   - GitHub: https://github.com/jakobsarthur
   - Email: [artos.jakobs@psi.ch](mailto:artos.jakobs@psi.ch)
 
+## Funding:
+aiphoria developers / European Forest Institute receive funding from the European Union’s Horizon Europe Research and Innovation Programme [`ForestPaths (ID No 101056755)`](https://forestpaths.eu/), [`Monifun (ID No 101134991)`](https://www.monifun.eu/) and [`eco2adapt (ID No 101059498)`](https://www.eco2adapt.eu/).
