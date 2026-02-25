@@ -1,7 +1,7 @@
 <h1>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/_static/aiphoria-logo.png" height="50">
-    <img alt="aiphoria logo" src="https://raw.githubusercontent.com/EuropeanForestInstitute/aiphoria/main/docs/_static/aiphoria-logo.png" height="160">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/aiphoria-logo.png" height="50">
+    <img alt="aiphoria logo" src="https://raw.githubusercontent.com/EuropeanForestInstitute/aiphoria/main/assets/aiphoria-logo.png" height="160">
   </picture>
 </h1>
 
