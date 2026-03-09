@@ -5,6 +5,8 @@
   </picture>
 </h1>
 
+[![Latest build](https://github.com/EuropeanForestInstitute/aiphoria/actions/workflows/publish-pypi.yaml/badge.svg)](https://github.com/EuropeanForestInstitute/aiphoria/actions/workflows/publish-pypi.yaml)
+
 ## Python package for assessing and visualizing dynamic wood material flows
 
 > ℹ️ _This package is under continuous development_
