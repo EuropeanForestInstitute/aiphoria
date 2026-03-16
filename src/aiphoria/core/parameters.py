@@ -83,6 +83,12 @@ class ParameterName(str, Enum):
     # Include scenario file metadata
     IncludeMetadata: str = "include_metadata"
 
+    # Stock lifetime overrides related
+    UseStockLifetimeOverrides: str = "use_stock_lifetime_overrides"
+    SheetNameStockLifetimeOverrides: str = "sheet_name_stock_lifetime_overrides"
+    SkipNumRowsStockLifetimeOverrides: str = "skip_num_rows_stock_lifetime_overrides"
+    IgnoreColumnsStockLifetimeOverrides: str = "ignore_columns_stock_lifetime_overrides"
+
 
 class ParameterFillMethod(str, Enum):
     """
@@ -134,6 +140,7 @@ class StockDistributionParameter(str, Enum):
     """
     Stock distribution parameters.
     """
+
     StdDev: str = "stddev"
     Shape: str = "shape"
     Scale: str = "scale"
@@ -148,6 +155,7 @@ class StockDistributionParameterValueType(object):
         StockDistributionParameterValueType[StockDistributionParameter.StdDev]
         StockDistributionParameterValueType["stddev"]
     """
+
     parameter_to_value_type = {
         StockDistributionParameter.StdDev: float,
         StockDistributionParameter.Shape: float,

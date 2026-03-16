@@ -2,7 +2,7 @@ import warnings
 from typing import List, Union, Any, Dict
 import numpy as np
 import pandas as pd
-from .datastructures import Process, Flow, Stock, FlowModifier, ScenarioDefinition, Color
+from .datastructures import Process, Flow, Stock, FlowModifier, ScenarioDefinition, Color, StockLifetimeOverride
 from .parameters import ParameterName, ParameterFillMethod, StockDistributionType, ParameterScenarioType
 
 # Suppress openpyxl warnings about Data Validation being suppressed
@@ -24,18 +24,20 @@ class DataProvider(object):
         self._stocks: List[Stock] = []
         self._scenario_definitions: List[ScenarioDefinition] = []
         self._colors: List[Color] = []
+        self._stock_lifetime_overrides: List[StockLifetimeOverride] = []
         self._sheet_name_processes: Union[None, str] = None
         self._sheet_name_flows: Union[None, str] = None
         self._sheet_name_scenarios: Union[None, str] = None
         self._sheet_name_colors: Union[None, str] = None
         self._sheet_name_process_positions: Union[None, str] = None
+        self._sheet_name_stock_lifetime_overrides: Union[None, str] = None
         self._year_to_process_id_to_position = {}
 
         # Check that all required keys exists
         required_params = [
             [ParameterName.SheetNameProcesses,
              str,
-             "Sheet name that contains data for Processes, (e.g. Processes)",
+             "Name of the sheet that contains data for Processes (e.g. Processes)",
              ],
             [ParameterName.SkipNumRowsProcesses,
              int,
@@ -49,7 +51,7 @@ class DataProvider(object):
             # Flow related
             [ParameterName.SheetNameFlows,
              str,
-             "Sheet name that contains data for Flows (e.g. Flows)",
+             "Name of the sheet that contains data for Flows (e.g. Flows)",
              ],
             [ParameterName.SkipNumRowsFlows,
              int,
@@ -124,7 +126,7 @@ class DataProvider(object):
              ],
             [ParameterName.SheetNameScenarios,
              str,
-             "Sheet name that contains data for scenarios (flow modifiers and constraints)",
+             "Name of the sheet that contains data for scenarios (flow modifiers and constraints)",
              "Scenarios",
              ],
             [ParameterName.IgnoreColumnsScenarios,
@@ -140,7 +142,7 @@ class DataProvider(object):
              ],
             [ParameterName.SheetNameColors,
              str,
-             "Sheet name that contains data for transformation stage colors (e.g. Colors)",
+             "Name of the sheet that contains data for transformation stage colors (e.g. Colors)",
              None,
              ],
             [ParameterName.IgnoreColumnsColors,
@@ -190,7 +192,7 @@ class DataProvider(object):
              ],
             [ParameterName.SheetNameProcessPositions,
              str,
-             "Sheet name that contains data for process positions in normalized format (position data in range [0,1])",
+             "Name of the sheet that contains data for process positions in normalized format (position data in range [0,1])",
              None,
              ],
             [ParameterName.CheckErrors,
@@ -201,8 +203,29 @@ class DataProvider(object):
             [ParameterName.IncludeMetadata,
              bool,
              "Include scenario metadata",
-             # True,
              False,
+             ],
+
+            # Stock lifetime overrides
+            [ParameterName.UseStockLifetimeOverrides,
+             bool,
+             "Enable/disable stock lifetime overrides",
+             False,
+             ],
+            [ParameterName.SheetNameStockLifetimeOverrides,
+             str,
+             "Name of the sheet that contains data for stock lifetime overrides (e.g. Stock lifetime overrides)",
+             None,
+             ],
+            [ParameterName.SkipNumRowsStockLifetimeOverrides,
+             int,
+             "Number of rows to skip when reading data for stock lifetime overrides. NOTE: Header row must be the first row to read!",
+             None,
+             ],
+            [ParameterName.IgnoreColumnsStockLifetimeOverrides,
+             list,
+             "Columns to ignore when reading stock lifetime overrides sheet",
+             [],
              ],
         ]
 
@@ -369,11 +392,24 @@ class DataProvider(object):
         # Process positions
         sheet_name_process_positions = self._param_name_to_value.get(ParameterName.SheetNameProcessPositions, None)
 
+        # Stock lifetime overrides
+        sheet_name_stock_lifetime_overrides = self._param_name_to_value.get(
+            ParameterName.SheetNameStockLifetimeOverrides, None)
+        ignore_columns_stock_lifetime_overrides = self._param_name_to_value.get(
+            ParameterName.IgnoreColumnsStockLifetimeOverrides, [])
+        skip_num_rows_stock_lifetime_overrides = self._param_name_to_value.get(
+            ParameterName.SkipNumRowsStockLifetimeOverrides, None)
+
+        use_stock_lifetime_overrides = self._param_name_to_value[ParameterName.UseStockLifetimeOverrides]
+        if not use_stock_lifetime_overrides:
+            sheet_name_stock_lifetime_overrides = ""
+
+        # Use scenarios (flow modifiers)
         use_scenarios = self._param_name_to_value[ParameterName.UseScenarios]
         if not use_scenarios:
             sheet_name_scenarios = ""
 
-        # Include metadata
+        # Include metadata: store filename and time of last modification to Sankey visualization
         include_metadata = self._param_name_to_value[ParameterName.IncludeMetadata]
 
         # Sheet name to DataFrame
@@ -384,8 +420,8 @@ class DataProvider(object):
                     sheet_processes = pd.read_excel(xls,
                                                     sheet_name=sheet_name_processes,
                                                     skiprows=skip_num_rows_processes)
-                    sheets[sheet_name_processes] = self._drop_ignored_columns_from_sheet(sheet_processes,
-                                                                                         ignore_columns_processes)
+                    sheet_processes = self._drop_ignored_columns_from_sheet(sheet_processes, ignore_columns_processes)
+                    sheets[sheet_name_processes] = sheet_processes
                 except ValueError:
                     pass
 
@@ -393,8 +429,8 @@ class DataProvider(object):
                     sheet_flows = pd.read_excel(xls,
                                                 sheet_name=sheet_name_flows,
                                                 skiprows=skip_num_rows_flows)
-                    sheets[sheet_name_flows] = self._drop_ignored_columns_from_sheet(sheet_flows,
-                                                                                     ignore_columns_flows)
+                    sheet_flows = self._drop_ignored_columns_from_sheet(sheet_flows, ignore_columns_flows)
+                    sheets[sheet_name_flows] = sheet_flows
                 except ValueError:
                     pass
 
@@ -404,8 +440,9 @@ class DataProvider(object):
                         sheet_scenarios = pd.read_excel(xls,
                                                         sheet_name=sheet_name_scenarios,
                                                         skiprows=skip_num_rows_scenarios)
-                        sheets[sheet_name_scenarios] = self._drop_ignored_columns_from_sheet(sheet_scenarios,
-                                                                                             ignore_columns_scenarios)
+                        sheet_scenarios = self._drop_ignored_columns_from_sheet(sheet_scenarios,
+                                                                                ignore_columns_scenarios)
+                        sheets[sheet_name_scenarios] = sheet_scenarios
 
                     except ValueError:
                         pass
@@ -414,14 +451,26 @@ class DataProvider(object):
                     sheet_colors = pd.read_excel(xls,
                                                  sheet_name=sheet_name_colors,
                                                  skiprows=skip_num_rows_colors)
-                    sheets[sheet_name_colors] = self._drop_ignored_columns_from_sheet(sheet_colors,
-                                                                                      ignore_columns_colors)
+                    sheet_colors = self._drop_ignored_columns_from_sheet(sheet_colors, ignore_columns_colors)
+                    sheets[sheet_name_colors] = sheet_colors
                 except ValueError:
                     pass
 
                 try:
                     sheet_process_positions = pd.read_excel(xls, sheet_name=sheet_name_process_positions)
                     sheets[sheet_name_process_positions] = sheet_process_positions
+                except ValueError:
+                    pass
+
+                # Stock lifetime overrides
+                try:
+                    sheet_stock_lifetime_overrides = pd.read_excel(xls,
+                                                                   sheet_name=sheet_name_stock_lifetime_overrides,
+                                                                   skiprows=skip_num_rows_stock_lifetime_overrides)
+
+                    sheet_stock_lifetime_overrides = self._drop_ignored_columns_from_sheet(
+                        sheet_stock_lifetime_overrides, ignore_columns_stock_lifetime_overrides)
+                    sheets[sheet_name_stock_lifetime_overrides] = sheet_stock_lifetime_overrides
                 except ValueError:
                     pass
 
@@ -446,6 +495,9 @@ class DataProvider(object):
         if sheet_name_scenarios:
             optional_sheet_names.append(sheet_name_scenarios)
 
+        if use_stock_lifetime_overrides:
+            optional_sheet_names.append(sheet_name_stock_lifetime_overrides)
+
         missing_sheet_names = self._check_missing_sheet_names(optional_sheet_names, sheets)
         if missing_sheet_names:
             errors = []
@@ -459,6 +511,7 @@ class DataProvider(object):
         self._sheet_name_scenarios = sheet_name_scenarios
         self._sheet_name_colors = sheet_name_colors
         self._sheet_name_process_positions = sheet_name_process_positions
+        self._sheet_name_stock_lifetime_overrides = sheet_name_stock_lifetime_overrides
 
         # Create Processes
         rows_processes = []
@@ -507,7 +560,6 @@ class DataProvider(object):
 
         # Read and update detailed Process positions (optional)
         if sheet_name_process_positions:
-
             # Map year -> Process ID -> position
             year_to_process_id_to_position = {}
             df_process_positions = sheets[sheet_name_process_positions]
@@ -527,6 +579,17 @@ class DataProvider(object):
                     process_id_to_position[process_id] = [normalized_x, normalized_y]
 
             self._year_to_process_id_to_position = year_to_process_id_to_position
+
+        # Read and create stock lifetime overrides
+        if sheet_name_stock_lifetime_overrides:
+            rows_stock_lifetime_overrides = []
+            df_stock_lifetime_overrides = sheets[sheet_name_stock_lifetime_overrides]
+            for (row_index, row) in df_stock_lifetime_overrides.iterrows():
+                row_number = row_index + skip_num_rows_stock_lifetime_overrides
+                new_stock_lifetime_override = StockLifetimeOverride(row, row_number)
+                rows_stock_lifetime_overrides.append(new_stock_lifetime_override)
+
+            self._stock_lifetime_overrides = rows_stock_lifetime_overrides
 
     @property
     def sheet_name_processes(self):
@@ -813,3 +876,11 @@ class DataProvider(object):
         :return: Dictionary (year -> Dictionary(Process ID, List[x, y]))
         """
         return self._year_to_process_id_to_position
+
+    def get_stock_lifetime_overrides(self) -> List[StockLifetimeOverride]:
+        """
+        Get list of StockLifetimeOverride-objects.
+
+        :return: List of StockLifetimeOverride-objects
+        """
+        return self._stock_lifetime_overrides

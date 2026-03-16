@@ -167,6 +167,153 @@ class Indicator(object):
         self._unit = new_unit
 
 
+class StockLifetimeOverride(ObjectBase):
+    """
+    Storage class to store stock lifetime override parameters.
+    """
+    def __init__(self, params: pd.Series, row_number: int = -1):
+        super().__init__()
+
+        self._process_id = params.iloc[0]     # string
+        self._lifetime = params.iloc[1]       # int
+        self._start_year = params.iloc[2]     # int
+        self._end_year = params.iloc[3]       # int
+        self._std_dev = params.iloc[4]        # float or nan
+        self._shape = params.iloc[5]          # float or nan
+        self._scale = params.iloc[6]          # float or nan
+        self._condition = params.iloc[7]      # string or nan
+        self._comment = params.iloc[8]        # string or nan
+
+        self.row_number = row_number
+
+    @property
+    def process_id(self) -> str:
+        """
+        Get stock Process ID.
+        NOTE: Process and Stock uses the same ID.
+
+        :return: Target Process ID where stock is
+        """
+        return self._process_id
+
+    @property
+    def lifetime(self) -> int:
+        """
+        Get stock lifetime in years.
+
+        :return: Stock lifetime in years
+        """
+        return self._lifetime
+
+    @property
+    def start_year(self) -> int:
+        """
+        Get start year of the stock lifetime override.
+        NOTE: Start year is included in lifetime range.
+
+        :return: Start year of the stock lifetime override.
+        """
+        return self._start_year
+
+    @property
+    def end_year(self) -> int:
+        """
+        Get end year of the stock lifetime override.
+        NOTE: End year is included in lifetime range.
+
+        :return: End year of the stock lifetime override.
+        """
+        return self._end_year
+
+    @property
+    def std_dev(self) -> float:
+        """
+        Get standard deviation parameter for stock lifetime override.
+
+        :return: Standard deviation parameter
+        """
+        return self._std_dev
+
+    @property
+    def shape(self) -> float:
+        """
+        Get shape parameter for stock lifetime override.
+
+        :return: Shape parameter
+        """
+        return self._shape
+
+    @property
+    def scale(self) -> float:
+        """
+        Get scale parameter for stock lifetime override.
+
+        :return: Scale parameter
+        """
+        return self._scale
+
+    @property
+    def condition(self) -> str:
+        """
+        Get condition parameter for stock lifetime override.
+
+        :return: Condition parameter
+        """
+        return self._condition
+
+    @property
+    def comment(self) -> str:
+        """
+        Get comment for stock lifetime override.
+
+        :return: Comment
+        """
+        return self._comment
+
+    def prepare_data(self) -> None:
+        """
+        Prepare data by converting following parameters:
+        - start_year    -> int
+        - end_year      -> int
+        - lifetime      -> int
+        - std_dev       -> float
+        - shape         -> float
+        - scale         -> float
+
+        This method should be called after the checking the properties because it overrides
+        the original values.
+        """
+        try:
+            self._start_year = int(self._start_year)
+        except ValueError as ex:
+            raise ex
+
+        try:
+            self._end_year = int(self._end_year)
+        except ValueError as ex:
+            raise ex
+
+        try:
+            self._lifetime = int(self._lifetime)
+        except ValueError as ex:
+            raise ex
+
+        try:
+            self._std_dev = float(self._std_dev)
+        except ValueError as ex:
+            raise ex
+
+        try:
+            self._shape = float(self._shape)
+        except ValueError as ex:
+            raise ex
+
+        try:
+            self._scale = float(self._scale)
+        except ValueError as ex:
+            raise ex
+
+
 class Process(ObjectBase):
     """
     aiphoria Process-object:
@@ -891,6 +1038,7 @@ class Stock(ObjectBase):
         self._process = params
         self._id = params.id
         self._row_number = row_number
+        self._stock_lifetime_override = None
 
     def __str__(self):
         if not self.is_valid():
@@ -926,6 +1074,14 @@ class Stock(ObjectBase):
     @property
     def stock_distribution_params(self):
         return self._process.stock_distribution_params
+
+    @property
+    def stock_lifetime_override(self) -> StockLifetimeOverride:
+        return self._stock_lifetime_override
+
+    @stock_lifetime_override.setter
+    def stock_lifetime_override(self, val: StockLifetimeOverride) -> None:
+        self._stock_lifetime_override = val
 
 
 class FlowModifier(ObjectBase):

@@ -3,8 +3,9 @@ from typing import List, Dict, Tuple, Any
 import numpy as np
 import pandas as pd
 from .dataprovider import DataProvider
-from .datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color, ProcessEntry
-from .parameters import ParameterName, ParameterFillMethod, StockDistributionType,\
+from .datastructures import Process, Flow, Stock, ScenarioDefinition, Scenario, ScenarioData, Color, ProcessEntry, \
+    StockLifetimeOverride
+from .parameters import ParameterName, ParameterFillMethod, StockDistributionType, StockDistributionParameter, \
     RequiredStockDistributionParameters, AllowedStockDistributionParameterValues
 from .types import FunctionType, ChangeType
 
@@ -46,6 +47,9 @@ class DataChecker(object):
 
         # Mapping of year -> Process ID -> Process position (normalized)
         year_to_process_id_to_position = self._dataprovider.get_process_positions()
+
+        # Stock lifetime overrides
+        stock_lifetime_overrides = self._dataprovider.get_stock_lifetime_overrides()
 
         # Default optional values
         # The default values are set inside DataProvider but
@@ -261,6 +265,12 @@ class DataChecker(object):
             if not ok:
                 raise Exception(errors)
 
+            if model_params[ParameterName.UseStockLifetimeOverrides]:
+                print("Checking stock lifetime overrides...")
+                ok, errors = self._check_stock_lifetime_overrides(stock_lifetime_overrides)
+                if not ok:
+                    raise Exception(errors)
+
         # *************************************
         # * Unpack DataFrames to dictionaries *
         # *************************************
@@ -327,6 +337,12 @@ class DataChecker(object):
         for name, indicator in indicator_name_to_indicator.items():
             indicator.conversion_factor = 1.0
 
+        # Convert any numeric property of StockLifetimeOverride as int and store the instance Stock-object
+        for stock_lifetime_override in stock_lifetime_overrides:
+            stock_lifetime_override.prepare_data()
+            stock = process_id_to_stock[stock_lifetime_override.process_id]
+            stock.stock_lifetime_override = stock_lifetime_override
+
         # List of all scenarios, first element is always the baseline scenario and always exists even if
         # any alternative scenarios are not defined
         scenarios = []
@@ -343,7 +359,7 @@ class DataChecker(object):
                                               virtual_flows_epsilon=virtual_flows_epsilon,
                                               baseline_value_name=baseline_value_name,
                                               baseline_unit_name=baseline_unit_name,
-                                              indicator_name_to_indicator=indicator_name_to_indicator
+                                              indicator_name_to_indicator=indicator_name_to_indicator,
                                               )
 
         baseline_scenario_definition = ScenarioDefinition(name="Baseline", flow_modifiers=[])
@@ -1804,5 +1820,128 @@ class DataChecker(object):
                         s = "Flow '{}' has invalid conversion factor defined for year {} (row {})".format(
                             flow_id, year, flow.row_number)
                         errors.append(s)
+
+        return not errors, errors
+
+    def _check_stock_lifetime_overrides(self,
+                                        stock_lifetime_overrides: List[StockLifetimeOverride]
+                                        ) -> Tuple[bool, List[str]]:
+        """
+        Check if stock lifetime overrides have errors.
+        :param stock_lifetime_overrides: List of StockLifetimeOverride-objects
+        :return: Tuple (has errors (bool), list of errors (str))
+        """
+        errors = []
+        process_id_to_stock = [stock.id for stock in self._stocks]
+        scenario_start_year = self.get_start_year()
+        scenario_end_year = self.get_end_year()
+        for entry in stock_lifetime_overrides:
+            # Check if target Process ID has stock
+            process_id = entry.process_id
+            if process_id not in process_id_to_stock:
+                s = "Stock lifetime overrides: Process '{}' does not have stock (row {})".format(
+                    process_id, entry.row_number)
+                errors.append(s)
+
+            # Check if lifetime can be converted to int and is equal or greater than 1
+            lifetime = entry.lifetime
+            try:
+                val = int(lifetime)
+                if val < 1:
+                    s = "Stock lifetime overrides: Process '{}' lifetime must be >= 1 (value = {}) (row {})".format(
+                        process_id, val, entry.row_number)
+                    errors.append(s)
+            except ValueError as ex:
+                s = "Stock lifetime overrides: Process '{}' lifetime is not number (value = {}) (row {})".format(
+                    process_id, lifetime, entry.row_number)
+                errors.append(s)
+
+            # Check if start year can be converted to int
+            start_year = entry.start_year
+            is_start_year_int = False
+            try:
+                start_year = int(start_year)
+                is_start_year_int = True
+                if start_year < scenario_start_year:
+                    s = ""
+                    s += "Stock lifetime overrides: Process '{}' start year is "
+                    s += "less than scenario start year (value = {}, scenario start year = {}) (row {})"
+                    s = s.format(process_id, start_year, scenario_start_year, entry.row_number)
+                    errors.append(s)
+
+            except ValueError as ex:
+                s = "Stock lifetime overrides: Process '{}' start year is not number (value = {}) (row {})".format(
+                    process_id, start_year, entry.row_number)
+                errors.append(s)
+
+            # Check if end year can be converted to int
+            end_year = entry.end_year
+            is_end_year_int = False
+            try:
+                end_year = int(end_year)
+                is_end_year_int = True
+                if end_year > scenario_end_year:
+                    s = ""
+                    s += "Stock lifetime overrides: Process '{}' end year is "
+                    s += "more than scenario end year (value = {}, scenario end year = {}) (row {})"
+                    s = s.format(process_id, end_year, scenario_end_year, entry.row_number)
+                    errors.append(s)
+
+            except ValueError as ex:
+                s = "Stock lifetime overrides: Process '{}' end year is not number (value = {}) (row {})".format(
+                    process_id, end_year, entry.row_number)
+                errors.append(s)
+
+            # Check that start year is less than end year and check that both start year and end year are in
+            # scenario year range
+            a = 0
+            if is_start_year_int and is_end_year_int:
+                if start_year > end_year:
+                    s = "Stock lifetime overrides: Process '{}' start year ({}) is greater than end year ({}) (row {})"
+                    s = s.format(process_id, start_year, end_year, entry.row_number)
+                    errors.append(s)
+
+            # Check if std_dev can be converted to float
+            # NOTE: Can be also None or empty string if not used
+            std_dev = entry.std_dev
+            if not pd.isna(std_dev):
+                try:
+                    std_dev = float(std_dev)
+                except ValueError as ex:
+                    s = "Stock lifetime overrides: Process '{}' std_dev is not number (value = {}) (row {})".format(
+                        process_id, std_dev, entry.row_number)
+                    errors.append(s)
+
+            # Check if shape can be converted to float
+            # NOTE: Can be also None or empty string if not used
+            shape = entry.shape
+            if not pd.isna(shape):
+                try:
+                    shape = float(shape)
+                except ValueError as ex:
+                    s = "Stock lifetime overrides: Process '{}' shape is not number (value = {}) (row {})".format(
+                        process_id, std_dev, entry.row_number)
+                    errors.append(s)
+
+            # Check if scale can be converted to float
+            # NOTE: Can be also None or empty string if not used
+            scale = entry.scale
+            if not pd.isna(scale):
+                try:
+                    scale = float(scale)
+                except ValueError as ex:
+                    s = "Stock lifetime overrides: Process '{}' shape is not number (value = {}) (row {})".format(
+                        process_id, scale, entry.row_number)
+                    errors.append(s)
+
+            # Check that condition is one of the valid values : "Wet", "Dry" or "Managed"
+            # Parameter names are defined in parameters.py (AllowedStockDistributionParameterValues)
+            # NOTE: Can be also None or empty string if not used
+            condition = entry.condition
+            if not pd.isna(condition):
+                if not (condition in AllowedStockDistributionParameterValues[StockDistributionParameter.Condition]):
+                    s = "Stock lifetime overrides: Process '{}' condition is not valid (value = {}) (row {})"
+                    s = s.format(process_id, condition, entry.row_number)
+                    errors.append(s)
 
         return not errors, errors

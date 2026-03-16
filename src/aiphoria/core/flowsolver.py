@@ -1325,6 +1325,20 @@ class FlowSolver(object):
                                              s=copy.deepcopy(stock_total),
                                              lt=copy.deepcopy(stock_lifetime_params))
 
+            # Apply stock lifetime override to baseline DSM if needed
+            year_to_override = {}
+            if stock.stock_lifetime_override:
+                stock_lifetime_override = stock.stock_lifetime_override
+                override_lt = stock_lifetime_override.lifetime
+                override_start_year = stock_lifetime_override.start_year
+                override_end_year = stock_lifetime_override.end_year + 1
+                year_to_override = {v: override_lt for v in range(override_start_year, override_end_year)}
+                for year_index, year in enumerate(stock_years):
+                    if year not in year_to_override:
+                        baseline_dsm.lt["Mean"][year_index] = stock.stock_lifetime
+                    else:
+                        baseline_dsm.lt["Mean"][year_index] = year_to_override[year]
+
             baseline_dsm.compute_s_c_inflow_driven()
             baseline_dsm.compute_o_c_from_s_c()
             baseline_dsm.compute_stock_total()
@@ -1340,6 +1354,14 @@ class FlowSolver(object):
                                                   i=copy.deepcopy(stock_total_inflows),
                                                   s=copy.deepcopy(stock_total),
                                                   lt=copy.deepcopy(stock_lifetime_params))
+
+                # Apply stock lifetime override to indicator DSM if needed
+                if stock.stock_lifetime_override:
+                    for year_index, year in enumerate(stock_years):
+                        if year not in year_to_override:
+                            indicator_dsm.lt["Mean"][year_index] = stock.stock_lifetime
+                        else:
+                            indicator_dsm.lt["Mean"][year_index] = year_to_override[year]
 
                 indicator_dsm.compute_s_c_inflow_driven()
                 indicator_dsm.compute_o_c_from_s_c()
