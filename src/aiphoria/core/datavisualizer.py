@@ -100,6 +100,11 @@ class DataVisualizer(object):
         self._build_default_transformation_stage_colors(unique_transformation_stages,
                                                         process_transformation_stage_colors)
 
+        # Gather list of stocks
+        process_id_to_stock = {}
+        for stock in scenario.scenario_data.stocks:
+            process_id_to_stock[stock.id] = stock
+
         year_to_data = {}
         year_to_process_to_flows = flow_solver.get_year_to_process_to_flows()
         for year, process_to_flows in year_to_process_to_flows.items():
@@ -193,6 +198,21 @@ class DataVisualizer(object):
                         )
                     )
 
+                # Get stock lifetime
+                stock_lifetime = process.stock_lifetime
+                lifetime_is_override = False
+                stock_lifetime_override = {}
+                if process.id in process_id_to_stock:
+                    stock = process_id_to_stock[process.id]
+                    stock_lifetime, lifetime_is_override = stock.get_lifetime_for_year(year)
+                    if stock.stock_lifetime_override:
+                        stock_lifetime_override_entry = stock.stock_lifetime_override
+                        stock_lifetime_override = dict(
+                            lifetime=stock_lifetime_override_entry.lifetime,
+                            start_year=stock_lifetime_override_entry.start_year,
+                            end_year=stock_lifetime_override_entry.end_year,
+                        )
+
                 # Custom data for node
                 year_node_custom_data.append(
                     dict(
@@ -206,7 +226,9 @@ class DataVisualizer(object):
                         stock=dict(
                             distribution_type=process.stock_distribution_type,
                             distribution_params=process.stock_distribution_params,
-                            lifetime=process.stock_lifetime,
+                            lifetime=stock_lifetime,
+                            lifetime_is_override=lifetime_is_override,
+                            stock_lifetime_override=stock_lifetime_override,
                         ),
                         x=process.position_x,
                         y=process.position_y,

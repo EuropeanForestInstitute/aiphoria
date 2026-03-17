@@ -2624,6 +2624,18 @@
       }
       headElem.appendChild(rowElem)
 
+      // Add stock lifetime override
+      colNames = [
+        "Lifetime override, start year",
+        "Lifetime override, end year",
+      ]
+
+      for (const [index, colName] of colNames.entries()) {
+        const dataElem = document.createElement("th")
+        dataElem.textContent = colName
+        rowElem.appendChild(dataElem)
+      }
+
       // Add stock inflow, outflow, and total
       colNames = [
         "Inflow",
@@ -2738,6 +2750,29 @@
         dataDistributionParamsElem.textContent = text
         rowElem.appendChild(dataDistributionParamsElem)
 
+        // Stock lifetime override
+        let ltStartYear = 0
+        let ltEndYear = 0
+
+        const stockLifetimeOverride = entry.stock.stock_lifetime_override
+        let hasStockLifetimeOverride = Object.keys(stockLifetimeOverride).length > 0
+        if (hasStockLifetimeOverride) {
+          ltStartYear = stockLifetimeOverride.start_year
+          ltEndYear = stockLifetimeOverride.end_year
+        } else {
+          ltStartYear = "No overrides"
+          ltEndYear = "No overrides"
+        }
+
+        const dataStockLifetimeOverrideStartYear = document.createElement("td")
+        dataStockLifetimeOverrideStartYear.textContent = ltStartYear
+        rowElem.appendChild(dataStockLifetimeOverrideStartYear)
+
+        const dataStockLifetimeOverrideEndYear = document.createElement("td")
+        dataStockLifetimeOverrideEndYear.textContent = ltEndYear
+        rowElem.appendChild(dataStockLifetimeOverrideEndYear)
+
+        // Stock flows
         const stockInflows = yearData.stockInflows[stockId]
         const stockOutflows = yearData.stockOutflows[stockId]
         const stockTotals = yearData.stockTotals[stockId]
@@ -4639,6 +4674,9 @@
         const stock = nodeCustomData.stock
         const stockDistributionType = stock.distribution_type
         const stockLifetime = stock.lifetime
+        const stockLifetimeIsOverride = stock.lifetime_is_override
+
+        const stockLifetimeOverride = nodeCustomData.stock.stock_lifetime_override
 
         // Row for "Has stock"
         const rowStockType = document.createElement("tr")
@@ -4664,6 +4702,37 @@
         const rowStockLifetimeValue = document.createElement("td")
         rowStockLifetimeValue.textContent = `${stockLifetime}`
         rowStockLifetime.appendChild(rowStockLifetimeValue)
+
+        // Stock lifetime override
+        if (stockLifetimeIsOverride) {
+          const ltStartYear = stockLifetimeOverride.start_year
+          const ltEndYear = stockLifetimeOverride.end_year
+
+          // Stock lifetime override start year row
+          const rowLifetimeStartYear = document.createElement("tr")
+          tableHeadStock.appendChild(rowLifetimeStartYear)
+
+          const rowLifetimeStartYearName = document.createElement("th")
+          rowLifetimeStartYearName.textContent = "Stock lifetime override, start year"
+          rowLifetimeStartYear.appendChild(rowLifetimeStartYearName)
+
+          const rowLifetimeStartYearValue = document.createElement("td")
+          rowLifetimeStartYearValue.textContent = `${ltStartYear}`
+          rowLifetimeStartYear.appendChild(rowLifetimeStartYearValue)
+
+          // Stock lifetime override start year row
+          const rowLifetimeEndYear = document.createElement("tr")
+          tableHeadStock.appendChild(rowLifetimeEndYear)
+
+          const rowLifetimeEndYearName = document.createElement("th")
+          rowLifetimeEndYearName.textContent = "Stock lifetime override, end year"
+          rowLifetimeEndYear.appendChild(rowLifetimeEndYearName)
+
+          const rowLifetimeEndYearValue = document.createElement("td")
+          rowLifetimeEndYearValue.textContent = `${ltEndYear}`
+          rowLifetimeEndYear.appendChild(rowLifetimeEndYearValue)
+
+        }
       }
 
       // ***********

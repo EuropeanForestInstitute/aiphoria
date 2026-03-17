@@ -1083,6 +1083,29 @@ class Stock(ObjectBase):
     def stock_lifetime_override(self, val: StockLifetimeOverride) -> None:
         self._stock_lifetime_override = val
 
+    def get_lifetime_for_year(self, year: int) -> Tuple[int, bool]:
+        """
+        Get stock lifetime for year.
+        If stock lifetime override is defined for the year then returns the overridden stock lifetime.
+        :param year: Target year
+
+        :return: Tuple (Stock lifetime in years, Using stock lifetime override)
+        """
+
+        if not self._stock_lifetime_override:
+            return self.stock_lifetime, False
+
+        override_start_year = self._stock_lifetime_override.start_year
+        override_end_year = self._stock_lifetime_override.end_year
+        override_lifetime = self._stock_lifetime_override.lifetime
+        if year < override_start_year:
+            return self.stock_lifetime, False
+
+        if year > override_end_year:
+            return self.stock_lifetime, False
+
+        return override_lifetime, True
+
 
 class FlowModifier(ObjectBase):
     """
