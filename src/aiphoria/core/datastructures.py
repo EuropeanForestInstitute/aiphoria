@@ -1038,7 +1038,8 @@ class Stock(ObjectBase):
         self._process = params
         self._id = params.id
         self._row_number = row_number
-        self._stock_lifetime_override = None
+        self._stock_lifetime_overrides = []
+        self._year_to_stock_lifetime_override_entry_index = {}
 
     def __str__(self):
         if not self.is_valid():
@@ -1076,12 +1077,22 @@ class Stock(ObjectBase):
         return self._process.stock_distribution_params
 
     @property
-    def stock_lifetime_override(self) -> StockLifetimeOverride:
-        return self._stock_lifetime_override
+    def stock_lifetime_overrides(self) -> List[StockLifetimeOverride]:
+        return self._stock_lifetime_overrides
 
-    @stock_lifetime_override.setter
-    def stock_lifetime_override(self, val: StockLifetimeOverride) -> None:
-        self._stock_lifetime_override = val
+    def add_stock_lifetime_override(self, entry: StockLifetimeOverride) -> None:
+        """
+        Add stock lifetime override to stock.
+
+        :param entry: Target StockLifetimeOverride
+        """
+        # Map years to stock lifetime override index
+        index = len(self._stock_lifetime_overrides)
+        years = [year for year in range(entry.start_year, entry.end_year + 1)]
+        for year in years:
+            self._year_to_stock_lifetime_override_entry_index[year] = index
+
+        self._stock_lifetime_overrides.append(entry)
 
     def get_lifetime_for_year(self, year: int) -> Tuple[int, bool]:
         """
@@ -1092,19 +1103,40 @@ class Stock(ObjectBase):
         :return: Tuple (Stock lifetime in years, Using stock lifetime override)
         """
 
-        if not self._stock_lifetime_override:
+        if not self._stock_lifetime_overrides:
             return self.stock_lifetime, False
 
-        override_start_year = self._stock_lifetime_override.start_year
-        override_end_year = self._stock_lifetime_override.end_year
-        override_lifetime = self._stock_lifetime_override.lifetime
-        if year < override_start_year:
-            return self.stock_lifetime, False
+        # Find stock lifetime override that is active for year (start year >= year and end year <= year)
+        target_index = -1
+        stock_lifetime_overrides = self.stock_lifetime_overrides
+        for index, stock_lifetime_override in enumerate(stock_lifetime_overrides):
+            start_year = stock_lifetime_override.start_year
+            end_year = stock_lifetime_override.end_year
+            if start_year <= year <= end_year:
+                target_index = index
 
-        if year > override_end_year:
+        if target_index < 0:
+            # Use the default stock lifetime
             return self.stock_lifetime, False
+        else:
+            # Use the stock lifetime override
+            target_entry = stock_lifetime_overrides[target_index]
+            return target_entry.lifetime, True
 
-        return override_lifetime, True
+    def get_stock_lifetime_override_entry_for_year(self, year: int) -> Union[StockLifetimeOverride, None]:
+        """
+        Get StockLifetimeOverride entry for target year.
+        Returns None if there is no StockLifetimeOverride for target year
+
+        :param year: Target year
+
+        :return: StockLifetimeOverride or None
+        """
+        if year in self._year_to_stock_lifetime_override_entry_index:
+            target_index = self._year_to_stock_lifetime_override_entry_index[year]
+            return self._stock_lifetime_overrides[target_index]
+
+        return None
 
 
 class FlowModifier(ObjectBase):

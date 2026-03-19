@@ -2751,12 +2751,14 @@
         rowElem.appendChild(dataDistributionParamsElem)
 
         // Stock lifetime override
+        const currentYear = globals.getCurrentYear()
         let ltStartYear = 0
         let ltEndYear = 0
 
-        const stockLifetimeOverride = entry.stock.stock_lifetime_override
-        let hasStockLifetimeOverride = Object.keys(stockLifetimeOverride).length > 0
-        if (hasStockLifetimeOverride) {
+        const stockLifetimeOverrides = entry.stock.stock_lifetime_overrides
+        let hasStockLifetimeOverrides = Object.keys(stockLifetimeOverrides).length > 0
+        if (hasStockLifetimeOverrides) {
+          const stockLifetimeOverride = stockLifetimeOverrides[currentYear]
           ltStartYear = stockLifetimeOverride.start_year
           ltEndYear = stockLifetimeOverride.end_year
         } else {
@@ -4676,7 +4678,8 @@
         const stockLifetime = stock.lifetime
         const stockLifetimeIsOverride = stock.lifetime_is_override
 
-        const stockLifetimeOverride = nodeCustomData.stock.stock_lifetime_override
+        // Dictionary: year -> stock lifetime overrides
+        const stockLifetimeOverrides = nodeCustomData.stock.stock_lifetime_overrides
 
         // Row for "Has stock"
         const rowStockType = document.createElement("tr")
@@ -4705,6 +4708,9 @@
 
         // Stock lifetime override
         if (stockLifetimeIsOverride) {
+          const currentYear = globals.getCurrentYear()
+          const stockLifetimeOverride = stockLifetimeOverrides[currentYear]
+
           const ltStartYear = stockLifetimeOverride.start_year
           const ltEndYear = stockLifetimeOverride.end_year
 

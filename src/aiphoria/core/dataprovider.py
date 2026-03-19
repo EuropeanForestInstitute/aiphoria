@@ -764,7 +764,7 @@ class DataProvider(object):
 
         return result
 
-    def _to_list(self, value: Any, sep=',', allowed_chars = [":"]) -> List[str]:
+    def _to_list(self, value: Any, sep=',', allowed_chars: List[str] = [":"]) -> List[str]:
         """
         Check and convert value to list of strings.
         Default separator is comma (',')

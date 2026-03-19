@@ -341,7 +341,7 @@ class DataChecker(object):
         for stock_lifetime_override in stock_lifetime_overrides:
             stock_lifetime_override.prepare_data()
             stock = process_id_to_stock[stock_lifetime_override.process_id]
-            stock.stock_lifetime_override = stock_lifetime_override
+            stock.add_stock_lifetime_override(stock_lifetime_override)
 
         # List of all scenarios, first element is always the baseline scenario and always exists even if
         # any alternative scenarios are not defined

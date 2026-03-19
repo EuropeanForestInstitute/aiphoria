@@ -201,17 +201,18 @@ class DataVisualizer(object):
                 # Get stock lifetime
                 stock_lifetime = process.stock_lifetime
                 lifetime_is_override = False
-                stock_lifetime_override = {}
+                year_to_stock_lifetime_override = {}
                 if process.id in process_id_to_stock:
                     stock = process_id_to_stock[process.id]
                     stock_lifetime, lifetime_is_override = stock.get_lifetime_for_year(year)
-                    if stock.stock_lifetime_override:
-                        stock_lifetime_override_entry = stock.stock_lifetime_override
+                    if lifetime_is_override:
+                        stock_lifetime_override_entry = stock.get_stock_lifetime_override_entry_for_year(year)
                         stock_lifetime_override = dict(
                             lifetime=stock_lifetime_override_entry.lifetime,
                             start_year=stock_lifetime_override_entry.start_year,
                             end_year=stock_lifetime_override_entry.end_year,
                         )
+                        year_to_stock_lifetime_override[year] = stock_lifetime_override
 
                 # Custom data for node
                 year_node_custom_data.append(
@@ -228,7 +229,7 @@ class DataVisualizer(object):
                             distribution_params=process.stock_distribution_params,
                             lifetime=stock_lifetime,
                             lifetime_is_override=lifetime_is_override,
-                            stock_lifetime_override=stock_lifetime_override,
+                            stock_lifetime_overrides=year_to_stock_lifetime_override,
                         ),
                         x=process.position_x,
                         y=process.position_y,
