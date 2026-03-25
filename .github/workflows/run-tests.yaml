@@ -31,7 +31,7 @@ jobs:
 
       - name: Update coverage
         run: |
-          coverage-badge -o assets/coverage.svg
+          coverage-badge -f -o assets/coverage.svg
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add assets/coverage.svg
