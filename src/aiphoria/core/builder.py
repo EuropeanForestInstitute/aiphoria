@@ -1,7 +1,7 @@
 import os
 import pickle
 import shutil
-from typing import Union, List
+from typing import Union, List, Dict, Any
 from . import logger
 from .logger import log, start_log_perf, stop_log_perf, clear_log_perf, show_log_perf_summary
 from .datachecker import DataChecker
@@ -243,14 +243,23 @@ def build_and_solve_scenarios(datachecker: DataChecker = None, use_cache: Union[
     return scenarios
 
 
-def build_results(filename: str = None, path_to_output_dir: Union[str, None] = None):
+def build_results(filename: str = None,
+                  path_to_output_dir: Union[str, None] = None,
+                  parameter_overrides: Union[Dict[str, Any], None] = None,
+                  ):
     """
     Build and solve scenarios using the settings file.
+    Parameters can be overriden by providing dictionary with key as parameter name and value as parameter value.
 
     :param filename: Path to Excel settings file
     :param path_to_output_dir: If None then uses the path from settings file
+    :param parameter_overrides: Dictionary {parameter name: parameter value}
+
     :return: Tuple (model parameters (dictionary), list of scenarios (List[Scenario), color definitions (dictionary))
     """
+    if parameter_overrides is None:
+        parameter_overrides = {}
+
     # Build DataProvider
     log("Loading data from file '{}'...".format(filename), level="info")
 
@@ -258,6 +267,15 @@ def build_results(filename: str = None, path_to_output_dir: Union[str, None] = N
     log("Build DataProvider...")
     dataprovider: DataProvider = build_dataprovider(filename)
     stop_log_perf()
+
+    # Parameter overrides
+    loaded_params = dataprovider.get_model_params()
+    for param_name, param_value in parameter_overrides.items():
+        # NOTE: Parameter value validity is not checked
+        if param_name not in loaded_params:
+            raise KeyError("Parameter override '{}' is not valid parameter name".format(param_name))
+        loaded_params[param_name] = param_value
+        print("Overriding parameter '{}' to {}".format(param_name, param_value))
 
     # Model parameters is a Dictionary that contains loaded data from Excel sheet named "Settings"
     # and are used for running the FlowSolver and setting up ODYM

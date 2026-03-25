@@ -61,4 +61,22 @@ where = ["src"]
 # "aiphoria.core.datavisualizer_data" = ["", "*.*"]
 # "aiphoria.core.network_graph_data" = ["*.*"]
 
+[tool.pytest.ini_options]
+addopts = "--cov=aiphoria"
+python_files = [
+    "tests/test_datastructures.py",
+    "tests/test_reference_scenario.py",
+    "tests/test_builder.py",
+    "tests/test_runner.py",
+    "tests/test_example.py",
+    "tests/test_visualizer_parameters.py",
+]
+testpaths = [
+    "tests"
+]
 
+[tool.coverage.run]
+omit = [
+    "lifetime_test.py",
+    "src/aiphoria/lib/*"
+]

@@ -2,12 +2,14 @@ import os
 import sys
 import shutil
 from importlib.resources import files
-from typing import Union
+from typing import Union, Dict, Any
 from .runner import run_scenarios
 
 
 def run_example(path_to_output_dir: Union[str, None] = None,
-                remove_existing_output_dir: bool = False):
+                remove_existing_output_dir: bool = False,
+                parameter_overrides: Union[Dict[str, Any], None] = None,
+                ):
     """
     Run example scenario and place output to path_to_output_dir.
     If no path_to_output_dir is provided then places results
@@ -17,7 +19,6 @@ def run_example(path_to_output_dir: Union[str, None] = None,
 
     Deleting existing directory can be overridden by setting
     parameter remove_existing_output_dir to True.
-
 
     Examples:
     run_example()
@@ -29,8 +30,13 @@ def run_example(path_to_output_dir: Union[str, None] = None,
     (e.g. "C:\\results\\aiphoria_example" (Windows)
     - ~ is expanded to absolute path automatically
 
+    NOTE:
+    Parameters can be overridden by providing dictionary as parameter "parameter_overrides"
+    where key is parameter name and value is parameter value.
+
     :param path_to_output_dir: Absolute path to output directory
     :param remove_existing_output_dir: If True then removes existing output directory (default = False)
+    :param parameter_overrides: Dictionary of parameters to override {parameter name: parameter value}
     """
     output_dir_name = "aiphoria_example"
     example_scenario_path = "data/example_scenario.xlsx"
@@ -62,5 +68,7 @@ def run_example(path_to_output_dir: Union[str, None] = None,
     os.chdir(path_to_output_dir)
     run_scenarios(path_to_example_scenario,
                   path_to_output_dir=path_to_output_dir,
-                  remove_existing_output_dir=remove_existing_output_dir)
+                  remove_existing_output_dir=remove_existing_output_dir,
+                  parameter_overrides=parameter_overrides,
+                  )
     os.chdir(current_cwd)

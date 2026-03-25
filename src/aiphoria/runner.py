@@ -5,7 +5,7 @@ import shutil
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from typing import Union
+from typing import Union, Any, Dict
 from datetime import datetime
 import matplotlib.pyplot as plt
 from .core.builder import init_builder, build_results
@@ -26,15 +26,25 @@ _default_cache_dir_name = "cache"
 def run_scenarios(path_to_settings_file: Union[str, None] = None,
                   path_to_output_dir: Union[str, None] = None,
                   remove_existing_output_dir: bool = False,
+                  parameter_overrides: Union[Dict[str, Any], None] = None,
                   ) -> bool:
     """
     Run scenarios using the settings file.
     If path_to_output_dir is set then overrides the setting from Excel file.
 
+    Parameters can be overridden by using the parameter_overrides-parameter.
+    Key is parameter name and value is the parameter value.
+    Refer example scenario file or aiphoria/core/parameters.py for full list of parameters.
+
     :param path_to_settings_file: Path to target settings Excel file
     :param path_to_output_dir: Path to output directory
     :param remove_existing_output_dir: Remove existing directory (default: False)
+    :param parameter_overrides:     Dictionary {parameter name: parameter value}
+
+    :return: True if succesful, False otherwise
     """
+    if parameter_overrides is None:
+        parameter_overrides = {}
 
     if path_to_settings_file is None:
         sys.stderr.write("ERROR: No path to settings file\n")
@@ -71,7 +81,9 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
                  clear_cache=False)
 
     # Build results
-    model_params, scenarios, color_definitions = build_results(path_to_settings_file, path_to_output_dir)
+    model_params, scenarios, color_definitions = build_results(path_to_settings_file,
+                                                               path_to_output_dir,
+                                                               parameter_overrides)
 
     scenario_name_to_output_path = setup_scenario_output_directories(
         model_params[ParameterName.OutputPath],
@@ -391,10 +403,10 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
             tick_gap = 1 if len(years) < 15 else 10
             plt.xticks(years[::tick_gap])
 
-            # # Save the figure as an SVG file
-            # filename = os.path.join(scenario_output_path, "{}_stock_plots_by_product.svg".format(scenario.name))
-            # plt.savefig(filename, format='svg')
-            #
+            # Save the figure as an SVG file
+            filename = os.path.join(scenario_output_path, "{}_stock_plots_by_product.svg".format(scenario.name))
+            plt.savefig(filename, format='svg')
+
             # if model_params[ParameterName.ShowPlots]:
             #     plt.show()
 
