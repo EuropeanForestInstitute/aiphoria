@@ -1,9 +1,12 @@
 import os
 import shutil
+import warnings
+
 import pytest
 # from aiphoria.core.dataprovider import DataProvider
 # from aiphoria.core.datachecker import DataChecker
 from aiphoria.core.builder import init_builder, build_dataprovider, build_datachecker, build_and_solve_scenarios, build_results
+import warnings
 
 
 @pytest.fixture
@@ -16,6 +19,9 @@ def path_to_output() -> str:
 
 
 def test_init_builder(reference_scenario_name: str, path_to_output):
+    # Ignore openpyxl warning about Data validation extension support, we are not using that
+    warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
+
     # Init Builder without cache and expect that the cache directory does not exists after running init_builder
     path_to_cache = os.path.join(os.path.abspath("."), "tests", "test_cache")
     init_builder(path_to_cache=path_to_cache, use_cache=False, use_timing=False, clear_cache=True)

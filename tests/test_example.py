@@ -1,4 +1,6 @@
 import os
+import warnings
+
 from aiphoria import ParameterName
 from aiphoria.example import run_example
 
@@ -6,6 +8,9 @@ output_dir_name = "output_test_example"
 
 
 def test_run_example():
+    # Ignore openpyxl warning about Data validation extension support, we are not using that
+    warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
+
     # Check that the last part of the path is "tests" to allow running
     # the tests outside tests/
     path_to_tests = os.path.abspath(".")

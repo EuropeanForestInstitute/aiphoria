@@ -1,4 +1,6 @@
 import os
+import warnings
+
 import pytest
 from aiphoria.core.dataprovider import DataProvider
 
@@ -12,6 +14,9 @@ def test_check_reference_scenario(reference_scenario_name):
     """
     Test that reference scenario contains expected values.
     """
+    # Ignore openpyxl warning about Data validation extension support, we are not using that
+    warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
+
     dataprovider = DataProvider(reference_scenario_name)
 
     # Check that all parameters are found in reference settings file
