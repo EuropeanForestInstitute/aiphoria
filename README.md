@@ -7,9 +7,9 @@
 
 ![GitHub Release](https://img.shields.io/github/v/release/EuropeanForestInstitute/aiphoria)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/EuropeanForestInstitute/aiphoria/publish-pypi.yaml)
-![GitHub License](https://img.shields.io/github/license/EuropeanForestInstitute/aiphoria)
 ![Tests](https://img.shields.io/github/actions/workflow/status/EuropeanForestInstitute/aiphoria/run-tests.yaml?label=tests)
 ![Coverage](assets/coverage.svg)
+![GitHub License](https://img.shields.io/github/license/EuropeanForestInstitute/aiphoria)
 <br>
 
 
