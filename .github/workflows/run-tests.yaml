@@ -21,9 +21,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -U pip
+          pip install .
           pip install pytest
 
       - name: Run tests
         run: pytest
+
 
 
