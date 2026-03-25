@@ -5,10 +5,11 @@ on:
     branches: [ main ]
     paths-ignore:
       - 'assets/coverage.svg'
+      - 'README.md'
     pull_requests:
 
 jobs:
-  test:
+  test-and-update-coverage:
     runs-on: ubuntu-latest
 
     steps:
