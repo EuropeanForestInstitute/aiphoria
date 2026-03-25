@@ -1,4 +1,0 @@
-tests/test_datastructures.py
-tests/test_reference_scenario.py
-tests/test_builder.py
-tests/test_runner.py
