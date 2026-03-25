@@ -3,6 +3,8 @@ name: Run tests
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'assets/coverage.svg'
     pull_requests:
 
 jobs:
@@ -22,11 +24,17 @@ jobs:
         run: |
           pip install -U pip
           pip install .
-          pip install pytest
-          pip install pytest-cov
+          pip install pytest pytest-cov
 
       - name: Run tests
         run: pytest
 
-
+      - name: Update coverage
+        run: |
+          coverage-badge -o assets/coverage.svg
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add assets/coverage.svg
+          git commit -m "Updated coverage badge" || echo "No changes"
+          git push
 
