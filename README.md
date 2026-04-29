@@ -14,9 +14,6 @@
 
 
 ## Python package for assessing and visualizing dynamic wood material flows
-
-> ℹ️ _This package is under continuous development_
-
 aiphoria is Python package that facilitates the assessment of wood materials flows, associated carbon stocks, and stock changes, as well as and their visualization over time.
 **aiphoria** builds on top of [ODYM - Open Dynamic Material Systems Model](https://github.com/IndEcol/ODYM).
 
@@ -27,7 +24,6 @@ aiphoria is Python package that facilitates the assessment of wood materials flo
 - **Visualize material flows** through a Sankey diagram and provided timestep.
 
 ## Use cases:
-
 **aiphoria** is ideal for:
 - **Any temporal and spatial situation where material systems want to be assessed**
 - **Product sink/stock effects**
