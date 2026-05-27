@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiphoria"
-version = "0.9.3"
+version = "0.9.4"
 authors = [
     { name="Janne Järvikylä", email="janne.jarvikyla@efi.int" },
 ]
@@ -25,8 +25,8 @@ dependencies = [
     "xlrd",
     "xlwt",
     "tqdm",
-    "myst-parser",
-    "sphinx-rtd-theme",
+    #"myst-parser",
+    #"sphinx-rtd-theme",
     "IPython",
     "xlsxwriter",
 ]
@@ -35,7 +35,7 @@ classifiers = [
     # 3 - Alpha
     # 4 - Beta
     # 5 - Production/Stable
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
@@ -78,5 +78,8 @@ testpaths = [
 [tool.coverage.run]
 omit = [
     "lifetime_test.py",
-    "src/aiphoria/lib/*"
+    "src/aiphoria/__init__.py",
+    "src/aiphoria/core/__init__.py",
+    "src/aiphoria/lib/*",
+    "src/aiphoria/core/logger.py",
 ]

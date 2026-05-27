@@ -1334,9 +1334,9 @@ class FlowSolver(object):
                     override_end_year = stock_lifetime_override.end_year + 1
                     year_to_override = {v: override_lt for v in range(override_start_year, override_end_year)}
                     for year_index, year in enumerate(stock_years):
-                        if year not in year_to_override:
-                            baseline_dsm.lt["Mean"][year_index] = stock.stock_lifetime
-                        else:
+                        # ODYM already has calculated stock lifetimes for each year so only update the years
+                        # that have been overridden by this stock lifetime modifier
+                        if year in year_to_override:
                             baseline_dsm.lt["Mean"][year_index] = year_to_override[year]
 
             baseline_dsm.compute_s_c_inflow_driven()
@@ -1359,9 +1359,9 @@ class FlowSolver(object):
                 if stock.stock_lifetime_overrides:
                     for stock_lifetime_override in stock.stock_lifetime_overrides:
                         for year_index, year in enumerate(stock_years):
-                            if year not in year_to_override:
-                                indicator_dsm.lt["Mean"][year_index] = stock.stock_lifetime
-                            else:
+                            # ODYM already has calculated stock lifetimes for each year so only update the years
+                            # that have been overridden by this stock lifetime modifier
+                            if year in year_to_override:
                                 indicator_dsm.lt["Mean"][year_index] = year_to_override[year]
 
                 indicator_dsm.compute_s_c_inflow_driven()

@@ -32,9 +32,9 @@ class DataChecker(object):
         """
 
         # NOTE: All flows must have data for the starting year
-        processes = self._dataprovider.get_processes()
-        flows = self._dataprovider.get_flows()
-        stocks = self._dataprovider.get_stocks()
+        processes = self.get_processes()
+        flows = self.get_flows()
+        stocks = self.get_stocks()
 
         model_params = self._dataprovider.get_model_params()
         detect_year_range = model_params[ParameterName.DetectYearRange]
@@ -77,10 +77,6 @@ class DataChecker(object):
 
         if not flows:
             error = "No valid flows!"
-            raise Exception([error])
-
-        if not processes or not flows:
-            error = "No processes or flows!"
             raise Exception([error])
 
         if detect_year_range:
