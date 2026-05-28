@@ -91,11 +91,6 @@ class DataChecker(object):
                 self._year_start, self._year_end)
             raise Exception([error])
 
-        if self._year_end < self._year_start:
-            error = "End year is less than start year! (start year: {}, end year: {})".format(
-                self._year_start, self._year_end)
-            raise Exception([error])
-
         # Check if data years are outside defined year range
         ok, errors = self._check_if_data_is_outside_year_range(flows)
         if not ok:
@@ -123,6 +118,8 @@ class DataChecker(object):
                 raise Exception(errors)
 
             # Check that source and target processes for flows are defined
+            # NOTE: This test is currently unreachable with tests because
+            # exception is already thrown in self._get_unique_process_ids_in_year_range(flows, processes, self._years)
             print("Checking flow source and target processes...")
             ok, errors = self._check_flow_sources_and_targets(unique_process_ids, df_year_to_flows)
             if not ok:
@@ -743,11 +740,19 @@ class DataChecker(object):
 
             source_process_id = flow.source_process_id
             if source_process_id not in unique_process_id_to_process:
+                if source_process_id not in process_id_to_process:
+                    # Skip to next if Process ID is invalid / non-existing
+                    continue
+
                 source_process = process_id_to_process[source_process_id]
                 unique_process_id_to_process[source_process_id] = source_process
 
             target_process_id = flow.target_process_id
             if target_process_id not in unique_process_id_to_process:
+                if target_process_id not in process_id_to_process:
+                    # Skip to next if Process ID is invalid / non-existing
+                    continue
+
                 target_process = process_id_to_process[target_process_id]
                 unique_process_id_to_process[target_process_id] = target_process
 
@@ -1451,7 +1456,7 @@ class DataChecker(object):
         return not errors, errors
 
     def _check_fill_method_requirements(self, fill_method: ParameterFillMethod, df_year_to_flows: pd.DataFrame)\
-            ->Tuple[bool, List[str]]:
+            -> Tuple[bool, List[str]]:
         """
         Check if fill method requirements are met for flows.
         Fill method Zeros: No checks needed.
@@ -1470,13 +1475,36 @@ class DataChecker(object):
             return not errors, errors
 
         if fill_method is ParameterFillMethod.Previous:
-            pass
+            # Check that there exists Flow in the start year
+            start_year = df_year_to_flows.index[0]
+            for flow_id in df_year_to_flows.columns:
+                flow = df_year_to_flows.at[start_year, flow_id]
+                if flow is None:
+                    s = "ERROR: Flow '{}' is not defined for the start year and using fill method = 'Previous'".format(
+                        flow_id)
+                    errors.append(s)
 
         if fill_method is ParameterFillMethod.Next:
-            pass
+            # Check that there exists Flow in the start year
+            end_year = df_year_to_flows.index[-1]
+            for flow_id in df_year_to_flows.columns:
+                flow = df_year_to_flows.at[end_year, flow_id]
+                if flow is None:
+                    s = "ERROR: Flow '{}' is not defined for the end year and using fill method = 'Next'".format(
+                        flow_id)
+                    errors.append(s)
 
         if fill_method is ParameterFillMethod.Interpolate:
-            pass
+            # Check that there exists Flow at least for start AND end year
+            start_year = df_year_to_flows.index[0]
+            end_year = df_year_to_flows.index[-1]
+            for flow_id in df_year_to_flows.columns:
+                flow_start_year = df_year_to_flows.at[start_year, flow_id]
+                flow_end_year = df_year_to_flows.at[end_year, flow_id]
+                if flow_start_year is None or flow_end_year is None:
+                    s = "ERROR: Flow '{}' is not defined for either start or end year and using fill method = 'Interpolate'".format(
+                        flow_id)
+                    errors.append(s)
 
         return not errors, errors
 
@@ -1742,11 +1770,6 @@ class DataChecker(object):
         for color in colors:
             row_errors = []
 
-            # Has valid name?
-            if not color.name:
-                s = "Color definition does not have name (row {})".format(color.row_number)
-                row_errors.append(s)
-
             # Has valid value?
             # - hex string prefixed with character '#'
             # - string length is 7
@@ -1800,13 +1823,8 @@ class DataChecker(object):
                 if not isinstance(flow, Flow):
                     continue
 
+                # NOTE: Flow indicator now defaults to 0.0 when it's not specified
                 for name, indicator in flow.indicator_name_to_indicator.items():
-                    if indicator.conversion_factor is None:
-                        s = "Flow '{}' has no conversion factor defined for year {}, using default={} (row {})"\
-                            .format(flow_id, year, default_conversion_factor, flow.row_number)
-                        print("INFO: {}".format(s))
-                        indicator.conversion_factor = default_conversion_factor
-
                     try:
                         # Try casting value to float and if exception happens then
                         # value was not float

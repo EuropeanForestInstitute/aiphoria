@@ -1,4 +1,4 @@
-__version__ = "0.0.1"
+#__version__ = "0.0.1"
 
 # Import aiphoria core files, classes and functions
 from . import core
@@ -28,8 +28,6 @@ from .core.parameters import (
 from .core.utils import (
     create_output_directory,
     setup_current_working_directory,
-    set_output_directory,
-    get_output_directory,
 )
 
 from .core.logger import log
@@ -53,7 +51,5 @@ __all__ = [
     "create_output_directory",
     "setup_current_working_directory",
     "log",
-    "set_output_directory",
-    "get_output_directory",
     "run_scenarios",
 ]

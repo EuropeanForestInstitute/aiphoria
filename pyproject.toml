@@ -64,11 +64,14 @@ where = ["src"]
 [tool.pytest.ini_options]
 addopts = "--cov=aiphoria"
 python_files = [
-    "tests/test_datastructures.py",
-    "tests/test_reference_scenario.py",
     "tests/test_builder.py",
-    "tests/test_runner.py",
+    "tests/test_datachecker.py",
+    "tests/test_datastructures.py",
+    "tests/test_datavisualizer.py",
     "tests/test_example.py",
+    "tests/test_flowmodifiersolver.py",
+    "tests/test_reference_scenario.py",
+    "tests/test_runner.py",
     "tests/test_visualizer_parameters.py",
 ]
 testpaths = [
@@ -77,7 +80,6 @@ testpaths = [
 
 [tool.coverage.run]
 omit = [
-    "lifetime_test.py",
     "src/aiphoria/__init__.py",
     "src/aiphoria/core/__init__.py",
     "src/aiphoria/lib/*",

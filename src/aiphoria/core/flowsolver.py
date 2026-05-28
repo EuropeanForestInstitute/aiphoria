@@ -1356,8 +1356,13 @@ class FlowSolver(object):
                                                   lt=copy.deepcopy(stock_lifetime_params))
 
                 # Apply stock lifetime override to indicator DSM if needed
+                year_to_override = {}
                 if stock.stock_lifetime_overrides:
                     for stock_lifetime_override in stock.stock_lifetime_overrides:
+                        override_lt = stock_lifetime_override.lifetime
+                        override_start_year = stock_lifetime_override.start_year
+                        override_end_year = stock_lifetime_override.end_year + 1
+                        year_to_override = {v: override_lt for v in range(override_start_year, override_end_year)}
                         for year_index, year in enumerate(stock_years):
                             # ODYM already has calculated stock lifetimes for each year so only update the years
                             # that have been overridden by this stock lifetime modifier
