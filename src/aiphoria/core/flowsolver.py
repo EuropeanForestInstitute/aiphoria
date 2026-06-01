@@ -985,9 +985,6 @@ class FlowSolver(object):
         if self._use_virtual_flows:
             self._create_virtual_flows(self._year_current, self._virtual_flows_epsilon)
 
-        # Show summary if virtual processes and flows created this year
-        #self._show_virtual_flows_summary()
-
         # Recalculate evaluated values for stock outflows
         self._recalculate_indicator_dynamic_stock_outflows(self._year_current)
 
@@ -1235,51 +1232,6 @@ class FlowSolver(object):
             self._year_to_process_id_to_flow_ids[year][virtual_flow.target_process_id]["in"].append(v_flow_id)
             self._year_to_process_id_to_flow_ids[year][virtual_flow.source_process_id]["out"].append(v_flow_id)
             self._unique_flow_id_to_flow[v_flow_id] = virtual_flow
-
-    def _show_virtual_flows_summary(self):
-        """
-        Show virtual process and virtual flows summary for the current year.
-        Does not do anything if no virtual processes or flows are created for current year.
-        """
-        # Show summary of created virtual processes and virtual flows
-        virtual_processes = []
-        virtual_flows = []
-        for process_id, process in self._get_current_year_process_id_to_process().items():
-            if not process.is_virtual:
-                continue
-
-            virtual_processes.append(process)
-
-            entry = self._get_current_year_process_id_to_to_flow_ids()[process_id]
-            inflow_ids = entry["in"]
-            outflow_ids = entry["out"]
-
-            for flow_id in inflow_ids:
-                flow = self._get_current_year_flow_id_to_flow()[flow_id]
-                if not flow.is_virtual:
-                    continue
-
-                virtual_flows.append(flow)
-
-            for flow_id in outflow_ids:
-                flow = self._get_current_year_flow_id_to_flow()[flow_id]
-                if not flow.is_virtual:
-                    continue
-
-                virtual_flows.append(flow)
-
-        # Show summary only if there is something to be shown
-        num_virtual_processes = len(virtual_processes)
-        num_virtual_flows = len(virtual_flows)
-        if num_virtual_processes or num_virtual_flows:
-            print("INFO: Created {} virtual processes and {} virtual flows for year {}".format(
-                num_virtual_processes, num_virtual_flows, self._year_current))
-            for process in virtual_processes:
-                print("INFO: \t- Virtual process ID '{}'".format(process.id))
-            for flow in virtual_flows:
-                print("INFO: \t- Virtual flow ID '{} (value={:.5})'".format(flow.id, flow.evaluated_value))
-
-            print("")
 
     def _create_dynamic_stocks(self) -> None:
         """

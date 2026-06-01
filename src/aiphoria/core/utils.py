@@ -5,7 +5,6 @@ import re
 from typing import List, Dict, Any, Union, Optional
 import numpy as np
 import pandas as pd
-from IPython import get_ipython
 from .datastructures import Scenario, Flow
 import aiphoria.lib.odym.modules.ODYM_Classes as msc
 
@@ -42,18 +41,6 @@ def show_exception_errors(exception: Exception, msg: str = ""):
     if type(errors) is list:
         for error in errors:
             print("\t{}".format(error))
-
-
-def setup_current_working_directory():
-    """
-    Setup current working directory.
-    """
-    if get_ipython() is None:
-        # Running in terminal
-        os.chdir(os.path.dirname(os.path.abspath(sys.argv[0])))
-    else:
-        # Running Notebook, cwd is already set
-        pass
 
 
 def create_output_directory(output_dir_path: str):

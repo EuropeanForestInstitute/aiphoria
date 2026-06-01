@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiphoria"
-version = "0.9.5"
+version = "0.9.6"
 authors = [
     { name="Janne Järvikylä", email="janne.jarvikyla@efi.int" },
 ]
@@ -25,7 +25,6 @@ dependencies = [
     "xlrd",
     "xlwt",
     "tqdm",
-    "IPython",
     "xlsxwriter",
 ]
 classifiers = [
@@ -63,6 +62,7 @@ python_files = [
     "tests/test_datastructures.py",
     "tests/test_datavisualizer.py",
     "tests/test_example.py",
+    "tests/test_flowsolver.py",
     "tests/test_flowmodifiersolver.py",
     "tests/test_reference_scenario.py",
     "tests/test_runner.py",

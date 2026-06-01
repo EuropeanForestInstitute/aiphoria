@@ -71,6 +71,22 @@ def test_indicator_creation():
     ind.name = "Test indicator name"
     assert ind.name == "Test indicator name"
 
+    new_comment = "New comment"
+    ind.comment = new_comment
+    assert ind.comment == new_comment
+
+    new_unit = "New unit"
+    ind.unit = new_unit
+    assert ind.unit == new_unit
+
+    new_conversion_factor = 0.123
+    ind.conversion_factor = new_conversion_factor
+    assert ind.conversion_factor == new_conversion_factor
+
+
+
+
+
 
 # *************************
 # * StockLifetimeOverride *
@@ -119,6 +135,31 @@ def test_stock_lifetime_override_creation():
 
     assert slo.comment == "Test comment"
 
+    # Test invalid StockLifetimeOverride data during creation
+    with pytest.raises(Exception) as ex_info:
+        invalid_slo = StockLifetimeOverride(pd.Series([0, "-", 0, 0, 0, 0, 0, 0, 0]))
+        invalid_slo.prepare_data()
+
+    with pytest.raises(Exception) as ex_info:
+        invalid_slo = StockLifetimeOverride(pd.Series([0, 0, "-", 0, 0, 0, 0, 0, 0]))
+        invalid_slo.prepare_data()
+
+    with pytest.raises(Exception) as ex_info:
+        invalid_slo = StockLifetimeOverride(pd.Series([0, 0, 0, "-", 0, 0, 0, 0, 0]))
+        invalid_slo.prepare_data()
+
+    with pytest.raises(Exception) as ex_info:
+        invalid_slo = StockLifetimeOverride(pd.Series([0, 0, 0, 0, "–", 0, 0, 0, 0]))
+        invalid_slo.prepare_data()
+
+    with pytest.raises(Exception) as ex_info:
+        invalid_slo = StockLifetimeOverride(pd.Series([0, 0, 0, 0, 0, "-", 0, 0, 0]))
+        invalid_slo.prepare_data()
+
+    with pytest.raises(Exception) as ex_info:
+        invalid_slo = StockLifetimeOverride(pd.Series([0, 0, 0, 0, 0, 0, "-", 0, 0]))
+        invalid_slo.prepare_data()
+
 
 # ***********
 # * Process *
@@ -156,6 +197,12 @@ def test_process_creation():
     assert p.position_x == 1.0
     assert p.position_y == 2.0
     assert p.label_in_graph == "Label in graph"
+
+    # Test invalid Process creation
+    invalid_process = Process(pd.Series([]))
+
+    process_str = str(p)
+    assert process_str == "Process 'P0:loc': Lifetime: 10"
 
 
 def test_process_is_valid():

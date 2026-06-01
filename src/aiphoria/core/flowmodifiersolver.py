@@ -200,7 +200,7 @@ class FlowModifierSolver(object):
                 for error in errors:
                     print("\t" + error)
                 log("Unconstrained scenario contained errors, stopping now...", level="error")
-                sys.exit(-1)
+                raise Exception("Unconstrained scenario contained errors, stopping now...")
 
         log("Scenario solving done")
 
@@ -372,12 +372,6 @@ class FlowModifierSolver(object):
                     missing = min_error_entry.outflows_missing
                     flow_modifier = flow_modifiers[min_error_entry.flow_modifier_index]
 
-                    # TODO: Show target relative share that allows to scenario to work in
-                    # TODO: error instead of absolute numbers
-                    # TODO: Show easy-to-understand error message saying that
-                    # TODO: a) increase/decrease the change in value to this amount to make this work
-                    # TODO: b) this is the minimum/maximum target value that can be used here
-
                     s = "Process '{}'".format(source_process_id)
                     s += " "
                     s += "does not have enough outflows for absolute flows in year {}".format(year)
@@ -458,8 +452,7 @@ class FlowModifierSolver(object):
                         print("TODO: Implement showing for error when using target value")
 
             if has_errors:
-                sys.exit(-1)
-                pass
+                raise Exception("ERROR: Unconstrained scenario found breaking errors, stopping execution...")
 
         # Recalculate process inflows/outflows
         self._recalculate_relative_flow_evaluated_shares(flow_solver)
@@ -681,7 +674,7 @@ class FlowModifierSolver(object):
         if has_errors:
             # Stop execution of constrained solver
             log("Errors in Constrained scenario solver, stopping execution...", level="error")
-            sys.exit(-1)
+            raise Exception("Errors in Constrained scenario solver, stopping execution...")
 
         # Recalculate process inflows/outflows
         self._recalculate_relative_flow_evaluated_shares(flow_solver)
@@ -1661,6 +1654,15 @@ class FlowModifierSolver(object):
         # These map always have same process IDs and years
         source_process_id_to_error_entries = {}
         for source_process_id in source_process_id_to_year_to_available_flow_share:
+            # NOTE: If targeting absolute flow that has no other absolute sibling flows then
+            # source_process_id_to_year_to_required_flow_offset does not contain the key
+            # so this is needed
+            if source_process_id not in source_process_id_to_year_to_available_flow_share:
+                continue
+
+            if source_process_id not in source_process_id_to_year_to_required_flow_offset:
+                continue
+
             year_to_available_flow_share = source_process_id_to_year_to_available_flow_share[source_process_id]
             year_to_required_flow_offset = source_process_id_to_year_to_required_flow_offset[source_process_id]
 

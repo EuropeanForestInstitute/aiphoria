@@ -25,11 +25,7 @@ from .core.parameters import (
     ParameterFillMethod,
 )
 
-from .core.utils import (
-    create_output_directory,
-    setup_current_working_directory,
-)
-
+from .core.utils import (create_output_directory)
 from .core.logger import log
 from .runner import run_scenarios
 
@@ -49,7 +45,6 @@ __all__ = [
     "ParameterName",
     "ParameterFillMethod",
     "create_output_directory",
-    "setup_current_working_directory",
     "log",
     "run_scenarios",
 ]
