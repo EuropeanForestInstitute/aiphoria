@@ -1688,7 +1688,9 @@ class DataChecker(object):
                     # Flow type must match with the ChangeType:
                     # - Absolute flows must have change_type == ChangeType.Value
                     # - Relative flows must have change_type == ChangeType.Proportional
-                    source_to_target_id = "{} {}".format(flow_modifier.source_process_id, flow_modifier.target_process_id)
+                    source_to_target_id = Flow.make_flow_id(flow_modifier.source_process_id,
+                                                            flow_modifier.target_process_id)
+
                     start_year_processes = df_year_to_process_flows.loc[flow_modifier.start_year]
 
                     # Get source-to-target flow mappings at start year
@@ -1725,6 +1727,8 @@ class DataChecker(object):
                         s += "Target value must be >= 0.0 (no negative values)"
                         errors.append(s)
                 else:
+                    # NOTE: Checking change in delta depends on solved values and only simple checks
+                    # can be done here
                     # NOTE: Implement checking change in delta
                     # Change in delta, change flow value either by value or by factor
                     # - If target flow is absolute: change_type can be either ChangeType.Value or ChangeType.Proportional
@@ -1748,6 +1752,28 @@ class DataChecker(object):
                     s = "" + error_message_prefix
                     s += "Using both change in value and target value in same row is not allowed"
                     errors.append(s)
+
+                # Check if using "Apply to targets" without target opposite process IDs:
+                # - strip opposite target Process IDs (= remove whitespace before and after the ID) and check
+                # if there is any valid process IDs
+                if flow_modifier.apply_to_targets:
+                    stripped_opposite_target_process_ids = []
+                    for process_id in opposite_target_process_ids:
+                        stripped_process_id = process_id.strip()
+                        if stripped_process_id:
+                            stripped_opposite_target_process_ids.append(stripped_process_id)
+
+                    if not len(stripped_opposite_target_process_ids):
+                        s = "" + error_message_prefix
+                        s += "Using 'Apply to targets' without opposite target process IDs"
+                        errors.append(s)
+                    else:
+                        # Check that source and target Process IDs are valid
+                        for target_opposite_process_id in stripped_opposite_target_process_ids:
+                            if target_opposite_process_id not in df_year_to_process_flows.columns:
+                                s = "" + error_message_prefix
+                                s += "Target opposite process ID ({}) does not exists".format(target_opposite_process_id)
+                                errors.append(s)
 
         return not errors, errors
 
