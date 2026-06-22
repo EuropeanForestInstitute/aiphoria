@@ -109,11 +109,7 @@ def get_path_to_output() -> str:
 
 
 def test_flowmodifiersolver():
-    use_cache = False
     path_to_scenario = get_path_to_reference_scenario()
-    path_to_output = get_path_to_output()
-
-    # Ignore openpyxl warning about Data validation extension support, we are not using that
     warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
 
     # Init Builder without cache and expect that the cache directory does not exists after running init_builder
@@ -123,35 +119,6 @@ def test_flowmodifiersolver():
 
     # Test FlowModifierSolver in "Unconstrained" mode
     scenarios = datachecker.build_scenarios()
-    # scenarios[1].model_params[ParameterName.ScenarioType] = ParameterScenarioType.Unconstrained
-    for scenario_index, scenario in enumerate(scenarios):
-        # NOTE: Baseline scenario is always the first element in the list
-        # and all the alternative scenarios (if any) are after that
-        if scenario_index == 0:
-            # Process baseline scenario
-            baseline_flow_solver = FlowSolver(scenario=scenario)
-            baseline_flow_solver.solve_timesteps()
-            scenario.flow_solver = baseline_flow_solver
-        else:
-            # Get and copy solved scenario data from baseline scenario flow solver
-            baseline_scenario_data = scenarios[0].flow_solver.get_solved_scenario_data()
-            scenario.copy_from_baseline_scenario_data(baseline_scenario_data)
-
-            # Solve this alternative scenario time steps
-            scenario_flow_solver = FlowSolver(scenario=scenario, reset_evaluated_values=False)
-            scenario_flow_solver.solve_timesteps()
-            scenario.flow_solver = scenario_flow_solver
-
-    # Build MFA systems for the scenarios
-    for scenario in scenarios:
-        scenario.mfa_system = build_mfa_system_for_scenario(scenario)
-
-    # Test FlowModifierSolver in "Constrained" mode
-    scenarios = datachecker.build_scenarios()
-    # scenarios[1].model_params[ParameterName.ScenarioType] = ParameterScenarioType.Constrained
-    # Test FlowModifierSolver in "Unconstrained" mode
-    scenarios = datachecker.build_scenarios()
-    # scenarios[1].model_params[ParameterName.ScenarioType] = ParameterScenarioType.Unconstrained
     for scenario_index, scenario in enumerate(scenarios):
         # NOTE: Baseline scenario is always the first element in the list
         # and all the alternative scenarios (if any) are after that
@@ -217,9 +184,6 @@ def test_flow_change_entry():
 
 def test_fms_unconstrained():
     path_to_scenario = get_path_to_fms_unconstrained_scenario()
-    path_to_output = get_path_to_output()
-
-    # Ignore openpyxl warning about Data validation extension support, we are not using that
     warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
 
     # Init Builder without cache and expect that the cache directory does not exists after running init_builder
@@ -227,7 +191,6 @@ def test_fms_unconstrained():
     datachecker = DataChecker(dataprovider)
     datachecker.check_for_errors()
 
-    # Test FlowModifierSolver in "Unconstrained" mode
     scenarios = datachecker.build_scenarios()
     for scenario_index, scenario in enumerate(scenarios):
         # NOTE: Baseline scenario is always the first element in the list
@@ -283,67 +246,68 @@ def test_fms_unconstrained_1():
 
 
 def test_fms_unconstrained_abs():
-    with pytest.raises(Exception) as ex_info:
-        path_to_scenario = get_path_to_fms_unconstrained_abs_scenario()
-        warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
-        dataprovider = DataProvider(path_to_scenario)
-        datachecker = DataChecker(dataprovider)
-        datachecker.check_for_errors()
+    # Do not expect Exceptions
+    path_to_scenario = get_path_to_fms_unconstrained_abs_scenario()
+    warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
+    dataprovider = DataProvider(path_to_scenario)
+    datachecker = DataChecker(dataprovider)
+    datachecker.check_for_errors()
 
-        scenarios = datachecker.build_scenarios()
-        for scenario_index, scenario in enumerate(scenarios):
-            # NOTE: Baseline scenario is always the first element in the list
-            # and all the alternative scenarios (if any) are after that
-            if scenario_index == 0:
-                # Process baseline scenario
-                baseline_flow_solver = FlowSolver(scenario=scenario)
-                baseline_flow_solver.solve_timesteps()
-                scenario.flow_solver = baseline_flow_solver
-            else:
-                # Get and copy solved scenario data from baseline scenario flow solver
-                baseline_scenario_data = scenarios[0].flow_solver.get_solved_scenario_data()
-                scenario.copy_from_baseline_scenario_data(baseline_scenario_data)
+    scenarios = datachecker.build_scenarios()
+    for scenario_index, scenario in enumerate(scenarios):
+        # NOTE: Baseline scenario is always the first element in the list
+        # and all the alternative scenarios (if any) are after that
+        if scenario_index == 0:
+            # Process baseline scenario
+            baseline_flow_solver = FlowSolver(scenario=scenario)
+            baseline_flow_solver.solve_timesteps()
+            scenario.flow_solver = baseline_flow_solver
+        else:
+            # Get and copy solved scenario data from baseline scenario flow solver
+            baseline_scenario_data = scenarios[0].flow_solver.get_solved_scenario_data()
+            scenario.copy_from_baseline_scenario_data(baseline_scenario_data)
 
-                # Solve this alternative scenario time steps
-                scenario_flow_solver = FlowSolver(scenario=scenario, reset_evaluated_values=False)
-                scenario_flow_solver.solve_timesteps()
-                scenario.flow_solver = scenario_flow_solver
+            # Solve this alternative scenario time steps
+            scenario_flow_solver = FlowSolver(scenario=scenario, reset_evaluated_values=False)
+            scenario_flow_solver.solve_timesteps()
+            scenario.flow_solver = scenario_flow_solver
 
-        # Build MFA systems for the scenarios
-        for scenario in scenarios:
-            scenario.mfa_system = build_mfa_system_for_scenario(scenario)
+    # Build MFA systems for the scenarios
+    for scenario in scenarios:
+        scenario.mfa_system = build_mfa_system_for_scenario(scenario)
 
 
 def test_fms_unconstrained_rel():
-    with pytest.raises(Exception) as ex_info:
-        path_to_scenario = get_path_to_fms_unconstrained_rel_scenario()
-        warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
-        dataprovider = DataProvider(path_to_scenario)
-        datachecker = DataChecker(dataprovider)
-        datachecker.check_for_errors()
+    # with pytest.raises(Exception) as ex_info:
 
-        scenarios = datachecker.build_scenarios()
-        for scenario_index, scenario in enumerate(scenarios):
-            # NOTE: Baseline scenario is always the first element in the list
-            # and all the alternative scenarios (if any) are after that
-            if scenario_index == 0:
-                # Process baseline scenario
-                baseline_flow_solver = FlowSolver(scenario=scenario)
-                baseline_flow_solver.solve_timesteps()
-                scenario.flow_solver = baseline_flow_solver
-            else:
-                # Get and copy solved scenario data from baseline scenario flow solver
-                baseline_scenario_data = scenarios[0].flow_solver.get_solved_scenario_data()
-                scenario.copy_from_baseline_scenario_data(baseline_scenario_data)
+    path_to_scenario = get_path_to_fms_unconstrained_rel_scenario()
+    warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
+    dataprovider = DataProvider(path_to_scenario)
+    datachecker = DataChecker(dataprovider)
+    datachecker.check_for_errors()
 
-                # Solve this alternative scenario time steps
-                scenario_flow_solver = FlowSolver(scenario=scenario, reset_evaluated_values=False)
-                scenario_flow_solver.solve_timesteps()
-                scenario.flow_solver = scenario_flow_solver
+    scenarios = datachecker.build_scenarios()
+    for scenario_index, scenario in enumerate(scenarios):
+        # NOTE: Baseline scenario is always the first element in the list
+        # and all the alternative scenarios (if any) are after that
+        if scenario_index == 0:
+            # Process baseline scenario
+            baseline_flow_solver = FlowSolver(scenario=scenario)
+            baseline_flow_solver.solve_timesteps()
+            scenario.flow_solver = baseline_flow_solver
+        else:
+            # Get and copy solved scenario data from baseline scenario flow solver
+            baseline_scenario_data = scenarios[0].flow_solver.get_solved_scenario_data()
+            scenario.copy_from_baseline_scenario_data(baseline_scenario_data)
 
-        # Build MFA systems for the scenarios
-        for scenario in scenarios:
-            scenario.mfa_system = build_mfa_system_for_scenario(scenario)
+            # Solve this alternative scenario time steps
+            scenario_flow_solver = FlowSolver(scenario=scenario, reset_evaluated_values=False)
+            scenario_flow_solver.solve_timesteps()
+            scenario.flow_solver = scenario_flow_solver
+
+    # Build MFA systems for the scenarios
+    for scenario in scenarios:
+        scenario.mfa_system = build_mfa_system_for_scenario(scenario)
 
 
 def test_fms_constrained():

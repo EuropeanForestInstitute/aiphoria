@@ -183,38 +183,42 @@ class FlowModifierSolver(object):
     def solve(self):
         if self._scenario_type == ParameterScenarioType.Unconstrained:
             log("Solving unconstrained scenario...")
-            ok, errors = self._solve_unconstrained_scenario()
+            ok, errors = self._solve_scenario(self._scenario_type)
             if not ok:
                 sys.stdout.flush()
                 log("Errors in unconstrained scenario:", level="error")
                 for error in errors:
                     print("\t" + error)
-                log("Unconstrained scenario contained errors, stopping now...", level="error")
+                log("Unconstrained scenario contained errors, continuing...", level="error")
 
+        # Apply flow modifiers but stop execution if there is errors
         if self._scenario_type == ParameterScenarioType.Constrained:
             log("Solving constrained scenario...")
-            ok, errors = self._solve_constrained_scenario()
+            ok, errors = self._solve_scenario(self._scenario_type)
             if not ok:
                 sys.stdout.flush()
                 log("Errors in constrained scenario:", level="error")
                 for error in errors:
                     print("\t" + error)
-                log("Unconstrained scenario contained errors, stopping now...", level="error")
-                raise Exception("Unconstrained scenario contained errors, stopping now...")
+                log("Constrained scenario contained errors, stopping now...", level="error")
+                raise Exception("Constrained scenario contained errors, stopping now...")
 
         log("Scenario solving done")
 
-    def _solve_unconstrained_scenario(self) -> Tuple[bool, List[str]]:
-        # ***************************************************************************
-        # * Solve unconstrained scenario                                            *
-        # * Introduces virtual flows if detecting that processes do not have enough *
-        # * outflows and does not stop execution                                    *
-        # ***************************************************************************
+    def _solve_scenario(self, scenario_type: ParameterScenarioType) -> Tuple[bool, List[str]]:
+        # ****************************************
+        # * In "Unconstrained" mode:             *
+        # * - do not stop if encountering error  *
+        # * - introduces virtual flows if needed *
+        # *                                      *
+        # * In "Constrained" mode:               *
+        # * - stop if encountering errors        *
+        # * - do not introduce virtual flows     *
+        # ****************************************
+
         errors: List[str] = []
         flow_solver: FlowSolver = self._flow_solver
         scenario: Scenario = self._flow_solver.get_scenario()
-
-        scenario_type = ParameterScenarioType.Unconstrained
         flow_solver._reset_evaluated_values = True
 
         # Evaluate new values for each flow modifier in the requested year range
@@ -237,7 +241,6 @@ class FlowModifierSolver(object):
         # checking what type of flow (absolute/relative) flow_modifier is targeting.
         # This is needed because the FlowModifiers only affect the same type of flows
         # as the source-to-target flow is.
-        has_errors = False
         for source_process_id, flow_modifier_indices in source_process_id_to_flow_modifier_indices.items():
             flow_modifier_indices_for_abs_flows = []
             flow_modifier_indices_for_rel_flows = []
@@ -291,10 +294,10 @@ class FlowModifierSolver(object):
                 scenario_type)
 
             # Check if target opposite flows or sibling flows have enough flows for the flow modifiers
-            self._check_flow_modifier_changes(flow_solver,
-                                              flow_modifier_indices,
-                                              flow_modifiers,
-                                              rel_changeset)
+            source_process_id_to_fmi_to_errors = self._check_flow_modifier_changes(flow_solver,
+                                                                                   flow_modifier_indices,
+                                                                                   flow_modifiers,
+                                                                                   rel_changeset)
 
             # *************************************************************
             # * Apply changesets (order: absolute flows, relative flows)  *
@@ -346,12 +349,10 @@ class FlowModifierSolver(object):
                         flow.evaluated_value = new_evaluated_value
                         flow.evaluated_share = new_evaluated_share
 
+            # Check for absolute flow errors
             if abs_flow_modifier_index_to_error_entry:
-                # Errors in absolute flows: Unpack error entries and show errors but do not stop execution
-                print("[Unconstrained scenario] Found issues in scenarios targeting absolute flows:")
-                has_errors = True
                 min_error_entry = None
-                flow_modifier_index: int
+                flow_modifier_index: int = -1
                 error_entry: FlowModifierSolver.FlowErrorEntry
                 for flow_modifier_index, error_entry in abs_flow_modifier_index_to_error_entry.items():
                     # Gather only total outflow errors
@@ -366,6 +367,7 @@ class FlowModifierSolver(object):
                         min_error_entry = error_entry
 
                 if min_error_entry:
+                    # Errors in absolute flows: Unpack error entries and show errors but do not stop execution
                     year = min_error_entry.year
                     total = min_error_entry.outflows_total
                     required = min_error_entry.outflows_required
@@ -379,18 +381,30 @@ class FlowModifierSolver(object):
                     s += "(total={}, required={}, missing={})".format(total, required, missing)
                     s += " "
                     s += "(row number {})".format(flow_modifier.row_number)
-                    print("\tERROR: {}".format(s))
+                    errors.append(s)
 
+                    fmi = min_error_entry.flow_modifier_index
+                    if source_process_id in source_process_id_to_fmi_to_errors:
+                        fmi_to_errors = source_process_id_to_fmi_to_errors[source_process_id]
+                        if fmi in fmi_to_errors:
+                            fmi_errors = fmi_to_errors[fmi]
+                            for err in fmi_errors:
+                                errors.append(err)
+
+            # Check for relative flow errors
             if rel_flow_modifier_index_to_error_entry:
-                # All flow modifiers in rel_flow_modifier_index_to_error_entry-map points to same source process ID
-                print("[Unconstrained scenario] Found issues in scenarios targeting relative flows:")
-                has_errors = True
                 min_error_entry = None
-                flow_modifier_index: int
+                flow_modifier_index: int = -1
                 error_entry: FlowModifierSolver.FlowErrorEntry
                 for flow_modifier_index, error_entry in rel_flow_modifier_index_to_error_entry.items():
-                    # Gather only total outflow errors
-                    if error_entry.error_type != FlowErrorType.NotEnoughTotalOutflows:
+                    # Skip to next if error is not a type of interest
+                    types_to_check = [
+                        FlowErrorType.NotEnoughTotalOutflows,
+                        FlowErrorType.NotEnoughOppositeFlowShares,
+                        FlowErrorType.NotEnoughSiblingFlowShares,
+                    ]
+                    if error_entry.error_type not in types_to_check:
+                        # In "Unconstrained" mode this will introduce virtual flows
                         continue
 
                     if not min_error_entry:
@@ -401,6 +415,7 @@ class FlowModifierSolver(object):
                         min_error_entry = error_entry
 
                 if min_error_entry:
+                    # All flow modifiers in rel_flow_modifier_index_to_error_entry-map points to same source process ID
                     year = min_error_entry.year
                     total = min_error_entry.outflows_total
                     required = min_error_entry.outflows_required
@@ -411,276 +426,146 @@ class FlowModifierSolver(object):
                     s += " "
                     s += "does not have enough outflows for relative flows in year {}".format(year)
                     s += " "
-                    s += "(total={}, required={}, missing={})".format(total, required, missing)
+                    s += "(total={:.3f}, required={:.3f}, missing={:.3f})".format(total, required, missing)
                     s += " "
                     s += "(row number {})".format(flow_modifier.row_number)
-                    print("\tERROR: {}".format(s))
+                    errors.append(s)
 
+                    fmi = min_error_entry.flow_modifier_index
+                    if source_process_id in source_process_id_to_fmi_to_errors:
+                        fmi_to_errors = source_process_id_to_fmi_to_errors[source_process_id]
+                        if fmi in fmi_to_errors:
+                            fmi_errors = fmi_to_errors[fmi]
+                            for err in fmi_errors:
+                                errors.append(err)
+
+                # Check for not enough opposite flow shares errors
                 for flow_modifier_index, error_entry in rel_flow_modifier_index_to_error_entry.items():
                     flow_modifier = flow_modifiers[flow_modifier_index]
-                    if error_entry.error_type is not FlowErrorType.NotEnoughOppositeFlowShares:
+                    if error_entry.error_type != FlowErrorType.NotEnoughOppositeFlowShares:
                         continue
 
                     error_data = error_entry.data
                     year = error_data["year"]
+
                     if flow_modifier.use_change_in_value:
-                        opposite_target_flow_ids = error_data["opposite_target_flow_ids"]
+                        # Relative flow, using delta change
+                        if flow_modifier.apply_to_targets:
+                            # Targets opposite / sibling flows
+                            opposite_target_flow_ids = error_data["opposite_target_flow_ids"]
+                            required_flow_shares = error_data["required_flow_shares"]  # share between [0, 1]
+                            available_flow_shares = error_data["available_flow_shares"]  # share between [0, 1]
 
-                        # required_flow_shares is flow share value between [0, 1]
-                        # available_flow_shares is flow share value between [0, 1]
-                        required_flow_shares = error_data["required_flow_shares"]
-                        available_flow_shares = error_data["available_flow_shares"]
+                            # Calculate maximum evaluated share for the flow modifier in range [0, 1]
+                            # and then convert maximum evaluated share to maximum possible change in value
+                            target_flow = flow_solver.get_flow(flow_modifier.target_flow_id, flow_modifier.start_year)
+                            start_year_evaluated_share = target_flow.evaluated_share
+                            max_evaluated_share = start_year_evaluated_share + available_flow_shares
+                            max_change_in_value = ((max_evaluated_share / start_year_evaluated_share) - 1) * 100.0
 
-                        # Calculate maximum evaluated share for the flow modifier in range [0, 1]
-                        # and then convert maximum evaluated share to maximum possible change in value
-                        target_flow = flow_solver.get_flow(flow_modifier.target_flow_id, flow_modifier.start_year)
-                        start_year_evaluated_share = target_flow.evaluated_share
-                        max_evaluated_share = start_year_evaluated_share + available_flow_shares
-                        max_change_in_value = ((max_evaluated_share / start_year_evaluated_share) - 1) * 100.0
+                            # Round value down so there value shown here is less than the absolute maximum value
+                            max_change_in_value -= 0.001
+                            s = "Flow modifier in row {} targets opposite flows that do not have enough flow shares".format(
+                                flow_modifier.row_number)
+                            s += " "
+                            s += "(required={}, available={}).".format(required_flow_shares * 100.0,
+                                                                       available_flow_shares * 100.0)
+                            s += " "
+                            s += "Maximum available change in value is {:.3f}%".format(max_change_in_value)
 
-                        # Round value down so there value shown here is less than the absolute maximum value
-                        max_change_in_value -= 0.001
-                        s = "Flow modifier in row {} targets opposite flows that do not have enough flow shares".format(
-                            flow_modifier.row_number)
-                        s += " "
-                        s += "(required={}, available={}).".format(required_flow_shares * 100.0,
-                                                                   available_flow_shares * 100.0)
-                        s += " "
-                        s += "Maximum available change in value is {:.3f}%".format(max_change_in_value)
-                        print("\tERROR: {}".format(s))
+                            errors.append(s)
+                        else:
+                            # Targets only source-to-target flows
+                            required_flow_shares = error_data["required_flow_shares"]    # share between [0, 1]
+                            available_flow_shares = error_data["available_flow_shares"]  # share between [0, 1]
+
+                            # Round value down so there value shown here is less than the absolute maximum value
+                            max_target_value = available_flow_shares * 100.0
+                            max_target_value -= 0.0001
+
+                            s = ""
+                            s += "Flow modifier in row {} targets opposite flows that do not have enough flow shares"
+                            s = s.format(flow_modifier.row_number)
+                            s += " "
+                            s += "(required={:.3f}, available={:.3f})."
+                            s = s.format(required_flow_shares * 100.0, available_flow_shares * 100.0)
+                            s += " "
+                            s += "Maximum available target value is {:.3f}%".format(max_target_value)
+
+                            errors.append(s)
+
+                            if self._scenario_type == ParameterScenarioType.Constrained:
+                                # Targeting only source-to-target flow in Constrained mode
+                                s = "Flow modifier in row {} cannot be applied in Constrained mode because "
+                                s += "virtual flows would be created"
+                                s = s.format(flow_modifier.row_number)
+                                errors.append(s)
+
                     else:
-                        print("TODO: Implement showing for error when using target value")
+                        # Relative flow, using target value
+                        if flow_modifier.apply_to_targets:
+                            # Targets opposite / sibling flows
+                            required_flow_shares = error_data["required_flow_shares"]    # share between [0, 1]
+                            available_flow_shares = error_data["available_flow_shares"]  # share between [0, 1]
 
-            if has_errors:
-                raise Exception("ERROR: Unconstrained scenario found breaking errors, stopping execution...")
+                            # Round value down so there value shown here is less than the absolute maximum value
+                            max_target_value = available_flow_shares * 100.0
+                            max_target_value -= 0.0001
+
+                            s = ""
+                            s += "Flow modifier in row {} targets opposite flows that do not have enough flow shares"
+                            s = s.format(flow_modifier.row_number)
+                            s += " "
+                            s += "(required={:.3f}, available={:.3f})."
+                            s = s.format(required_flow_shares * 100.0, available_flow_shares * 100.0)
+                            s += " "
+                            s += "Maximum available target value is {:.3f}%".format(max_target_value)
+                            log("Unexpected failure when checking flow modifier results, contact developer", level="error")
+                            raise Exception()
+                        else:
+                            # Targets only source-to-target flows
+                            required_flow_shares = error_data["required_flow_shares"]    # share between [0, 1]
+                            available_flow_shares = error_data["available_flow_shares"]  # share between [0, 1]
+
+                            # NOTE: If ended up here because of using Constant-function, show different error message
+                            if self._scenario_type == ParameterScenarioType.Constrained:
+                                if required_flow_shares > 1.0:
+                                    # Pop previous error message so that the message is consistent
+                                    # The error message starts with "Process 'Middle:FI' does not have enough ..."
+                                    errors.pop(-1)
+
+                                    s = ""
+                                    s += "Flow modifier in row {} targets flow without applying opposite changes "
+                                    s = s.format(flow_modifier.row_number)
+                                    s += "to target flows. This causes the process {} total relative outflows to go "
+                                    s += "over 100% which would create virtual flows in Constrained-mode."
+                                    s = s.format(source_process_id)
+                                    errors.append(s)
+                                    continue
+
+                            # Round value down so there value shown here is less than the absolute maximum value
+                            max_target_value = available_flow_shares * 100.0
+                            max_target_value -= 0.0001
+
+                            s = ""
+                            s += "Flow modifier in row {} targets opposite flows that do not have enough flow shares"
+                            s = s.format(flow_modifier.row_number)
+                            s += " "
+                            s += "(required={:.3f}, available={:.3f})."
+                            s = s.format(required_flow_shares * 100.0, available_flow_shares * 100.0)
+                            s += " "
+                            s += "Maximum available target value is {:.3f}%".format(max_target_value)
+
+                            errors.append(s)
 
         # Recalculate process inflows/outflows
-        self._recalculate_relative_flow_evaluated_shares(flow_solver)
+        errors += self._recalculate_relative_flow_evaluated_shares(flow_solver, flow_modifiers)
 
         # Check if flow modifiers caused negative flows to target opposite flows
         errors += self._check_flow_modifier_results(flow_solver, flow_modifiers)
 
         # Clamp all flows to minimum of 0.0 to introduce virtual flows
         flow_solver.clamp_flow_values_below_zero()
-
-        return not errors, errors
-
-    def _solve_constrained_scenario(self) -> Tuple[bool, List[str]]:
-        # ********************************************************************************
-        # * Solve constrained scenario                                                   *
-        # * Difference to unconstrained scenario is that no virtual flows are introduced *
-        # * and execution stops if errors are found                                      *
-        # ********************************************************************************
-        errors: List[str] = []
-        flow_solver: FlowSolver = self._flow_solver
-        scenario: Scenario = self._flow_solver.get_scenario()
-
-        scenario_type = ParameterScenarioType.Constrained
-        flow_solver._reset_evaluated_values = True
-
-        # Evaluate new values for each flow modifier in the requested year range
-        # and group flow modifiers by source process ID. This is needed when multiple
-        # flow modifiers are affecting the same source process.
-        source_process_id_to_flow_modifier_indices = {}
-        flow_modifier_index_to_new_values = {}
-        flow_modifier_index_to_new_offsets = {}
-        flow_modifiers = scenario.scenario_definition.flow_modifiers
-        for flow_modifier_index, flow_modifier in enumerate(flow_modifiers):
-            new_values, new_offsets = self._calculate_new_flow_values(flow_modifier)
-            flow_modifier_index_to_new_values[flow_modifier_index] = new_values
-            flow_modifier_index_to_new_offsets[flow_modifier_index] = new_offsets
-            source_process_id = flow_modifier.source_process_id
-            if source_process_id not in source_process_id_to_flow_modifier_indices:
-                source_process_id_to_flow_modifier_indices[source_process_id] = []
-            source_process_id_to_flow_modifier_indices[source_process_id].append(flow_modifier_index)
-
-        # Separate into entries that affect relative and absolute flows by
-        # checking what type of flow (absolute/relative) flow_modifier is targeting.
-        # This is needed because the FlowModifiers only affect the same type of flows
-        # as the source-to-target flow is.
-        has_errors = False
-        for source_process_id, flow_modifier_indices in source_process_id_to_flow_modifier_indices.items():
-            flow_modifier_indices_for_abs_flows = []
-            flow_modifier_indices_for_rel_flows = []
-            for flow_modifier_index in flow_modifier_indices:
-                flow_modifier = flow_modifiers[flow_modifier_index]
-                flow = flow_solver.get_flow(flow_modifier.target_flow_id, flow_modifier.start_year)
-                if flow.is_unit_absolute_value:
-                    flow_modifier_indices_for_abs_flows.append(flow_modifier_index)
-                else:
-                    flow_modifier_indices_for_rel_flows.append(flow_modifier_index)
-
-            # Cache process total absolute and relative outflows for every year
-            # before any changes applied. This is used when recalculating new flow share
-            year_to_total_outflows_abs = {}
-            year_to_total_outflows_rel = {}
-            for year in scenario.scenario_data.years:
-                # NOTE: Every year might not contain all process IDs to skip those years
-                has_total_abs = False
-                has_total_rel = False
-                try:
-                    year_to_total_outflows_abs[year] = flow_solver.get_process_outflows_total_abs(source_process_id, year)
-                    has_total_abs = True
-                except KeyError:
-                    pass
-                try:
-                    year_to_total_outflows_rel[year] = flow_solver.get_process_outflows_total_rel(source_process_id, year)
-                    has_total_rel = True
-                except KeyError:
-                    pass
-
-                if not has_total_abs and not has_total_rel:
-                    continue
-
-            # Solve absolute flows and relative flows independently
-            abs_flow_modifier_index_to_error_entry, abs_changeset = self._process_absolute_flows(
-                source_process_id,
-                flow_solver,
-                flow_modifier_indices_for_abs_flows,
-                flow_modifiers,
-                flow_modifier_index_to_new_values,
-                flow_modifier_index_to_new_offsets,
-                scenario_type)
-
-            rel_flow_modifier_index_to_error_entry, rel_changeset = self._process_relative_flows(
-                source_process_id,
-                flow_solver,
-                flow_modifier_indices_for_rel_flows,
-                flow_modifiers,
-                flow_modifier_index_to_new_values,
-                flow_modifier_index_to_new_offsets,
-                scenario_type)
-
-            # *************************************************************
-            # * Apply changesets (order: absolute flows, relative flows)  *
-            # * This order is needed because relative flow values depends *
-            # * on the remaining process outflows after applying absolute *
-            # * flows values                                              *
-            # *************************************************************
-            # Apply changes targeting absolute flows
-            for flow_modifier_index, changeset in abs_changeset.items():
-                flow_modifier = flow_modifiers[flow_modifier_index]
-                entry: FlowModifierSolver.FlowChangeEntry
-                for entry in changeset:
-                    flow = flow_solver.get_flow(entry.flow_id, entry.year)
-                    if flow.id == flow_modifier.target_flow_id:
-                        # Apply calculated changes to source-to-target flow
-                        # This is because that entry is always first in the list
-                        # Overwrites the flow value
-                        flow.value = entry.value
-                        flow.evaluated_value = entry.evaluated_value
-                        flow.evaluated_share = entry.evaluated_share
-                    else:
-                        # Apply calculated offset to evaluated value, these are all sibling flows
-                        # or the target opposite flows
-                        flow.value += entry.evaluated_offset
-                        flow.evaluated_value += entry.evaluated_offset
-
-            # Apply changes targeting relative flows
-            for flow_modifier_index, changeset in rel_changeset.items():
-                flow_modifier = flow_modifiers[flow_modifier_index]
-                entry: FlowModifierSolver.FlowChangeEntry
-                for entry in changeset:
-                    flow = flow_solver.get_flow(entry.flow_id, entry.year)
-                    if flow.id == flow_modifier.target_flow_id:
-                        # Apply calculated changes to source-to-target flow
-                        # This is because that entry is always first in the list
-                        # Overwrites the flow share
-                        flow.value = entry.value
-                        flow.evaluated_value = entry.evaluated_value
-                        flow.evaluated_share = entry.evaluated_share
-                    else:
-                        # Apply calculated offset to evaluated value, these are all sibling flows
-                        # or the target opposite flows
-                        total_outflows_rel = year_to_total_outflows_rel[entry.year]
-                        new_evaluated_value = flow.evaluated_value + entry.evaluated_offset
-                        new_value = new_evaluated_value / total_outflows_rel * 100.0
-                        new_evaluated_share = new_value / 100.0
-
-                        flow.value += entry.evaluated_share_offset
-                        flow.evaluated_value = new_evaluated_value
-                        flow.evaluated_share = new_evaluated_share
-
-            if abs_flow_modifier_index_to_error_entry:
-                # Errors in absolute flows: Unpack error entries and show errors but do not stop execution
-                print("[Constrained scenario] Found issues in scenarios targeting absolute flows:")
-                has_errors = True
-                min_error_entry = None
-                flow_modifier_index: int
-                error_entry: FlowModifierSolver.FlowErrorEntry
-                for flow_modifier_index, error_entry in abs_flow_modifier_index_to_error_entry.items():
-                    # Gather only total outflow errors
-                    if not error_entry.error_type == FlowErrorType.NotEnoughTotalOutflows:
-                        continue
-
-                    if not min_error_entry:
-                        min_error_entry = error_entry
-                        continue
-
-                    if error_entry.outflows_missing < min_error_entry.outflows_missing:
-                        min_error_entry = error_entry
-
-                if min_error_entry:
-                    year = min_error_entry.year
-                    total = min_error_entry.outflows_total
-                    required = min_error_entry.outflows_required
-                    missing = min_error_entry.outflows_missing
-                    flow_modifier = flow_modifiers[min_error_entry.flow_modifier_index]
-
-                    s = "Process '{}'".format(source_process_id)
-                    s += " "
-                    s += "does not have enough outflows for absolute flows in year {}".format(year)
-                    s += " "
-                    s += "(total={}, required={}, missing={})".format(total, required, missing)
-                    s += " "
-                    s += "(row number {})".format(flow_modifier.row_number)
-                    print("\tERROR: {}".format(s))
-
-            if rel_flow_modifier_index_to_error_entry:
-                # All flow modifiers in rel_flow_modifier_index_to_error_entry-map points to same source process ID
-                print("[Constrained scenario] Found issues in scenarios targeting relative flows:")
-                has_errors = True
-                min_error_entry = None
-                flow_modifier_index: int
-                error_entry: FlowModifierSolver.FlowErrorEntry
-                for flow_modifier_index, error_entry in rel_flow_modifier_index_to_error_entry.items():
-                    # Gather only total outflow errors
-                    if not error_entry.error_type == FlowErrorType.NotEnoughTotalOutflows:
-                        continue
-
-                    if not min_error_entry:
-                        min_error_entry = error_entry
-                        continue
-
-                    if error_entry.outflows_missing < min_error_entry.outflows_missing:
-                        min_error_entry = error_entry
-
-                if min_error_entry:
-                    year = min_error_entry.year
-                    total = min_error_entry.outflows_total
-                    required = min_error_entry.outflows_required
-                    missing = min_error_entry.outflows_missing
-                    flow_modifier = flow_modifiers[min_error_entry.flow_modifier_index]
-
-                    s = "Process '{}'".format(source_process_id)
-                    s += " "
-                    s += "does not have enough outflows for relative flows in year {}".format(year)
-                    s += " "
-                    s += "(total={}, required={}, missing={})".format(total, required, missing)
-                    s += " "
-                    s += "(row number {})".format(flow_modifier.row_number)
-                    print("\tERROR: {}".format(s))
-
-        if has_errors:
-            # Stop execution of constrained solver
-            log("Errors in Constrained scenario solver, stopping execution...", level="error")
-            raise Exception("Errors in Constrained scenario solver, stopping execution...")
-
-        # Recalculate process inflows/outflows
-        self._recalculate_relative_flow_evaluated_shares(flow_solver)
-
-        # Check if flow modifiers caused negative flows to target opposite flows
-        errors += self._check_flow_modifier_results(flow_solver, flow_modifiers)
 
         return not errors, errors
 
@@ -1047,6 +932,48 @@ class FlowModifierSolver(object):
             new_values_offset = flow_modifier_index_to_new_values_offset[flow_modifier_index]
             new_values_actual = flow_modifier_index_to_new_values_actual[flow_modifier_index]
 
+            # Check that there is enough process relative outflows to cover the source-to-target flow modification
+            if not flow_modifier.apply_to_targets:
+                for year_index, year in enumerate(flow_modifier.get_year_range()):
+                    # Get available total sibling share for this year in [0, 100] % share range
+                    sibling_flows = self._get_process_outflow_siblings(flow_modifier.source_process_id,
+                                                                       flow_modifier.target_flow_id,
+                                                                       year,
+                                                                       only_same_type=True)
+
+                    sibling_flow_shares = 0.0
+                    for flow in sibling_flows:
+                        sibling_flow_shares += flow.evaluated_share
+
+                    # Calculate total relative outflows, including the source-to-target flow share
+                    available_flow_shares = sibling_flow_shares
+                    required_flow_shares = (new_values_actual[year_index] / 100.0) + sibling_flow_shares
+                    if required_flow_shares > 1.0:
+                        # Total relative outflows exceeds 100 %, notify about error
+                        outflows_total = year_to_process_total_outflows[year]
+                        outflows_required = year_to_total_outflows_required[year]
+                        data = {
+                            "year": year,
+                            "opposite_target_flow_ids": [],
+                            "required_flow_shares": required_flow_shares,
+                            "available_flow_shares": available_flow_shares,
+                        }
+
+                        # Create new error entry
+                        new_error_entry = FlowModifierSolver.FlowErrorEntry(year,
+                                                                            outflows_total,
+                                                                            outflows_required,
+                                                                            flow_modifier_index,
+                                                                            # Either:
+                                                                            # FlowErrorType.NotEnoughOppositeFlowShares,
+                                                                            # or:
+                                                                            FlowErrorType.NotEnoughOppositeFlowShares,
+                                                                            data,
+                                                                            )
+
+                        flow_modifier_index_to_error_entry[flow_modifier_index] = new_error_entry
+                        continue
+
             # Check if target opposite flows have enough flow share to fulfill the target flow change
             if flow_modifier.has_opposite_targets:
                 opposite_target_flow_ids = flow_modifier.get_opposite_target_flow_ids()
@@ -1066,6 +993,7 @@ class FlowModifierSolver(object):
                 for year_index, year in enumerate(flow_modifier.get_year_range()):
                     required_flow_shares = year_to_required_flow_share[year]
                     available_sibling_flow_shares = year_to_available_flow_shares[year]
+
                     if required_flow_shares > available_sibling_flow_shares:
                         outflows_total = year_to_process_total_outflows[year]
                         outflows_required = year_to_total_outflows_required[year]
@@ -1086,7 +1014,6 @@ class FlowModifierSolver(object):
                                                                             )
 
                         flow_modifier_index_to_error_entry[flow_modifier_index] = new_error_entry
-
             else:
                 # Check if all sibling flows have enough flow share to fulfill the target flow change
                 year_to_required_flow_share = {}
@@ -1109,6 +1036,7 @@ class FlowModifierSolver(object):
                 for year_index, year in enumerate(flow_modifier.get_year_range()):
                     required_flow_shares = year_to_required_flow_share[year]
                     available_flow_shares = year_to_available_flow_shares[year]
+
                     if required_flow_shares > available_flow_shares:
                         outflows_total = year_to_process_total_outflows[year]
                         outflows_required = year_to_total_outflows_required[year]
@@ -1129,11 +1057,7 @@ class FlowModifierSolver(object):
 
                         flow_modifier_index_to_error_entry[flow_modifier_index] = new_error_entry
 
-        # Exit early if there is errors
-        if scenario_type == ParameterScenarioType.Constrained and flow_modifier_index_to_error_entry:
-            return flow_modifier_index_to_error_entry, flow_modifier_index_to_changeset
-
-        # Apply changes to source to target flows
+        # Apply changes to source-to-target flows
         year_to_total_outflows_required = {}
         for flow_modifier_index in flow_modifier_indices:
             flow_modifier = flow_modifiers[flow_modifier_index]
@@ -1441,13 +1365,11 @@ class FlowModifierSolver(object):
         :param flow_modifiers: List of FlowModifiers
         :return: List of errors (empty list == no errors)
         """
+        assert(flow_solver is not None)
         errors = []
 
         if flow_modifiers is None:
             flow_modifiers = []
-
-        if not flow_solver:
-            raise Exception("Parameter flow_solver is None, check calling code")
 
         # Check that all flows that are affected by the flow modifiers have evaluated value >= 0.0
         # This could be caused by flow modifier that has opposite target flows that do not have enough flow
@@ -1467,9 +1389,6 @@ class FlowModifierSolver(object):
 
                 if flow_modifier.has_opposite_targets:
                     # # Get list of all opposite flow IDs
-                    # for target_process_id in flow_modifier.opposite_target_process_ids:
-                    #     opposite_flow_id = Flow.make_flow_id(flow_modifier.source_process_id, target_process_id)
-                    #     affected_flow_ids.append(opposite_flow_id)
                     affected_flow_ids += flow_modifier.get_opposite_target_flow_ids()
                 else:
                     # Get list of all same type sibling flows and unpack as flow IDs
@@ -1505,37 +1424,40 @@ class FlowModifierSolver(object):
                 if not negative_flows:
                     continue
 
+                # NOTE: Should show information about target opposite / sibling flows?
+                # target_flow_type = "opposite" if flow_modifier.has_opposite_targets else "sibling"
+                target_flow_type = "opposite"
+
                 # Find entry with the smallest value
                 min_year_entry = min(negative_flows, key=lambda x: x[1])
-                s = "Flow modifier in row {} targets opposite flows that do not have enough flows. ".format(
-                    flow_modifier.row_number)
+                s = ""
+                s += "Flow modifier in row {} targets {} flows that do not have enough flows. ".format(
+                    flow_modifier.row_number, target_flow_type)
                 s += "This caused negative flow (evaluated value={}) for flow '{}' in year {}".format(
                     min_year_entry[1], affected_flow_id, min_year_entry[0])
                 errors.append(s)
 
-        # Using flow modifier solver with apply to targets = False can
-        # make total relative outflows over 100%
-        process_id_to_errors = {}
-        total_rel_outflow_tolerance = 0.01
-        for flow_modifier_index, flow_modifier in enumerate(flow_modifiers):
-            source_process_id = flow_modifier.source_process_id
-            for year in flow_modifier.get_year_range():
-                outflows = flow_solver.get_process_outflows(source_process_id, year)
-                total_outflows_rel = 0.0
-                for flow in outflows:
-                    if not flow.is_unit_absolute_value:
-                        total_outflows_rel += flow.evaluated_share
-
-                if total_outflows_rel > (1.0 + total_rel_outflow_tolerance):
-                    s = "Flow modifier in row {} targeting flow {} causes the total relative outflows"
-                    s += " of source process '{}' to become over 100% in year {} (evaluated share = {:.3f}%)"
-                    s = s.format(flow_modifier.row_number,
-                                 flow_modifier.target_flow_id,
-                                 flow_modifier.source_process_id,
-                                 year,
-                                 (total_outflows_rel * 100.0)
-                                 )
-                    errors.append(s)
+        # # Using flow modifier with "Apply to targets" == False can make total relative outflows over 100%
+        # total_rel_outflow_tolerance = 0.01
+        # for flow_modifier_index, flow_modifier in enumerate(flow_modifiers):
+        #     source_process_id = flow_modifier.source_process_id
+        #     for year in flow_modifier.get_year_range():
+        #         outflows = flow_solver.get_process_outflows(source_process_id, year)
+        #         total_outflows_rel = 0.0
+        #         for flow in outflows:
+        #             if not flow.is_unit_absolute_value:
+        #                 total_outflows_rel += flow.evaluated_share
+        #
+        #         if total_outflows_rel > (1.0 + total_rel_outflow_tolerance):
+        #             s = "Flow modifier in row {} targeting flow {} causes the total relative outflows"
+        #             s += " of source process '{}' to become over 100% in year {} (evaluated share = {:.3f}%)"
+        #             s = s.format(flow_modifier.row_number,
+        #                          flow_modifier.target_flow_id,
+        #                          flow_modifier.source_process_id,
+        #                          year,
+        #                          (total_outflows_rel * 100.0)
+        #                          )
+        #             errors.append(s)
 
         return errors
 
@@ -1543,7 +1465,7 @@ class FlowModifierSolver(object):
                                      flow_solver: FlowSolver,
                                      flow_modifier_indices: List[int],
                                      flow_modifiers: List[FlowModifier],
-                                     flow_change_entries: Dict[int, List[FlowChangeEntry]]):
+                                     flow_change_entries: Dict[int, List[FlowChangeEntry]]) -> Dict[str, Dict[int, List[str]]]:
         """
         Check if flow modifier changes can be done.
         Checks that:
@@ -1553,7 +1475,10 @@ class FlowModifierSolver(object):
         :param flow_modifier_indices: List of flow modifier indices
         :param flow_modifiers: List of all FlowModifiers
         :param flow_change_entries: Flow modification changeset
+
+        :return: Dictionary (Source Process ID -> Dictionary(flow modifier index -> List of errors (string)) )
         """
+        source_process_id_to_fmi_to_errors = {}
 
         # Get available flow share for every flow modifier source process
         source_process_id_to_year_to_flow_id_to_available_share = {}
@@ -1564,6 +1489,28 @@ class FlowModifierSolver(object):
             if source_process_id not in source_process_id_to_year_to_flow_id_to_available_share:
                 source_process_id_to_year_to_flow_id_to_available_share[source_process_id] = {}
             year_to_flow_id_to_available_share = source_process_id_to_year_to_flow_id_to_available_share[source_process_id]
+
+            # NOTE: Skip applying changes to target flows (either siblings or target opposite flows) if set
+            if not flow_modifier.apply_to_targets:
+                # Check if total outflows rel are less than 100% if using Constrained-mode because
+                # this would cause creation of virtual flows
+                if self._scenario_type == ParameterScenarioType.Constrained:
+                    has_error = False
+                    for year in flow_modifier.get_year_range():
+                        total_outflows_rel = flow_solver.get_process_outflows_total_rel(source_process_id, year)
+                        if total_outflows_rel < 100.0:
+                            has_error = True
+
+                    if has_error:
+                        if source_process_id not in source_process_id_to_fmi_to_errors:
+                            source_process_id_to_fmi_to_errors[source_process_id] = {}
+                        fmi_to_errors = source_process_id_to_fmi_to_errors[source_process_id]
+                        if flow_modifier_index not in fmi_to_errors:
+                            fmi_to_errors[flow_modifier_index] = []
+
+                        fmi_to_errors[flow_modifier_index].append("12")
+
+                continue
 
             if flow_modifier.has_opposite_targets:
                 for year in flow_modifier.get_year_range():
@@ -1591,6 +1538,7 @@ class FlowModifierSolver(object):
                                                                        only_same_type=True
                                                                        )
 
+                    # NOTE: flow_id_to_available_flow_share will be empty if there is no sibling flows
                     for flow in sibling_flows:
                         flow_id = flow.id
                         if flow_id in flow_id_to_to_available_flow_share:
@@ -1657,6 +1605,8 @@ class FlowModifierSolver(object):
             # NOTE: If targeting absolute flow that has no other absolute sibling flows then
             # source_process_id_to_year_to_required_flow_offset does not contain the key
             # so this is needed
+            # NOTE: If targeting relative flow that has no other relative sibling flows then
+            # source_process_id_to_year_to_required_flow_offset does not contain the key
             if source_process_id not in source_process_id_to_year_to_available_flow_share:
                 continue
 
@@ -1668,7 +1618,17 @@ class FlowModifierSolver(object):
 
             for year in year_to_available_flow_share.keys():
                 available_flow_share = year_to_available_flow_share[year]
-                required_flow_offset = year_to_required_flow_offset[year]
+
+                required_flow_offset = 0.0
+                if year not in year_to_required_flow_offset:
+                    # Targeting the only absolute/relative outflow of the process so there is not enough outflows
+                    # which causes virtual flows to appear. This should not happen in Constrained-mode
+                    error_entry = [source_process_id, year, required_flow_offset, available_flow_share]
+                    if source_process_id not in source_process_id_to_error_entries:
+                        source_process_id_to_error_entries[source_process_id] = []
+                    error_entries = source_process_id_to_error_entries[source_process_id]
+                    error_entries.append(error_entry)
+                    continue
 
                 if required_flow_offset > 0.0:
                     continue
@@ -1679,6 +1639,20 @@ class FlowModifierSolver(object):
                         source_process_id_to_error_entries[source_process_id] = []
                     error_entries = source_process_id_to_error_entries[source_process_id]
                     error_entries.append(error_entry)
+
+                # OlD IMPLEMENTATION
+                # available_flow_share = year_to_available_flow_share[year]
+                # required_flow_offset = year_to_required_flow_offset[year]
+                #
+                # if required_flow_offset > 0.0:
+                #     continue
+                #
+                # if available_flow_share < abs(required_flow_offset):
+                #     error_entry = [source_process_id, year, required_flow_offset, available_flow_share]
+                #     if source_process_id not in source_process_id_to_error_entries:
+                #         source_process_id_to_error_entries[source_process_id] = []
+                #     error_entries = source_process_id_to_error_entries[source_process_id]
+                #     error_entries.append(error_entry)
 
         # Check all error entries for source processes
         for source_process_id, error_entries in source_process_id_to_error_entries.items():
@@ -1719,21 +1693,57 @@ class FlowModifierSolver(object):
                 end_value = start_value + (maximum_flow_share * fmi_to_share[fmi])
                 fmi_to_max_change_in_value[fmi] = ((end_value / start_value) - 1.0) * 100.0
 
-            print("Adjust the following flow modifiers that affect the source process {}".format(source_process_id))
-            for fmi in local_flow_modifier_indices:
-                flow_modifier = flow_modifiers[fmi]
-                max_change_in_value = fmi_to_max_change_in_value[fmi] - 0.001
-                print("- Maximum change in value for flow modifier in row {} is {:.3f} %".format(
-                    flow_modifier.row_number, max_change_in_value))
+            if source_process_id not in source_process_id_to_fmi_to_errors:
+                source_process_id_to_fmi_to_errors[source_process_id] = {}
+            fmi_to_errors = source_process_id_to_fmi_to_errors[source_process_id]
 
-    def _recalculate_relative_flow_evaluated_shares(self, flow_solver: FlowSolver):
+            for fmi in local_flow_modifier_indices:
+                if fmi not in fmi_to_errors:
+                    fmi_to_errors[fmi] = []
+
+                    s = "Adjust the following flow modifiers that affect the source process {}"
+                    s = s.format(source_process_id)
+                    fmi_to_errors[fmi].append(s)
+
+                flow_modifier = flow_modifiers[fmi]
+                max_change_in_value = fmi_to_max_change_in_value[fmi]
+                max_change_in_value -= - 0.0001
+
+                s = "- Maximum change in value for flow modifier in row {} is {:.3f} %"
+                s = s.format(flow_modifier.row_number, max_change_in_value)
+                fmi_to_errors[fmi].append(s)
+
+                # Show more details error when virtual flows would be introduced in Constrained-mode
+                if self._scenario_type == ParameterScenarioType.Constrained:
+                    s = "Applying this flow modifier (row number {}) would cause virtual flows, not allowed when using Constrained"
+                    s = s.format(flow_modifier.row_number)
+                    fmi_to_errors[fmi].append(s)
+
+        return source_process_id_to_fmi_to_errors
+
+    def _recalculate_relative_flow_evaluated_shares(self,
+                                                    flow_solver: FlowSolver,
+                                                    flow_modifiers: List[FlowModifier] | None) -> List[str]:
         """
         Recalculates flow shares after applying flow modifiers.
 
         :param flow_solver: Target FlowSolver
-        :param flow_modifiers: List of FlowModifers
-        :return: None
+        :param flow_modifiers: List of FlowModifiers
+        :return: List of errors (list of strings)
         """
+        errors = []
+        if flow_modifiers is None:
+            flow_modifiers = []
+
+        # Map process IDs to list of flow modifiers
+        process_id_to_flow_modifiers = {}
+        flow_modifier: FlowModifier | None = None
+        for flow_modifier in flow_modifiers:
+            source_process_id = flow_modifier.source_process_id
+            if source_process_id not in process_id_to_flow_modifiers:
+                process_id_to_flow_modifiers[source_process_id] = []
+            process_id_to_flow_modifiers[source_process_id].append(flow_modifier)
+
         # Recalculate all relative flow shares
         year_to_process_to_flows = flow_solver.get_year_to_process_to_flows()
         for year, process_to_flows in year_to_process_to_flows.items():
@@ -1752,5 +1762,23 @@ class FlowModifierSolver(object):
                 if total_outflows_rel <= 0.0:
                     continue
 
+                # # Check if the process:
+                # # - is not using apply to targets (= affect only source-to-target flow, "Apply to targets" == False)
+                # # - is source of the flow
+                # if total_outflows_rel > 100.0:
+                #     if process_id in process_id_to_flow_modifiers:
+                #         local_flow_modifiers = process_id_to_flow_modifiers[process_id]
+                #         flow_modifier: FlowModifier | None = None
+                #         for flow_modifier in local_flow_modifiers:
+                #             if flow_modifier.apply_to_targets:
+                #                 continue
+                #
+                #             # Now we have situation where process ID is the source of the source-to-target flow
+                #             # of the flow modifier and were are not applying the change to opposite/sibling flows
+                #             errors.append("THIS IS ERROR, YOU SHOULD SEE THIS")
+                #             continue
+
                 for flow in outflows_rel:
                     flow.evaluated_share = flow.evaluated_value / total_outflows_rel
+
+        return errors

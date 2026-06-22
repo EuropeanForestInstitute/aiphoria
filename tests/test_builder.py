@@ -25,24 +25,20 @@ def get_path_to_output() -> str:
 
 
 def test_init_builder_no_use_cache():
-    use_cache = False
     path_to_scenario = get_path_to_reference_scenario()
     path_to_output = get_path_to_output()
-
-    # Ignore openpyxl warning about Data validation extension support, we are not using that
     warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
 
     # Init Builder without cache and expect that the cache directory does not exists after running init_builder
     path_to_cache = os.path.join(os.path.abspath("."), "tests", "test_cache")
-    init_builder(path_to_cache=path_to_cache, use_cache=use_cache, use_timing=False, clear_cache=True)
+    init_builder(path_to_cache=path_to_cache, use_cache=False, use_timing=False, clear_cache=True)
     assert not os.path.exists(path_to_cache)
 
-    dataprovider = build_dataprovider(path_to_scenario, use_cache=use_cache)
-    datachecker = build_datachecker(dataprovider, use_cache=use_cache)
-    scenarios = build_and_solve_scenarios(datachecker, use_cache=use_cache)
+    dataprovider = build_dataprovider(path_to_scenario, use_cache=False)
+    datachecker = build_datachecker(dataprovider, use_cache=False)
+    scenarios = build_and_solve_scenarios(datachecker, use_cache=False)
 
-    model_params, scenarios, color_defs = build_results(path_to_scenario,
-                                                        path_to_output_dir=path_to_output)
+    model_params, scenarios, color_defs = build_results(path_to_scenario, path_to_output_dir=path_to_output)
 
 
 def test_init_builder_use_cache():

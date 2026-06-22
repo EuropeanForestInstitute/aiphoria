@@ -39,32 +39,32 @@ def get_path_to_output() -> str:
 
 
 def test_flowsolver():
+    # Do not expect Exception
     path_to_scenario = get_path_to_flowsolver_scenario()
     warnings.filterwarnings(action="ignore", category=UserWarning, module="openpyxl")
     dataprovider = DataProvider(path_to_scenario)
     datachecker = DataChecker(dataprovider)
     datachecker.check_for_errors()
 
-    with pytest.raises(Exception) as ex_info:
-        scenarios = datachecker.build_scenarios()
-        for scenario_index, scenario in enumerate(scenarios):
-            if scenario_index == 0:
-                baseline_flow_solver = FlowSolver(scenario=scenario)
-                baseline_flow_solver.solve_timesteps()
-                scenario.flow_solver = baseline_flow_solver
-            else:
-                # Get and copy solved scenario data from baseline scenario flow solver
-                baseline_scenario_data = scenarios[0].flow_solver.get_solved_scenario_data()
-                scenario.copy_from_baseline_scenario_data(baseline_scenario_data)
+    scenarios = datachecker.build_scenarios()
+    for scenario_index, scenario in enumerate(scenarios):
+        if scenario_index == 0:
+            baseline_flow_solver = FlowSolver(scenario=scenario)
+            baseline_flow_solver.solve_timesteps()
+            scenario.flow_solver = baseline_flow_solver
+        else:
+            # Get and copy solved scenario data from baseline scenario flow solver
+            baseline_scenario_data = scenarios[0].flow_solver.get_solved_scenario_data()
+            scenario.copy_from_baseline_scenario_data(baseline_scenario_data)
 
-                # Solve this alternative scenario time steps
-                scenario_flow_solver = FlowSolver(scenario=scenario, reset_evaluated_values=False)
-                scenario_flow_solver.solve_timesteps()
-                scenario.flow_solver = scenario_flow_solver
+            # Solve this alternative scenario time steps
+            scenario_flow_solver = FlowSolver(scenario=scenario, reset_evaluated_values=False)
+            scenario_flow_solver.solve_timesteps()
+            scenario.flow_solver = scenario_flow_solver
 
-        # Build MFA systems for the scenarios
-        for scenario in scenarios:
-            scenario.mfa_system = build_mfa_system_for_scenario(scenario)
+    # Build MFA systems for the scenarios
+    for scenario in scenarios:
+        scenario.mfa_system = build_mfa_system_for_scenario(scenario)
 
 
 def test_flowsolver_virtual_flows():

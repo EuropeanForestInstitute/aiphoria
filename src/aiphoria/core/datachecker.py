@@ -1763,11 +1763,7 @@ class DataChecker(object):
                         if stripped_process_id:
                             stripped_opposite_target_process_ids.append(stripped_process_id)
 
-                    if not len(stripped_opposite_target_process_ids):
-                        s = "" + error_message_prefix
-                        s += "Using 'Apply to targets' without opposite target process IDs"
-                        errors.append(s)
-                    else:
+                    if len(stripped_opposite_target_process_ids):
                         # Check that source and target Process IDs are valid
                         for target_opposite_process_id in stripped_opposite_target_process_ids:
                             if target_opposite_process_id not in df_year_to_process_flows.columns:
