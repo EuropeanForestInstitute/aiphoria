@@ -1640,20 +1640,6 @@ class FlowModifierSolver(object):
                     error_entries = source_process_id_to_error_entries[source_process_id]
                     error_entries.append(error_entry)
 
-                # OlD IMPLEMENTATION
-                # available_flow_share = year_to_available_flow_share[year]
-                # required_flow_offset = year_to_required_flow_offset[year]
-                #
-                # if required_flow_offset > 0.0:
-                #     continue
-                #
-                # if available_flow_share < abs(required_flow_offset):
-                #     error_entry = [source_process_id, year, required_flow_offset, available_flow_share]
-                #     if source_process_id not in source_process_id_to_error_entries:
-                #         source_process_id_to_error_entries[source_process_id] = []
-                #     error_entries = source_process_id_to_error_entries[source_process_id]
-                #     error_entries.append(error_entry)
-
         # Check all error entries for source processes
         for source_process_id, error_entries in source_process_id_to_error_entries.items():
             local_flow_modifier_indices = source_process_id_to_flow_modifier_indices[source_process_id]
