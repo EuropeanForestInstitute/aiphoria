@@ -79,7 +79,7 @@ Correctness is checked with a `pytest` suite run on every push through GitHub Ac
  
 # Research impact statement
  
-`aiphoria` has supported two peer-reviewed studies so far. It was used to map wood material flows and added-value wood product markets across the EU forest sector [@Orfanidou2026] and to reconstruct the Italian forest-wood value chain [@Khan2026]. The package was initially developed in the Horizon Europe ForestPaths project and is in active use at EFI; it is openly released under an MIT licence with documentation in the project wiki, has issued more than sixteen versioned releases, and is installable from PyPI, so it is ready for use beyond the original author group.
+`aiphoria` has supported two peer-reviewed studies so far. It was used to map wood material flows and added-value wood product markets across the EU forest sector [@orfanidou2026] and to reconstruct the Italian forest-wood value chain [@khan2026]. The package was initially developed in the Horizon Europe ForestPaths project and is in active use at EFI; it is openly released under an MIT licence with documentation in the project wiki, has issued more than sixteen versioned releases, and is installable from PyPI, so it is ready for use beyond the original author group.
 
  
 # AI usage disclosure
