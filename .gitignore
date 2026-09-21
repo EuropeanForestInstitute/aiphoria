@@ -146,3 +146,4 @@ output/
 # Ignore virtual environment directory
 venv*/
 dev.py
+.venv*/

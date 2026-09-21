@@ -1,8 +1,6 @@
 import os
-import warnings
-
 import pytest
-
+import warnings
 from aiphoria.core import FlowSolver
 from aiphoria.core.datachecker import DataChecker
 from aiphoria.core.dataprovider import DataProvider

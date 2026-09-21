@@ -84,10 +84,6 @@ def test_indicator_creation():
     assert ind.conversion_factor == new_conversion_factor
 
 
-
-
-
-
 # *************************
 # * StockLifetimeOverride *
 # *************************
@@ -169,10 +165,18 @@ def make_process_data() -> pd.Series:
     Make test data for Process-object
     """
     return pd.Series([
-        "P0", "loc", "P0:loc", "EOL", "10",
-        "Stock lt source", "Fixed", "stddev=1.0, shape=1.0", 0.5, "WCS comment",
-        1000, "Density source comment", "Modelling status", "Test comment", 1.0,
-        2.0, "Label in graph"])
+        "P0",                       # Name
+        "loc",                      # Location
+        "P0:loc",                   # ID
+        "EOL",                      # Transformation stage
+        "10",                       # Stock lifetime
+        "Fixed",                    # Stock distribution type
+        "stddev=1.0, shape=1.0",    # Stock distribution params
+        "Test comment",             # Comment
+        1.0,                        # Position X
+        2.0,                        # Position Y
+        "Label in graph"            # Label in graph
+    ])
 
 
 def test_process_creation():
@@ -185,14 +189,8 @@ def test_process_creation():
     assert p.location == "loc"
     assert p.id == "P0:loc"
     assert p.stock_lifetime == int(10)
-    assert p.stock_lifetime_source == "Stock lt source"
     assert p.stock_distribution_type == "Fixed"
     assert p.stock_distribution_params == {"stddev": 1.0, "shape": 1.0}
-    assert p.wood_content == 0.5
-    assert p.wood_content_source == "WCS comment"
-    assert p.density == 1000
-    assert p.density_source == "Density source comment"
-    assert p.modelling_status == "Modelling status"
     assert p.comment == "Test comment"
     assert p.position_x == 1.0
     assert p.position_y == 2.0

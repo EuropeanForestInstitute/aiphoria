@@ -1,8 +1,6 @@
 import os
-import warnings
-
 import pytest
-
+import warnings
 from aiphoria import ParameterName
 from aiphoria.example import run_example
 import matplotlib

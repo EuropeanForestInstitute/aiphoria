@@ -13,14 +13,12 @@ class NetworkGraph(object):
         self._html = ""
 
         # Load ECharts from file
-        # path_echarts = os.path.join(os.path.abspath("."), "core", "network_graph_data", "echarts_min.js")
-        path_echarts = files("aiphoria.core").joinpath("network_graph_data/echarts_min.js")
+        path_echarts = files("aiphoria.assets").joinpath("network_graph/echarts_min.js")
         with open(path_echarts, mode="r", encoding="utf-8") as fs:
             self._echarts = fs.read()
 
         # Load visualizer script from file
-        # path_network_graph = os.path.join(os.path.abspath("."), "core", "network_graph_data", "network_graph.js")
-        path_network_graph = files("aiphoria.core").joinpath("network_graph_data/network_graph.js")
+        path_network_graph = files("aiphoria.assets").joinpath("network_graph/network_graph.js")
         with open(path_network_graph, mode="r", encoding="utf-8") as fs:
             self._visualizer = fs.read()
 
@@ -115,8 +113,7 @@ class NetworkGraph(object):
         script = script.replace("{scenario_data}", json.dumps(graph_scenario_data))
         self._visualizer = script
 
-        # path_network_graph = os.path.join(os.path.abspath("."), "core", "network_graph_data", "network_graph.html")
-        path_network_graph = files("aiphoria.core").joinpath("network_graph_data/network_graph.html")
+        path_network_graph = files("aiphoria.assets").joinpath("network_graph/network_graph.html")
 
         with open(path_network_graph, "r", encoding="utf-8") as fs:
             self._html = fs.read()

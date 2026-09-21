@@ -4,11 +4,10 @@ import zlib
 import base64
 import webbrowser
 from typing import List, Dict, Any
-import plotly.graph_objects as go
-from PIL import Image
 from .datastructures import Scenario, Color
 from .parameters import ParameterName
 from importlib.resources import files
+
 
 class DataVisualizer(object):
     def __init__(self):
@@ -36,10 +35,6 @@ class DataVisualizer(object):
 
         if combine_to_one_file:
             # Build combined output file that contains all scenarios
-            for scenario in scenarios:
-                scenario_name_to_info[scenario.name] = self._build_scenario_info(scenario)
-                scenario_name_to_data[scenario.name] = self._build_scenario_year_to_data(scenario, visualizer_params)
-
             # Generate HTML file for scenarios
             html = self._build_combined_scenario_graph(scenario_name_to_info, scenario_name_to_data, visualizer_params)
 
@@ -57,9 +52,6 @@ class DataVisualizer(object):
             # Build separate files for each scenario
             for scenario_name in scenario_name_to_data:
                 # Generate HTML file for scenario
-                scenario_info = scenario_name_to_info[scenario_name]
-                scenario_year_to_data = scenario_name_to_data[scenario_name]
-
                 html = self._build_scenario_graph(scenario_name,
                                                   scenario_name_to_info,
                                                   scenario_name_to_data,
@@ -320,9 +312,9 @@ class DataVisualizer(object):
         target_scenario_name_to_data = {scenario_name: scenario_name_to_data[scenario_name]}
 
         # Add JS script that is run after the Plotly has loaded
-        filename_plotly = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/plotly-3.0.0.min.js")
-        filename_pako = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/pako.min.js")
-        filename_html = os.path.join(os.path.abspath("."), "core", "datavisualizer_data/datavisualizer_plotly.html")
+        filename_plotly = files("aiphoria.assets").joinpath("datavisualizer/plotly-3.0.0.min.js")
+        filename_pako = files("aiphoria.assets").joinpath("datavisualizer/pako.min.js")
+        filename_html = files("aiphoria.assets").joinpath("datavisualizer/datavisualizer_plotly.html")
 
         # Read HTML file contents
         html = ""
@@ -372,9 +364,9 @@ class DataVisualizer(object):
                                        params: Dict = None):
 
         # Add JS script that is run after the Plotly has loaded
-        filename_plotly = files("aiphoria.core").joinpath("datavisualizer_data/plotly-3.0.0.min.js")
-        filename_pako = files("aiphoria.core").joinpath("datavisualizer_data/pako.min.js")
-        filename_html = files("aiphoria.core").joinpath("datavisualizer_data/datavisualizer_plotly.html")
+        filename_plotly = files("aiphoria.assets").joinpath("datavisualizer/plotly-3.0.0.min.js")
+        filename_pako = files("aiphoria.assets").joinpath("datavisualizer/pako.min.js")
+        filename_html = files("aiphoria.assets").joinpath("datavisualizer/datavisualizer_plotly.html")
 
         # Read HTML file contents
         html = ""

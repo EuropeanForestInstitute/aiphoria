@@ -5,7 +5,7 @@ import shutil
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from typing import Union, Any, Dict
+from typing import Union, Any, Dict, List
 from datetime import datetime
 import matplotlib.pyplot as plt
 from .core.builder import init_builder, build_results
@@ -18,109 +18,49 @@ from .core.logger import log
 from .core.parameters import ParameterName
 from .core.network_graph import NetworkGraph
 from .core.datavisualizer import DataVisualizer
+from .core.datastructures import Scenario
 
 _default_output_dir_name = "output"
 _default_cache_dir_name = "cache"
 
 
-def run_scenarios(path_to_settings_file: Union[str, None] = None,
-                  path_to_output_dir: Union[str, None] = None,
-                  remove_existing_output_dir: bool = False,
-                  parameter_overrides: Union[Dict[str, Any], None] = None,
-                  ) -> bool:
+def _create_network_graph(color_definitions: Dict[str, Any],
+                          scenario: Scenario,
+                          scenario_name_to_output_path: Dict[str, str],
+                          show_graphs: bool):
     """
-    Run scenarios using the settings file.
-    If path_to_output_dir is set then overrides the setting from Excel file.
+    Create and possibly show network graphs.
 
-    Parameters can be overridden by using the parameter_overrides-parameter.
-    Key is parameter name and value is the parameter value.
-    Refer example scenario file or aiphoria/core/parameters.py for full list of parameters.
-
-    :param path_to_settings_file: Path to target settings Excel file
-    :param path_to_output_dir: Path to output directory
-    :param remove_existing_output_dir: Remove existing directory (default: False)
-    :param parameter_overrides:     Dictionary {parameter name: parameter value}
-
-    :return: True if succesful, False otherwise
+    :param color_definitions: (Dictionary) Mapping of transform stage to hex code string (e.g. "EoL" to "#7dda60")
+    :param scenario: Scenario-object
+    :param scenario_name_to_output_path: (Dictionary) Mapping of scenario name to output path
+    :param show_graphs: If True then shows the graphs.
     """
-    if parameter_overrides is None:
-        parameter_overrides = {}
 
-    if path_to_settings_file is None:
-        sys.stderr.write("ERROR: No path to settings file\n")
-        sys.stderr.flush()
-        return False
+    # Extra options that are used when building network graphs
+    options = {
+        "transformation_stage_name_to_color": color_definitions,
+        "scenario_name": scenario.name
+    }
 
-    abs_output_dir = os.path.realpath(os.path.expanduser(path_to_output_dir))
-    output_dir_exists = os.path.isdir(abs_output_dir)
-    if not remove_existing_output_dir and output_dir_exists:
-        sys.stderr.write("ERROR: Output directory already exists\n")
-        sys.stderr.flush()
-        return False
+    output_filename = os.path.join(
+        scenario_name_to_output_path.get(scenario.name), "network_graph.html")
+    network_visualizer = NetworkGraph()
+    network_visualizer.build(scenario.scenario_data, options)
 
-    # Use the output path from settings file
-    if path_to_output_dir is None:
-        cwd = os.path.realpath(os.getcwd())
-        path_to_output_dir = os.path.join(cwd, _default_output_dir_name)
+    if show_graphs:
+        network_visualizer.show(output_filename)
 
-    if os.path.isdir(path_to_output_dir):
-        if not remove_existing_output_dir:
-            log("Directory {} already exists.".format(path_to_output_dir))
-            return False
-        else:
-            shutil.rmtree(path_to_output_dir, ignore_errors=True)
 
-    if not os.path.isdir(path_to_output_dir):
-        os.mkdir(path_to_output_dir)
+def _export_scenario_results(scenarios: List[Scenario], output_path: str):
+    """
+    Export scenario results to Excel file.
 
-    time_total_in_secs: float = time.perf_counter()
-    path_to_cache = os.path.join(path_to_output_dir, _default_cache_dir_name)
-    init_builder(path_to_cache=path_to_cache,
-                 use_cache=False,
-                 use_timing=False,
-                 clear_cache=False)
-
-    # Build results
-    model_params, scenarios, color_definitions = build_results(path_to_settings_file,
-                                                               path_to_output_dir,
-                                                               parameter_overrides)
-
-    scenario_name_to_output_path = setup_scenario_output_directories(
-        model_params[ParameterName.OutputPath],
-        [scenario.name for scenario in scenarios]
-    )
-
-    if model_params[ParameterName.CreateNetworkGraphs]:
-        progress_bar = tqdm(total=len(scenarios),
-                            desc="Building network graphs for solved scenarios")
-        for scenario_index, scenario in enumerate(scenarios):
-            # Extra options that are used when building network graphs
-            options = {
-                "transformation_stage_name_to_color": color_definitions,
-                "scenario_name": scenario.name
-            }
-
-            output_filename = os.path.join(
-                scenario_name_to_output_path.get(scenario.name), "network_graph.html")
-            network_visualizer = NetworkGraph()
-            network_visualizer.build(scenario.scenario_data, options)
-
-            if model_params[ParameterName.ShowPlots]:
-                network_visualizer.show(output_filename)
-
-            progress_bar.update()
-        progress_bar.close()
-        sys.stdout.flush()
-        sys.stderr.flush()
-
-    # %%
-    # ***************************************************************************
-    # * Step 3: Export scenario results to files (processes, flows, and stocks) *
-    # ***************************************************************************
-
+    :param scenarios: List of Scenarios
+    :param output_path: Output path
+    """
     # Sheet names to what are written to file. Note that the order is important.
-    sheet_names = ["Processes", "Flows",
-                   "Flow values (baseline value)", "Mass balance"]
+    sheet_names = ["Processes", "Flows", "Flow values (baseline value)", "Mass balance"]
     sheet_name_to_list_of_dfs = {name: [] for name in sheet_names}
 
     progress_bar = tqdm(total=len(scenarios))
@@ -157,8 +97,7 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
 
     # Combine all scenario data to one Excel file
     # by concatenating all sheet-specific list of DataFrames as one DataFrame
-    combined_excel_filename = os.path.join(
-        model_params[ParameterName.OutputPath], "combined_scenario_data.xlsx")
+    combined_excel_filename = os.path.join(output_path, "combined_scenario_data.xlsx")
     log(f"Exporting all scenarios to {combined_excel_filename}...")
     with pd.ExcelWriter(combined_excel_filename, engine='xlsxwriter') as writer:
         for sheet_name, list_of_dfs in sheet_name_to_list_of_dfs.items():
@@ -168,12 +107,10 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
     log(f"All scenario data exported to {combined_excel_filename}")
     sys.stdout.flush()
 
-    # %%
-    # ***********************************************************************
-    # * Step 4: Build dynamic stock results for each Scenario and visualize *
-    # ***********************************************************************
-    progress_bar = tqdm(total=len(scenarios),
-                        desc="Building dynamic stock results")
+
+def _export_dynamic_stock_results(scenarios: List[Scenario], scenario_name_to_output_path: Dict[str, str]):
+    progress_bar = tqdm(total=len(scenarios), desc="Building dynamic stock results")
+
     sys.stderr.flush()
     for scenario_index, scenario in enumerate(scenarios):
         progress_bar.set_description("Building dynamic stock results (scenario {}/{})".format(
@@ -415,9 +352,18 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
     progress_bar.close()
     sys.stderr.flush()
 
-    # *****************************************************
-    # * Step 5: Convert the carbon stocks to CO2 removals *
-    # *****************************************************
+
+def _export_annual_co2_stock_emissions(scenarios: List[Scenario],
+                                       scenario_name_to_output_path: Dict[str, str],
+                                       conversion_factor_c_to_co2: float,
+                                       ):
+    """
+    Export annual CO2 stock emission and removals.
+
+    :param scenarios: List of Scenarios
+    :param scenario_name_to_output_path: Mapping of scenario name to output path
+    :param conversion_factor_c_to_co2: Conversion factor from carbon (C) to carbon dioxide (CO2).
+    """
     log("Calculating annual CO2 stock emissions / removals results...")
 
     # Storage for comparison
@@ -442,7 +388,6 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
 
         results_co2_removals = pd.DataFrame({'Year': years})
         results_net_emitters = pd.DataFrame({'Year': years})
-        conversion_factor_c_to_co2 = model_params[ParameterName.ConversionFactorCToCO2]
 
         # Define line styles, markers, and colors for differentiation
         line_styles = ['-', '--', '-.', ':']
@@ -553,13 +498,19 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
         filename = os.path.join(scenario_output_path, f"{scenario.name}_steady_state_periods.csv")
         steady_state_df.to_csv(filename, index=False)
 
-    # ************************************************************
-    # * Step 6: Visualize inflows per year to selected processes *
-    # ************************************************************
 
+def _export_visualized_inflows_to_selected_processes(scenarios: List[Scenario],
+                                                     scenario_name_to_output_path: Dict[str, str],
+                                                     process_ids: List[str],
+                                                     baseline_unit_name: str,
+                                                     ):
+    """
+    Export graphs that visualize inflows to selected processes.
+
+    :param scenarios: List of Scenarios
+    """
     # This is only done when there is multiple years
     # Visualize inflows per year to processes
-    visualize_inflows_to_process_ids = model_params[ParameterName.VisualizeInflowsToProcesses]
     for scenario in scenarios:
         scenario_output_path = scenario_name_to_output_path[scenario.name]
         flow_solver = scenario.flow_solver
@@ -567,7 +518,7 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
 
         # Dictionary: Process ID to process
         unique_processes = flow_solver.get_unique_processes()
-        for process_id in visualize_inflows_to_process_ids:
+        for process_id in process_ids:
             process = flow_solver.get_process(process_id, min(years))
             flow_id_to_source_process_id = {}
 
@@ -598,8 +549,12 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
 
             # Create 2D array with shape of (number of source process IDs, number of years)
             # and fill with the value of the inflow from source process for each year
+            # df_inflows_to_process = pd.DataFrame(columns=['Year', 'Source Process ID', 'Value ({})'.format(
+            #     model_params[ParameterName.BaselineUnitName])])
+
             df_inflows_to_process = pd.DataFrame(columns=['Year', 'Source Process ID', 'Value ({})'.format(
-                model_params[ParameterName.BaselineUnitName])])
+                baseline_unit_name)])
+
             source_process_by_flow_values = np.zeros(
                 (len(source_process_ids), len(years)))
             for year_index, year in enumerate(years):
@@ -639,15 +594,122 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
                                     "{}_inflows_to_{}.svg".format(scenario.name, process_id_for_filename))
             plt.savefig(filename, format='svg')
 
-            # NOTE: Causes when running from PyCharm
-            # if model_params[ParameterName.ShowPlots]:
-            #     plt.show()
+
+def run_scenarios(path_to_settings_file: Union[str, None] = None,
+                  path_to_output_dir: Union[str, None] = None,
+                  remove_existing_output_dir: bool = False,
+                  parameter_overrides: Union[Dict[str, Any], None] = None,
+                  ) -> bool:
+    """
+    Run scenarios using the settings file.
+    If path_to_output_dir is set then overrides the setting from Excel file.
+
+    Parameters can be overridden by using the parameter_overrides-parameter.
+    Key is parameter name and value is the parameter value.
+    Refer example scenario file or aiphoria/core/parameters.py for full list of parameters.
+
+    :param path_to_settings_file: Path to target settings Excel file
+    :param path_to_output_dir: Path to output directory
+    :param remove_existing_output_dir: Remove existing directory (default: False)
+    :param parameter_overrides:     Dictionary {parameter name: parameter value}
+
+    :return: True if succesful, False otherwise
+    """
+    if parameter_overrides is None:
+        parameter_overrides = {}
+
+    if path_to_settings_file is None:
+        sys.stderr.write("ERROR: No path to settings file\n")
+        sys.stderr.flush()
+        return False
+
+    abs_output_dir = os.path.realpath(os.path.expanduser(path_to_output_dir))
+    output_dir_exists = os.path.isdir(abs_output_dir)
+    if not remove_existing_output_dir and output_dir_exists:
+        sys.stderr.write("ERROR: Output directory already exists\n")
+        sys.stderr.flush()
+        return False
+
+    # Use the output path from settings file
+    if path_to_output_dir is None:
+        cwd = os.path.realpath(os.getcwd())
+        path_to_output_dir = os.path.join(cwd, _default_output_dir_name)
+
+    if os.path.isdir(path_to_output_dir):
+        if not remove_existing_output_dir:
+            log("Directory {} already exists.".format(path_to_output_dir))
+            return False
+        else:
+            shutil.rmtree(path_to_output_dir, ignore_errors=True)
+
+    if not os.path.isdir(path_to_output_dir):
+        os.mkdir(path_to_output_dir)
+
+    time_total_in_secs: float = time.perf_counter()
+    path_to_cache = os.path.join(path_to_output_dir, _default_cache_dir_name)
+    init_builder(path_to_cache=path_to_cache,
+                 use_cache=False,
+                 use_timing=False,
+                 clear_cache=False)
+
+    # Build results
+    model_params: Dict[str, Any]
+    scenarios: List[Scenario]
+    color_definitions: Dict[str, str]
+    model_params, scenarios, color_definitions = build_results(path_to_settings_file,
+                                                               path_to_output_dir,
+                                                               parameter_overrides)
+
+    scenario_name_to_output_path = setup_scenario_output_directories(
+        model_params[ParameterName.OutputPath],
+        [scenario.name for scenario in scenarios]
+    )
+
+    if model_params[ParameterName.CreateNetworkGraphs]:
+        progress_bar = tqdm(total=len(scenarios),
+                            desc="Building network graphs for solved scenarios")
+        for scenario_index, scenario in enumerate(scenarios):
+            _create_network_graph(color_definitions,
+                                  scenario,
+                                  scenario_name_to_output_path,
+                                  model_params[ParameterName.ShowPlots])
+
+            progress_bar.update()
+        progress_bar.close()
+        sys.stdout.flush()
+        sys.stderr.flush()
+
+    # ***************************************************************************
+    # * Step 3: Export scenario results to files (processes, flows, and stocks) *
+    # ***************************************************************************
+    _export_scenario_results(scenarios, model_params[ParameterName.OutputPath])
+
+    # ***********************************************************************
+    # * Step 4: Build dynamic stock results for each Scenario and visualize *
+    # ***********************************************************************
+    _export_dynamic_stock_results(scenarios, scenario_name_to_output_path)
+
+    # *****************************************************
+    # * Step 5: Convert the carbon stocks to CO2 removals *
+    # *****************************************************
+    _export_annual_co2_stock_emissions(scenarios,
+                                       scenario_name_to_output_path,
+                                       model_params[ParameterName.ConversionFactorCToCO2],
+                                       )
+
+    # ************************************************************
+    # * Step 6: Visualize inflows per year to selected processes *
+    # ************************************************************
+    _export_visualized_inflows_to_selected_processes(scenarios,
+                                                     scenario_name_to_output_path,
+                                                     model_params[ParameterName.VisualizeInflowsToProcesses],
+                                                     model_params[ParameterName.BaselineUnitName],
+                                                     )
 
     # ***********************************************************
     # * Step 7: Visualize the scenario results as Sankey graphs *
     # ***********************************************************
     # Virtual process graph label overrides
-    # TODO: Move also this to settings file?
     virtual_process_graph_labels = {}
     virtual_process_graph_labels["VP_P2:EU"] = "Unreported flow from P2"
     virtual_process_graph_labels["VP_P3:EU"] = "Unreported flow from P3"
@@ -656,7 +718,6 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
     visualizer_params = {
         # User can hide processes in Sankey graph that have total inflows less than this value
         # This value cannot be changed now in the Sankey graph
-        # TODO: Move this to settings file?
         "small_node_threshold": 5,
 
         # Dictionary to define labels for virtual flows
@@ -690,6 +751,8 @@ def run_scenarios(path_to_settings_file: Union[str, None] = None,
         }
 
     if model_params[ParameterName.CreateSankeyCharts]:
+        # NOTE: combine_to_one_file is not changeable in parameters, now always assume that user wants the combined
+        # file
         log("Creating Sankey charts for scenarios...")
         visualizer = DataVisualizer()
         visualizer.build_and_show(

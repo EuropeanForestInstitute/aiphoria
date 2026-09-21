@@ -1,7 +1,6 @@
-from typing import Tuple, List, Union, Dict, Any
-from builtins import float
 import copy
 import pandas as pd
+from typing import Tuple, List, Union, Dict, Any
 from aiphoria.lib.odym.modules.ODYM_Classes import MFAsystem
 from .parameters import StockDistributionParameterValueType
 from .types import FunctionType, ChangeType
@@ -328,14 +327,8 @@ class Process(ObjectBase):
         self._id = None
         self._transformation_stage = None
         self._stock_lifetime = None
-        self._stock_lifetime_source = None
         self._stock_distribution_type = None
         self._stock_distribution_params = None
-        self._wood_content = None
-        self._wood_content_source = None
-        self._density = None
-        self._density_source = None
-        self._modelling_status = None
         self._comment = None
         self._row_number = -1
         self._depth = -1
@@ -353,30 +346,26 @@ class Process(ObjectBase):
 
         self._name = params.iloc[0]
         self._location = params.iloc[1]
+
+        # TODO: Generate Process ID from name and location during runtime
+        # TODO: Now Process ID is provided from the settings file. Should we construct ID here from name and location?
         self._id = params.iloc[2]
         self._transformation_stage = params.iloc[3]
 
         # Parse stock lifetime, default to zero if None
         self._stock_lifetime = self._parse_stock_lifetime(params.iloc[4], row_number)
-
-        self._stock_lifetime_source = params.iloc[5]
-        self._stock_distribution_type = params.iloc[6]
-        self._stock_distribution_params = params.iloc[7]
+        self._stock_distribution_type = params.iloc[5]
+        self._stock_distribution_params = params.iloc[6]
 
         # Parse stock distribution parameters
-        # NOTE: Event invalid key-value -pairs are stored to _stock_distribution_params after parsin
+        # NOTE: Event invalid key-value -pairs are stored to _stock_distribution_params after parsing
         # and those are checked in datachecker
-        self._parse_and_set_distribution_params(params.iloc[7])
+        self._parse_and_set_distribution_params(params.iloc[6])
 
-        self._wood_content = params.iloc[8]
-        self._wood_content_source = params.iloc[9]
-        self._density = params.iloc[10]
-        self._density_source = params.iloc[11]
-        self._modelling_status = params.iloc[12]
-        self._comment = params.iloc[13]
-        self._position_x = params.iloc[14]
-        self._position_y = params.iloc[15]
-        self._label_in_graph = params.iloc[16]
+        self._comment = params.iloc[7]
+        self._position_x = params.iloc[8]
+        self._position_y = params.iloc[9]
+        self._label_in_graph = params.iloc[10]
         self._row_number = row_number
         self._meta = {}
 
@@ -437,14 +426,6 @@ class Process(ObjectBase):
         self._stock_lifetime = value
 
     @property
-    def stock_lifetime_source(self) -> str:
-        return self._stock_lifetime_source
-
-    @stock_lifetime_source.setter
-    def stock_lifetime_source(self, value: str):
-        self._stock_lifetime_source = value
-
-    @property
     def stock_distribution_type(self) -> str:
         return self._stock_distribution_type
 
@@ -459,46 +440,6 @@ class Process(ObjectBase):
     @stock_distribution_params.setter
     def stock_distribution_params(self, value: str):
         self._stock_distribution_params = value
-
-    @property
-    def wood_content(self) -> float:
-        return self._wood_content
-
-    @wood_content.setter
-    def wood_content(self, value: float):
-        self._wood_content = value
-
-    @property
-    def wood_content_source(self) -> str:
-        return self._wood_content_source
-
-    @wood_content_source.setter
-    def wood_content_source(self, value: str):
-        self._wood_content_source = value
-
-    @property
-    def density(self) -> float:
-        return self._density
-
-    @density.setter
-    def density(self, value: float):
-        self._density = value
-
-    @property
-    def density_source(self) -> str:
-        return self._density_source
-
-    @density_source.setter
-    def density_source(self, value: str):
-        self._density_source = value
-
-    @property
-    def modelling_status(self) -> str:
-        return self._modelling_status
-
-    @modelling_status.setter
-    def modelling_status(self, value: str):
-        self._modelling_status = value
 
     @property
     def comment(self) -> str:
@@ -646,9 +587,6 @@ class Flow(ObjectBase):
         self._value = None
         self._unit = None
         self._year = None
-        self._data_source = None
-        self._data_source_comment = None
-        self._comment = None
 
         # Evaluated per timestep
         self._is_evaluated = False
@@ -680,12 +618,10 @@ class Flow(ObjectBase):
         self._value = params.iloc[8]
         self._unit = params.iloc[9]
         self._year = int(params.iloc[10])
-        self._data_source = params.iloc[11]
-        self._data_source_comment = params.iloc[12]
 
         # Rest of the elements except last element are indicators
         # There should be even number of indicators because each indicator has value and comment
-        first_indicator_index = 13
+        first_indicator_index = 11
         indicators = params[first_indicator_index:]
         if len(indicators) % 2:
             s = "Not even number of indicator columns in settings file.\n"
@@ -881,18 +817,6 @@ class Flow(ObjectBase):
     @year.setter
     def year(self, value: int):
         self._year = value
-
-    @property
-    def data_source(self) -> str:
-        return self._data_source
-
-    @property
-    def data_source_comment(self) -> str:
-        return self._data_source_comment
-
-    @property
-    def comment(self) -> str:
-        return self._comment
 
     @property
     def is_evaluated(self) -> bool:
@@ -1220,7 +1144,7 @@ class FlowModifier(ObjectBase):
                 self._opposite_target_process_ids.append(process_id)
 
     def __str__(self):
-        s = "Flow modifier: scenario_name='{}', source_process_id='{}', target_process_id='{}', change_in_value='{}', " \
+        s = "Flow modifier: scenario_name='{}', source_process_id='{}', target_process_id='{}', change_in_value='{}', "\
             "target_value='{}', change_type='{}', start_year='{}', end_year='{}', function_type='{}'".format(
             self.scenario_name,
             self.source_process_id,

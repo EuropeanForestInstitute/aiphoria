@@ -1,12 +1,12 @@
-recursive-include src/aiphoria/core/datavisualizer_data *
-recursive-include src/aiphoria/core/network_graph_data *
+recursive-include src/aiphoria/assets/datavisualizer *
+recursive-include src/aiphoria/assets/network_graph *
 recursive-include src/aiphoria/data example_scenario.xlsx
 
-prune src/aiphoria/core/datavisualizer_data/.idea
-prune src/aiphoria/core/datavisualizer_data/.vscode
+prune src/aiphoria/assets/datavisualizer/.idea
+prune src/aiphoria/assets/datavisualizer/.vscode
 
-prune src/aiphoria/core/network_graph_data/.idea
-prune src/aiphoria/core/network_graph_data/.vscode
+prune src/aiphoria/assets/network_graph/.idea
+prune src/aiphoria/assets/network_graph/.vscode
 
 prune .idea
 prune .vscode

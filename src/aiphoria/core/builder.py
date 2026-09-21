@@ -1,7 +1,7 @@
 import os
 import pickle
 import shutil
-from typing import Union, List, Dict, Any
+from typing import Union, List, Dict, Any, Tuple
 from . import logger
 from .logger import log, start_log_perf, stop_log_perf, clear_log_perf, show_log_perf_summary
 from .datachecker import DataChecker
@@ -246,7 +246,7 @@ def build_and_solve_scenarios(datachecker: DataChecker = None, use_cache: Union[
 def build_results(filename: str = None,
                   path_to_output_dir: Union[str, None] = None,
                   parameter_overrides: Union[Dict[str, Any], None] = None,
-                  ):
+                  ) -> Tuple[Dict[str, Any], List[Scenario], Dict[str, str]]:
     """
     Build and solve scenarios using the settings file.
     Parameters can be overriden by providing dictionary with key as parameter name and value as parameter value.
