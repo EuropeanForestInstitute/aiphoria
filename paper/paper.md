@@ -26,7 +26,7 @@ bibliography: paper.bib
 
 `aiphoria` is an open-source Python package for dynamic material flow analysis
 (DMFA) of wood. It can be used to follow wood from harvest through sawmills
-and other processing to final products such as building products, furniture, and paper,
+and other processing to final products such as buildings, furniture, and paper,
 and it calculates how much carbon these products hold over time and when it is
 released at end of life. Users describe the system and their scenarios in an
 Excel file, so no programming is needed. The package builds on ODYM
@@ -57,7 +57,7 @@ shares, for example the percentage of sawnwood used in construction. Combining
 the two usually requires custom preprocessing that is hard to repeat across
 studies.
 
-`aiphoria` can be useful for forest economists, bioeconomy analysts, and experts
+`aiphoria` is made for forest economists, bioeconomy analysts, and experts
 preparing LULUCF greenhouse gas reports, who often work in spreadsheets rather
 than code. It takes absolute and relative flows together, calculates the
 unknown flows while keeping the mass balance, and follows the carbon in each
@@ -90,7 +90,7 @@ Market models such as TiMBA [@TiMBA] answer a different question, namely how
 wood flows respond to prices and policy; their results can serve as input to
 `aiphoria`.
 
-What has been missing is a reusable tool that starts from harvests to production and trade
+What has been missing is a reusable tool that starts from production and trade
 statistics, follows wood to its end uses and back through recycling, and keeps
 mass and carbon balanced over time. Compared with the tools above, `aiphoria`
 adds:
@@ -120,13 +120,15 @@ known absolute flows and calculates the rest so that the inputs and outputs of
 each process balance. Flows into in-use stocks are passed to ODYM's dynamic stock model, which uses a lifetime
 distribution to calculate the stock and its outflow by age cohort. These
 outflows enter the flow network again in the next year, for example as
-recycled wood or as wood for energy. 
+recycled wood or as wood for energy. Reusing ODYM means the stock calculations
+rely on a tested method.
 
-Scenarios change selected flows over time, for example decreasing a flow share by 50% 
-over five years. In the constrained mode, the default, a change that the data cannot 
-supply stops the run, and the model reports the largest possible change. In the unconstrained 
-mode the change is always applied and virtual flows fill the gap, which suits exploratory work. 
-Virtual flows also close unreported imbalances in the input data.
+Scenarios change selected flows over time, for example decreasing a flow share
+by 50% over five years. In the constrained mode, the default, a change that the
+data cannot supply stops the run, and the model reports the largest possible
+change. In the unconstrained mode the change is always applied and virtual
+flows fill the gap, which suits exploratory work. Virtual flows also close
+unreported imbalances in the input data.
 
 `aiphoria` models flows and stocks along one dimension only: time. Location,
 processing stage, and carbon content are attributes of processes and flows,
@@ -159,8 +161,7 @@ incineration. An alternative scenario reduces sawmilling residues by 50%
 between 2025 and 2030.
 
 : Flows of the example scenario as entered in the Excel input (year 2021).
-Values are illustrative.
-[]{label="tab:input"}
+Values are illustrative. \label{tab:input}
 
 | Source | Target | Value | Unit |
 |---|---|---:|---|
@@ -179,20 +180,19 @@ Values are illustrative.
 entering construction and furniture stays in use. By 2030 (b), the first
 furniture and construction cohorts have reached end of life, so flows to
 incineration and a recycling loop from construction back to sawmilling appear.
-The network graph (c) shows the same system in 2021.
 
-![Visual outputs of the example scenario: the Sankey diagram in (a) 2021 and
-(b) 2030, and (c) the network graph in 2021, with flow values on the edges.
-\label{fig:example}](figures/visualisation_capabilities.png){ width=70% }
+![Sankey diagram of the example scenario in (a) 2021 and (b) 2030, selected
+with the year slider.
+\label{fig:example}](figures/sankey_example.png){ width=100% }
 
-The carbon stocks are also saved to Excel (\autoref{tab:example}). 
-Furniture has a short lifetime (5 years), so its stock stops growing at about 20 Mt C once as much carbon leaves as enters. 
-Construction has a longer lifetime (10 years), so its stock keeps growing until 2030.
+The carbon stocks are also saved to Excel (\autoref{tab:example}). Furniture
+has a short lifetime (5 years), so its stock stops growing at about 20 Mt C once
+as much carbon leaves as enters. Construction has a longer lifetime (10 years),
+so its stock keeps growing until 2030.
 
 : Carbon stock in the in-use product stocks of the example scenario
 (baseline), in million tonnes of carbon (Mt C), from the `Total_stock` sheet of
-the output workbook.
-[]{label="tab:example"}
+the output workbook. \label{tab:example}
 
 | Stock | 2021 | 2024 | 2027 | 2030 |
 |---|---:|---:|---:|---:|
