@@ -1,6 +1,5 @@
 ---
 title: 'aiphoria: A Python package for dynamic wood material flow and carbon stock analysis'
-
 tags:
   - Python
   - material flow analysis
@@ -23,73 +22,209 @@ date: 20 June 2026
 bibliography: paper.bib
 ---
 
- 
 # Summary
- 
-`aiphoria` is an open-source Python package for dynamic material flow analysis (DMFA) of wood products. It helps tracking how wood moves through socioeconomic systems, from harvested timber through semi-finished products to end uses such as construction, furniture, and paper, and how carbon is stored in those products or released back to the atmosphere over time. The package builds on ODYM [@Pauliuk2020], a general-purpose dynamic material systems model, and adds the workflow that wood-sector analysis needs: mixed input formats (absolute volumes together with relative shares), temporary carbon storage accounting, and interactive Sankey diagrams of the flow system at any timestep. Scenarios are defined in an Excel file, so users without programming experience can run a full analysis. Results include time series of material flows, in-use stocks, and carbon stock changes, exported for further analysis or direct visualisation.
- 
- 
+
+`aiphoria` is an open-source Python package for dynamic material flow analysis
+(DMFA) of wood. It can be used to follow wood from harvest through sawmills
+and other processing to final products such as building products, furniture, and paper,
+and it calculates how much carbon these products hold over time and when it is
+released at end of life. Users describe the system and their scenarios in an
+Excel file, so no programming is needed. The package builds on ODYM
+[@Pauliuk2020] for the stock calculations and returns time series of flows,
+in-use stocks, and carbon stock changes, with interactive Sankey diagrams.
+
+`aiphoria` was built for the wood sector, but its core does not depend on
+wood: wood-specific settings, such as carbon content and product lifetimes,
+are input data and can be replaced for any other material.
+
 # Statement of need
- 
-The forest-wood value chain holds an important place in Europe's climate mitigation efforts [@verkerk2022]. Forests sequester carbon in biomass and soil; harvested wood products (HWP) extend that sequestration into the technosphere by storing carbon in long-lived applications such as construction timber and engineered wood panels; and wood-based materials and energy displace fossil -based alternatives. These three mechanisms, forest carbon storage, HWP carbon storage, and material and energy substitution, interact across the full life cycle of wood, and their joint optimisation is a defining challenge of sustainable bioeconomy governance. Tracking how wood flows through the economy and how long carbon remains locked in products before returning to the atmosphere is central to assessing the mitigation potential of the forest-based bioeconomy [@BrunetNavarro2016]. aiphoria is also complementary to forest-sector market models such as EFI-GTM [@Kallio2004] and TiMBA [@TiMBA2025], which project wood supply and demand at the market level. Projections from these models can be integrated with historic statistics and end-use shares inside aiphoria, linking market-level outlooks to the underlying physical material and carbon stock changes.
- 
-Dynamic material flow analysis provides the quantitative basis for this [@Brunner2016]: by tracking wood mass and carbon through the system over time, it links harvest, product stocks, and end-of-life pathways into a single, mass-balanced account. The main challenge is the data. Forest sector and wood use data come in different forms: production and trade are reported in absolute volumes (m³ or tonnes), while end-uses are often connected to semi-finished wood products as shares (for example, the percentage of sawnwood going to construction). Connecting these data into one consistent system has so far required custom preprocessing that is hard to reproduce across studies, which in turn limits scenario analysis at the end-use level. `aiphoria` is built for the users who run into this problem, for example, forest economists, bioeconomy analysts, and LULUCF experts working at national or regional scale, often from spreadsheet data rather than code. It takes absolute and relative flows together, converts the relative shares into absolute flows while preserving mass balance, and propagates carbon coefficients through the stocks, so a dataset that mixes the two becomes a reproducible wood-flow and carbon stock account without custom scripting or preprocessing.
- 
- 
+
+Wood is both a material and a temporary carbon store. The carbon
+taken up by trees stays stored in harvested wood products for as long as they
+remain in use, from a few years for paper to several decades for construction
+timber and wood panels, and is released when the products are burned or decay
+at end of life. Assessing the climate role of the forest-based bioeconomy
+therefore means following how wood flows through the economy and how long
+carbon stays in products before it is released. This question is central to
+current EU forest and climate policy [@Verkerk2022].
+
+Dynamic material flow analysis gives the basis for this [@Brunner2016]: it
+tracks wood and carbon year by year and keeps each process in balance, so
+harvest, products in use, and end-of-life flows are linked in one account. The
+main challenge is the data. Production and trade statistics are reported as
+absolute amounts (m³ or tonnes), while end uses are often available only as
+shares, for example the percentage of sawnwood used in construction. Combining
+the two usually requires custom preprocessing that is hard to repeat across
+studies.
+
+`aiphoria` can be useful for forest economists, bioeconomy analysts, and experts
+preparing LULUCF greenhouse gas reports, who often work in spreadsheets rather
+than code. It takes absolute and relative flows together, calculates the
+unknown flows while keeping the mass balance, and follows the carbon in each
+product stock, without custom scripting.
+
 # State of the field
- 
-General-purpose dynamic MFA frameworks such as ODYM [@Pauliuk2020] and flodym [@flodym] provide the modelling foundation for material systems, but the user has to define each system, i.e., its processes, flows, and dimensions, in code. Rather than re-implement stock dynamics, `aiphoria` reuses ODYM's `DynamicStockModel` as its computational engine and contributes the domain layer on top: the wood-sector workflow, the mixed absolute and relative flows solver, and temporary carbon storage assessment.
- 
-The main capabilities `aiphoria` adds are:
- 
-|Capability|`aiphoria`|
-|-|-|
-|Automated stock–flow solver (`FlowSolver`)|yes|
-|Mixed absolute and percentage flows in one system|yes|
-|Carbon stock tracking across age cohorts|yes|
-|Interactive Sankey visualisation, per timestep|yes|
-|Network graph of the full system|yes|
-|Excel scenario input|yes|
-|Constrained and unconstrained solver modes|yes|
-|Virtual flows for accounting-only transfers|yes|
-|`pip install` distribution|yes|
- 
-Mixed absolute and relative flow solving is the central contribution: it lets production, import, and export statistics which are typically available at the semi-finished wood product level to be linked directly to end uses, without first converting everything to a single flow type by hand. Carbon stock tracking can be integrated into the same flow model, computing temporary carbon storage in wood products across cohorts and timesteps, which is what bioeconomy and LULUCF accounting require. The same structure also supports user-defined transfer coefficients beyond carbon (e.g., employment, revenue, etc.), propagated across cohorts and timesteps in the same way.
- 
- 
+
+General dynamic MFA frameworks such as ODYM [@Pauliuk2020] and flodym
+[@flodym] provide well-tested methods for stocks and flows, but the user must
+build each system in code and first bring all data into one consistent format.
+`aiphoria` reuses ODYM's dynamic stock model and adds what wood-sector studies need: a spreadsheet interface, a solver for
+mixed absolute and relative flows, and carbon stock accounting.
+
+Carbon in harvested wood products (HWP) is usually estimated with the approach
+of the IPCC guidelines [@IPCC2019]. The default method starts from production
+statistics for three product groups (sawnwood, wood-based panels, and paper and
+paperboard) and assumes that each group loses carbon at a fixed rate (default
+half-lives of 35, 25, and 2 years). It is simple and needs little data, but it
+does not follow products to their end uses or capture recycling and
+circularity. Many models go further, and the review by @BrunetNavarro2016
+shows that they differ widely in product categories, lifetimes, and
+end-of-life options. Studies that combine the
+IPCC approach with mass-balanced MFA find that following end uses can give
+larger carbon pools than the default method [@Jasinevicius2018], but these
+studies were not released as reusable software. Forest carbon models such as
+CBM-CFS3 [@Kurz2009] include an HWP pool, but they start from forest inventory
+data, and product accounting is only a small part of a larger forest model.
+
+Market models such as TiMBA [@TiMBA] answer a different question, namely how
+wood flows respond to prices and policy; their results can serve as input to
+`aiphoria`.
+
+What has been missing is a reusable tool that starts from harvests to production and trade
+statistics, follows wood to its end uses and back through recycling, and keeps
+mass and carbon balanced over time. Compared with the tools above, `aiphoria`
+adds:
+
+- absolute amounts and shares solved together in one mass-balanced system;
+- in-use stocks with product lifetime distributions, calculated with ODYM;
+- carbon stocks and annual CO2 removals for each product stock and age cohort;
+- scenarios defined in Excel, with constrained and unconstrained solver modes;
+- interactive Sankey diagrams for every year and a network graph of the system.
+
 # Software design
- 
-`aiphoria` is organised in three layers, a design that separates what the user provides from how the system is solved and reported.
- 
-The **input layer** is an Excel settings file in which the user defines processes, flows, parameters, the time range, and one or more scenarios. Using a spreadsheet as the interface trades some flexibility for accessibility: it keeps the tool usable by users who do not need to have programming knowledge.
- 
-The **solver layer** is the `FlowSolver`. It resolves mixed absolute and relative flows defined in the Excel file by converting percentage shares into absolute flows from upstream values, then calls ODYM's `DynamicStockModel` for each in-use stock process. Outflows are derived from product lifetime distributions and fed back into the flow network. The solver runs in two modes by design: an unconstrained mode for exploratory scenario work, and a constrained mode that applies flow modifiers strictly and reports exactly which flows the data cannot supply, which makes it a diagnostic tool for building normative scenarios. Stock accumulation can be bypassed for flows that never enter use (for example, direct exports), and *virtual flows* let the model carry transfers that are needed for accounting but do not exist as separate physical movements.
- 
-The **output layer** writes results to a structured directory: per-timestep Sankey diagrams and a network graph open automatically in the browser, and all numerical results are saved as Excel or CSV files.
- 
-A complete analysis runs without writing modelling code:
- 
+
+`aiphoria` has three layers (\autoref{fig:design}). The `DataProvider` reads
+the Excel file; the `DataChecker` checks the data, fills in missing years, and
+builds the baseline and alternative scenarios; and the `FlowSolver` calculates
+flows and stocks year by year. Results are saved as Excel and CSV files, and
+the Sankey diagrams and network graph as HTML files.
+
+The whole model, including lifetimes, carbon contents, and scenarios, is
+described in one Excel file. This limits what the
+user can express compared with code, but keeps the tool open to analysts who
+do not program and makes a model easy to share and review.
+
+Each flow is given either as an absolute amount or as a share of the remaining
+outflow of its source process. For every year, the solver starts from the
+known absolute flows and calculates the rest so that the inputs and outputs of
+each process balance. Flows into in-use stocks are passed to ODYM's dynamic stock model, which uses a lifetime
+distribution to calculate the stock and its outflow by age cohort. These
+outflows enter the flow network again in the next year, for example as
+recycled wood or as wood for energy. 
+
+Scenarios change selected flows over time, for example decreasing a flow share by 50% 
+over five years. In the constrained mode, the default, a change that the data cannot 
+supply stops the run, and the model reports the largest possible change. In the unconstrained 
+mode the change is always applied and virtual flows fill the gap, which suits exploratory work. 
+Virtual flows also close unreported imbalances in the input data.
+
+`aiphoria` models flows and stocks along one dimension only: time. Location,
+processing stage, and carbon content are attributes of processes and flows,
+not separate dimensions as in ODYM and flodym. This keeps the input simple and
+is enough for national and regional wood-flow studies, but it limits analyses
+that need to split results by, for example, region and product type at once.
+
+![The three layers of an `aiphoria` run, from the Excel input to the results.
+\label{fig:design}](figures/software_design.pdf){ width=100% }
+
+A `pytest` suite runs on every push through GitHub Actions and covers mixed
+flows, mass balance, both solver modes, carbon calculations, and a full run of
+the example. The package is on PyPI (`pip install aiphoria`).
+
+# Illustrative example
+
+`aiphoria` comes with an example scenario that runs with two lines of code:
+
 ```python
 from aiphoria.example import run_example
 run_example(remove_existing_output_dir=True)
 ```
- 
-Correctness is checked with a `pytest` suite run on every push through GitHub Actions, covering absolute, relative, and mixed absolute and relative flows resolution, mass balance, both solver modes, the carbon stock calculations, and an end-to-end run of the example scenario. The package is distributed on PyPI (`pip install aiphoria`).
- 
- 
-# Research impact statement
- 
-`aiphoria` has supported two peer-reviewed studies so far. It was used to map wood material flows and added-value wood product markets across the EU forest sector [@orfanidou2026] and to reconstruct the Italian forest-wood value chain [@khan2026]. The package was initially developed in the Horizon Europe ForestPaths project and is in active use at EFI; it is openly released under an MIT licence with documentation in the project wiki, has issued more than sixteen versioned releases, and is installable from PyPI, so it is ready for use beyond the original author group.
 
- 
+The example uses illustrative values for a sawnwood chain in one country from
+2021 to 2030 (\autoref{tab:input}). Sawmilling turns roundwood into sawnwood
+and residues. Sawnwood is imported, exported, and used in construction (mean
+lifetime 10 years) and furniture (5 years). At end of life, 40% of the construction wood returns to sawmilling
+as recycled wood, and the rest, together with all furniture, goes to
+incineration. An alternative scenario reduces sawmilling residues by 50%
+between 2025 and 2030.
+
+: Flows of the example scenario as entered in the Excel input (year 2021).
+Values are illustrative.
+[]{label="tab:input"}
+
+| Source | Target | Value | Unit |
+|---|---|---:|---|
+| Industrial roundwood | Sawmilling | 60 | Mm³ |
+| Sawmilling | Residues | 10 | Mm³ |
+| Sawmilling | Sawnwood | 100 | % |
+| Sawnwood (import) | Sawnwood | 10 | Mm³ |
+| Sawnwood | Sawnwood (export) | 20 | Mm³ |
+| Sawnwood | Construction | 60 | % |
+| Sawnwood | Furniture | 40 | % |
+| Construction | Sawmilling | 40 | % |
+| Construction | Incineration | 60 | % |
+| Furniture | Incineration | 100 | % |
+
+\autoref{fig:example} shows the resulting flows. In 2021 (a), almost all wood
+entering construction and furniture stays in use. By 2030 (b), the first
+furniture and construction cohorts have reached end of life, so flows to
+incineration and a recycling loop from construction back to sawmilling appear.
+The network graph (c) shows the same system in 2021.
+
+![Visual outputs of the example scenario: the Sankey diagram in (a) 2021 and
+(b) 2030, and (c) the network graph in 2021, with flow values on the edges.
+\label{fig:example}](figures/visualisation_capabilities.png){ width=70% }
+
+The carbon stocks are also saved to Excel (\autoref{tab:example}). 
+Furniture has a short lifetime (5 years), so its stock stops growing at about 20 Mt C once as much carbon leaves as enters. 
+Construction has a longer lifetime (10 years), so its stock keeps growing until 2030.
+
+: Carbon stock in the in-use product stocks of the example scenario
+(baseline), in million tonnes of carbon (Mt C), from the `Total_stock` sheet of
+the output workbook.
+[]{label="tab:example"}
+
+| Stock | 2021 | 2024 | 2027 | 2030 |
+|---|---:|---:|---:|---:|
+| Construction | 5.4 | 21.6 | 37.8 | 53.2 |
+| Furniture | 3.6 | 14.3 | 19.7 | 20.0 |
+
+# Research impact statement
+
+`aiphoria` has supported two peer-reviewed studies. It was used to map wood
+material flows across the EU forest sector [@Orfanidou2026] and to reconstruct
+the Italian forest-wood value chain [@Khan2026]. The package was developed in
+the Horizon Europe ForestPaths project, is in active use at EFI, and has had
+more than sixteen releases under an MIT licence, with documentation in the
+project wiki.
+
 # AI usage disclosure
- 
-Open 4.8 was used to assist with copy-editing and structuring the text of this paper. All scientific content, design decisions, and software were produced and verified by the authors, who reviewed and edited every AI-assisted suggestion.
- 
- 
-# Acknowledgments
- 
-We thank Arthur Jakobs for contributions to packaging and CI/CD setup, and Gustavo Ezequiel Martinez, Pieter Johannes Verkerk, and Giuseppe Cardellini for their support during the development and testing of `aiphoria`. This work received funding from the European Union's Horizon Europe Research and Innovation Programme under grant agreements ForestPaths (No 101056755), Monifun (No 101134991), and eco2adapt (No 101059498).
- 
- 
+
+The authors used Anthropic's Claude models (Claude Sonnet 5 and Claude Opus
+5.5) while preparing this paper. All scientific content, design decisions, and
+the software itself were produced by the authors, who reviewed, edited, and
+verified every AI-assisted change.
+
+# Acknowledgements
+
+`aiphoria` was developed by the European Forest Institute (EFI) and the
+Flemish Institute for Technological Research (VITO) in the ForestPaths
+project. We thank Gustavo Ezequiel Martinez, Pieter Johannes Verkerk, and
+Giuseppe Cardellini for their support during the development and use of
+`aiphoria`, and Arthur Jakobs for contributions to packaging and CI/CD setup.
+
+This work received funding from the European Union's Horizon Europe Research
+and Innovation Programme under grant agreements ForestPaths (No 101056755),
+Monifun (No 101134991), and eco2adapt (No 101059498).
+
 # References
