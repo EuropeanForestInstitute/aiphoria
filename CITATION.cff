@@ -44,6 +44,6 @@ keywords:
   - Python
   - visualization
 license: MIT
-commit: b0e0e7c
-version: v0.9.3
-date-released: '2026-03-19'
+commit: ac521883
+version: v1.1.0
+date-released: '2026-09-24'

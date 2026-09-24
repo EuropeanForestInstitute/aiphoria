@@ -97,5 +97,14 @@ A huge thank you to the following people who made aiphoria better:
   - GitHub: [jakobsarthur](https://github.com/jakobsarthur)
   - Email: [artos.jakobs@psi.ch](mailto:artos.jakobs@psi.ch)
 
+### JOSS review
+aiphoria was reviewed for the [Journal of Open Source Software](https://joss.theoj.org) ([review thread](https://github.com/openjournals/joss-reviews/issues/11039)).
+
+We warmly thank the reviewers [@JakobBD](https://github.com/JakobBD) and 
+[@paulrougieux](https://github.com/paulrougieux), and the editor
+[@ethanwhite](https://github.com/ethanwhite), for their careful and constructive 
+feedback. Their comments helped us improve the documentation, dependencies,
+package structure and code organisation of aiphoria, as well as the paper.
+
 ## Funding:
 aiphoria developers / European Forest Institute receive funding from the European Union’s Horizon Europe Research and Innovation Programme [`ForestPaths (ID No 101056755)`](https://forestpaths.eu/), [`Monifun (ID No 101134991)`](https://www.monifun.eu/) and [`eco2adapt (ID No 101059498)`](https://www.eco2adapt.eu/).
