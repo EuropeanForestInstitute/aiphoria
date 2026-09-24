@@ -9,10 +9,12 @@ class ParameterName(str, Enum):
     """
     Parameter enumerations used in settings file
     """
-
     # ***********************
     # * Required parameters *
     # ***********************
+    # File format version
+    Version: str = "version"
+
 
     # Process related
     SheetNameProcesses: str = "sheet_name_processes"

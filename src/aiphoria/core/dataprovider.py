@@ -35,6 +35,10 @@ class DataProvider(object):
 
         # Check that all required keys exists
         required_params = [
+            [ParameterName.Version,
+             str,
+             "Version number of the scenario file format",
+             ],
             [ParameterName.SheetNameProcesses,
              str,
              "Name of the sheet that contains data for Processes (e.g. Processes)",
@@ -264,6 +268,15 @@ class DataProvider(object):
             param_name, param_type, param_desc = entry
             if param_name not in param_name_to_value:
                 missing_params.append(entry)
+
+        # Check that ParameterName.Version is found
+        # NOTE: Now only expect that the version row exist, more detailed heuristics could be used for
+        if ParameterName.Version not in param_name_to_value:
+            s = f"Parameter called \"{ParameterName.Version}\" is missing from Settings-sheet in scenario file.\n"
+            s += f"aiphoria version >= 1.1.0 expects scenario file to contain file format version in scenario file.\n"
+            s += f"If you encounter this issue first time, you might need to mark some columns as ignored in Processes and Flows sheets.\n"
+            s += f"Refer to new scenario format at https://github.com/EuropeanForestInstitute/aiphoria/wiki"
+            raise Exception(s)
 
         # Print missing parameters and information
         if missing_params:
