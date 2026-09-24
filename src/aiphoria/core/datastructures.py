@@ -319,6 +319,10 @@ class Process(ObjectBase):
 
     Used to store data for Process.
     """
+
+    # Separator used to separate Process name and Location (e.g. P0:UTOPIA)
+    _location_sep = ":"
+
     def __init__(self, params: pd.Series = None, row_number=-1):
         super().__init__()
 
@@ -573,15 +577,15 @@ class Flow(ObjectBase):
 
     Used to store data for Flow.
     """
+
+    # Separator used between source process ID and target process ID
+    _flow_id_sep = " "
+
     def __init__(self, params: pd.Series = None, row_number=-1):
         super().__init__()
 
         self._source_process = None
-        self._source_process_transformation_stage = None
-        self._source_process_location = None
         self._target_process = None
-        self._target_process_transformation_stage = None
-        self._target_process_location = None
         self._source_process_id = None
         self._target_process_id = None
         self._value = None
@@ -607,21 +611,18 @@ class Flow(ObjectBase):
         if params.isna().all():
             return
 
-        self._source_process = params.iloc[0]
-        self._source_process_transformation_stage = params.iloc[1]
-        self._source_process_location = params.iloc[2]
-        self._target_process = params.iloc[3]
-        self._target_process_transformation_stage = params.iloc[4]
-        self._target_process_location = params.iloc[5]
-        self._source_process_id = params.iloc[6]
-        self._target_process_id = params.iloc[7]
-        self._value = params.iloc[8]
-        self._unit = params.iloc[9]
-        self._year = int(params.iloc[10])
+        self._source_process_id = params.iloc[0]
+        self._target_process_id = params.iloc[1]
+        self._value = params.iloc[2]
+        self._unit = params.iloc[3]
+        self._year = int(params.iloc[4])
+
+        self._source_process = self._source_process_id.split(Process._location_sep)[0]
+        self._target_process = self._target_process_id.split(Process._location_sep)[0]
 
         # Rest of the elements except last element are indicators
         # There should be even number of indicators because each indicator has value and comment
-        first_indicator_index = 11
+        first_indicator_index = 5
         indicators = params[first_indicator_index:]
         if len(indicators) % 2:
             s = "Not even number of indicator columns in settings file.\n"
@@ -682,7 +683,7 @@ class Flow(ObjectBase):
         :param target_process_id: Target Process ID (string)
         :return: Flow ID (string)
         """
-        return "{} {}".format(source_process_id, target_process_id)
+        return "{}{}{}".format(source_process_id, Flow._flow_id_sep, target_process_id)
 
     @property
     def id(self) -> str:
@@ -725,28 +726,12 @@ class Flow(ObjectBase):
         return self._source_process
 
     @property
-    def source_process_transformation_stage(self) -> str:
-        return self._source_process_transformation_stage
-
-    @property
-    def source_process_location(self) -> str:
-        return self._source_process_location
-
-    @property
     def target_process(self) -> str:
         """
         Get target Process name.
         :return: Target Process name (str)
         """
         return self._target_process
-
-    @property
-    def target_process_transformation_stage(self) -> str:
-        return self._target_process_transformation_stage
-
-    @property
-    def target_process_location(self) -> str:
-        return self._target_process_location
 
     @property
     def source_process_id(self) -> str:

@@ -256,29 +256,18 @@ def make_flow_data() -> pd.Series:
     they appear in the settings file)
     """
     index = [
-        "Source process",
-        "Transformation stage",
-        "Source process location",
-        "Target process",
-        "Transformation stage.1",
-        "Target process location",
         "Source ID",
         "Target ID",
         "Value",
         "Unit",
         "Year",
-        "Data source",
-        "Data source comment",
         "CO2 (kg)",
         "Comment",
     ]
 
     s = pd.Series([
-        "A", "stage", "loc",
-        "B", "stage2", "loc2",
-        "A_id", "B_id",
+        "A:UTOPIA", "B:UTOPIA",
         100.0, "kg", 2020,
-        "src", "comment",
         0.5, "Indicator comment",
     ], index=index)
     return s
@@ -301,7 +290,7 @@ def test_flow_id_generation():
     Test Flow-object ID generation
     """
     f = Flow(make_flow_data())
-    assert f.id == "A_id B_id"
+    assert f.id == "A:UTOPIA B:UTOPIA"
 
 
 def test_flow_is_valid():
