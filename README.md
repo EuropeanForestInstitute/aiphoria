@@ -75,7 +75,7 @@ run_example(remove_existing_output_dir=True)
 ```
 
 The results are written to a folder called `aiphoria_example` in your home directory. Open
-`combined_sankey.html` in a web browser to explore the flows year by year. See the
+`combined_sankey.html` in a web browser to explore the flows year by timestep/ year by year. See the
 [Quick start](https://github.com/EuropeanForestInstitute/aiphoria/wiki/Quick-start) for what to look at first.
 
 ## Run your own scenario
