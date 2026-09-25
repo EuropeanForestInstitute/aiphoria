@@ -32,7 +32,7 @@ carbon content and product lifetimes are input data and can be replaced for any 
 - **Solve flows given as absolute amounts and as shares (%) together** in one mass-balanced system, for example
   production and trade statistics (absolute) linked to end uses (shares)
 - **Model in-use stocks** with product lifetime distributions, by age cohort, using ODYM
-- **Track carbon and other indicators** (e.g. dry mass, energy) through flows and stocks, and calculate annual CO2
+- **Track carbon and other indicators/elements** (e.g. dry mass, energy) through flows and stocks, and calculate annual CO2
   removals from carbon stocks
 - **Run alternative scenarios** defined in Excel, with constrained and unconstrained modes
 - **Explore results interactively** with Sankey diagrams for every year and a network graph of the system, and export
