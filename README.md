@@ -13,7 +13,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/aiphoria)](https://pypi.org/project/aiphoria/)
 [![Downloads](https://static.pepy.tech/badge/aiphoria)](https://pepy.tech/project/aiphoria)
 ![GitHub License](https://img.shields.io/github/license/EuropeanForestInstitute/aiphoria)
-[![status](https://joss.theoj.org/papers/11039/status.svg)](https://joss.theoj.org/papers/11039)
+[![status](https://joss.theoj.org/papers/2f7c3cb5d1ba68a920da48a10385871e/status.svg)](https://joss.theoj.org/papers/2f7c3cb5d1ba68a920da48a10385871e)
 <br>
 
 
