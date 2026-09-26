@@ -18,8 +18,7 @@
 
 ## Python package for dynamic wood material flow and carbon stock analysis
 
-**aiphoria** is an open-source Python package for dynamic material flow analysis (DMFA) of wood. It follows wood
-from harvest through processing to products such as buildings, furniture, and paper, and calculates how much carbon
+**aiphoria** is an open-source Python package for dynamic material flow analysis (DMFA) of wood. It allows users to follow (among other materials) wood from harvest through processing to products such as buildings, furniture, and paper, and calculates how much carbon
 these products store over time and when it is released. You describe your system and scenarios in an Excel file, so
 no programming is needed.
 
