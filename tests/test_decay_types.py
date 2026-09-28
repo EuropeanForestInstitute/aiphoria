@@ -2,12 +2,14 @@
 import os
 import warnings
 
+import numpy as np
 import openpyxl
 import pytest
 
 from aiphoria.core import FlowSolver
 from aiphoria.core.datachecker import DataChecker
 from aiphoria.core.dataprovider import DataProvider
+from aiphoria.lib.odym.modules.dynamic_stock_model import DynamicStockModel
 
 
 def get_path_to_reference_scenario() -> str:
@@ -68,3 +70,53 @@ def test_landfill_condition_changes_decay(tmp_path, distribution_type):
     wet = solve_with_construction_stock(tmp_path, 0, distribution_type, "condition=Wet")[-1]
     managed = solve_with_construction_stock(tmp_path, 0, distribution_type, "condition=Managed")[-1]
     assert dry > wet > managed
+
+
+# ****************************************
+# * Simple decay compared with IPCC HWP  *
+# ****************************************
+def solve_simple_dsm(inflow: np.ndarray, lifetime: int) -> DynamicStockModel:
+    """
+    Build and solve DynamicStockModel with Simple decay (k = 1 / lifetime).
+    """
+    dsm = DynamicStockModel(t=np.arange(len(inflow)), i=inflow, lt={"Type": "Simple", "Mean": [lifetime]})
+    dsm.compute_s_c_inflow_driven()
+    dsm.compute_o_c_from_s_c()
+    dsm.compute_stock_total()
+    dsm.compute_outflow_total()
+    return dsm
+
+
+def ipcc_first_order_decay(inflow: np.ndarray, half_life: float) -> np.ndarray:
+    """
+    IPCC first-order decay for HWP (IPCC 2006 Vol. 4 Ch. 12, Eq. 12.1):
+    C(i+1) = exp(-k) * C(i) + [(1 - exp(-k)) / k] * Inflow(i), with k = ln(2) / half-life
+    Returns stock at the end of each year.
+    """
+    k = np.log(2) / half_life
+    stock = 0.0
+    result = []
+    for value in inflow:
+        stock = np.exp(-k) * stock + (1 - np.exp(-k)) / k * value
+        result.append(stock)
+    return np.array(result)
+
+
+def test_simple_decay_uses_mean_lifetime():
+    # Share of an inflow still in stock after t years is exp(-t / Lifetime)
+    lifetime = 50
+    inflow = np.zeros(100)
+    inflow[0] = 1.0
+    dsm = solve_simple_dsm(inflow, lifetime)
+    np.testing.assert_allclose(dsm.s, np.exp(-np.arange(100) / lifetime))
+
+
+@pytest.mark.parametrize("half_life", [35, 25])
+def test_simple_decay_with_converted_half_life_close_to_ipcc(half_life):
+    # Half-life converted to mean lifetime (Lifetime = half-life / ln(2), rounded)
+    # gives stocks within 2% of the IPCC equation for long-lived products
+    lifetime = int(round(half_life / np.log(2)))
+    inflow = np.ones(200)
+    aiphoria_stock = solve_simple_dsm(inflow, lifetime).s
+    ipcc_stock = ipcc_first_order_decay(inflow, half_life)
+    np.testing.assert_allclose(aiphoria_stock[10:], ipcc_stock[10:], rtol=0.02)
