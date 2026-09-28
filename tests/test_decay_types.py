@@ -114,7 +114,8 @@ def test_simple_decay_uses_mean_lifetime():
 @pytest.mark.parametrize("half_life", [35, 25])
 def test_simple_decay_with_converted_half_life_close_to_ipcc(half_life):
     # Half-life converted to mean lifetime (Lifetime = half-life / ln(2), rounded)
-    # gives stocks within 2% of the IPCC equation for long-lived products
+    # gives stocks within 2% of the IPCC equation for long lifetimes (here 50 and 36 years).
+    # Short lifetimes are not tested: aiphoria adds the whole inflow at once while IPCC spreads it over the year, so the stock differs by about 1 / (2 x Lifetime), ~20% for 2-3 years.
     lifetime = int(round(half_life / np.log(2)))
     inflow = np.ones(200)
     aiphoria_stock = solve_simple_dsm(inflow, lifetime).s
