@@ -81,6 +81,7 @@ python_files = [
     "tests/test_reference_scenario.py",
     "tests/test_runner.py",
     "tests/test_visualizer_parameters.py",
+    "tests/test_decay_types.py",
 ]
 
 [tool.coverage.run]
