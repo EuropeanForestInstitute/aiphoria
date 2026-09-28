@@ -1254,7 +1254,7 @@ class FlowSolver(object):
                 scale = stock.stock_distribution_params.get(StockDistributionParameter.Scale, 1.0)
 
                 # For new decay functions
-                landfill_decay_types = [StockDistributionType.LandfillDecayWood, StockDistributionType.LandfillDecayWood]
+                landfill_decay_types = [StockDistributionType.LandfillDecayWood, StockDistributionType.LandfillDecayPaper]
                 if stock.stock_distribution_type in landfill_decay_types:
                     condition = stock.stock_distribution_params[StockDistributionParameter.Condition]
 
