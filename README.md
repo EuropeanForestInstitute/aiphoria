@@ -9,7 +9,7 @@
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/EuropeanForestInstitute/aiphoria/publish-pypi.yaml)
 ![Tests](https://img.shields.io/github/actions/workflow/status/EuropeanForestInstitute/aiphoria/run-tests.yaml?label=tests)
 ![Coverage](assets/coverage.svg)
-[![PyPI Downloads](https://img.shields.io/pypi/dm/aiphoria)](https://pypi.org/project/aiphoria/)
+[![PyPI Downloads](https://static.pepy.tech/badge/aiphoria/month)](https://pepy.tech/projects/aiphoria)
 [![PyPI version](https://img.shields.io/pypi/v/aiphoria)](https://pypi.org/project/aiphoria/)
 ![GitHub License](https://img.shields.io/github/license/EuropeanForestInstitute/aiphoria)
 [![status](https://joss.theoj.org/papers/2f7c3cb5d1ba68a920da48a10385871e/status.svg)](https://joss.theoj.org/papers/2f7c3cb5d1ba68a920da48a10385871e)
