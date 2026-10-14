@@ -97,11 +97,11 @@ statistics, follows wood to its end uses and back through recycling, and keeps
 mass and carbon balanced over time. Compared with the tools above, `aiphoria`
 adds:
  
-- absolute amounts and shares solved together in one mass-balanced system;
-- in-use stocks with product lifetime distributions, calculated with ODYM;
-- carbon stocks and annual CO2 removals for each product stock and age cohort;
-- scenarios defined in Excel, with constrained and unconstrained solver modes;
-- interactive Sankey diagrams for every year and a network graph of the system.
+- absolute amounts and shares solved together in one mass-balanced system
+- in-use stocks with product lifetime distributions, calculated with ODYM
+- carbon stocks and annual CO2 removals for each product stock and age cohort
+- scenarios defined in Excel, with constrained and unconstrained solver modes
+- interactive Sankey diagrams for every year and a network graph of the system
 
 # Software design
  
@@ -206,7 +206,7 @@ the output workbook. \label{tab:example}
 `aiphoria` has supported two peer-reviewed studies. It was used to map wood
 material flows across the EU forest sector [@Orfanidou2026] and to reconstruct
 the Italian forest-wood value chain [@Khan2026]. The package was developed in
-the Horizon Europe ForestPaths project, is in active use at EFI, and has had
+the Horizon Europe ForestPaths project, is in active use at the European Forest Institute (EFI), and has had
 more than sixteen releases under an MIT licence, with documentation in the
 project wiki.
  
@@ -219,7 +219,7 @@ verified every AI-assisted change.
  
 # Acknowledgements
  
-`aiphoria` was initially developed by the European Forest Institute (EFI) and the
+`aiphoria` was initially developed by EFI and the
 Flemish Institute for Technological Research (VITO) in the ForestPaths
 project. We thank Gustavo Ezequiel Martinez, Pieter Johannes Verkerk, and
 Giuseppe Cardellini for their support during the development and use of
