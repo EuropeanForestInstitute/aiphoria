@@ -1,48 +1,34 @@
-# This CITATION.cff file was generated with cffinit.
-# Visit https://bit.ly/cffinit to generate yours today!
-
-cff-version: 1.2.0
-title: aiphoria
-message: >-
-  If you use this software, please cite it using the
-  metadata from this file.
-type: software
+cff-version: "1.2.0"
 authors:
-  - given-names: Timokleia
-    family-names: Orfanidou
-    email: cleo.orfanidou@efi.int
-    affiliation: European Forest Institute
-    orcid: 'https://orcid.org/0000-0003-3126-9603'
-  - given-names: Janne
-    family-names: Järvikylä
-    email: janne.jarvikyla@efi.int
-    affiliation: European Forest Institute
-    orcid: 'https://orcid.org/0009-0006-8390-1905'
-repository-code: 'https://github.com/EuropeanForestInstitute/aiphoria'
-url: 'https://github.com/EuropeanForestInstitute/aiphoria'
-abstract: >-
-  aiphoria is an open-source Python package for dynamic
-  material flow analysis (dMFA) of wood products. It tracks
-  how wood moves through industrial systems and quantifies
-  carbon storage and release at each stage over time. Built
-  on top of ODYM, aiphoria extends general-purpose dMFA with
-  wood sector specific characteristics: simultaneous
-  handling of absolute flow volumes and relative market
-  end-use shares, automated flow solving with mass balance,
-  and temporary carbon stock accounting. Scenarios are
-  defined in Excel, making the tool accessible to users
-  without deep programming expertise. Outputs include
-  time-series of material flows, in-use stocks, carbon stock
-  changes, and interactive Sankey diagrams for flow
-  visualisation at any timestep.
-keywords:
-  - material flow analysis
-  - carbon stocks
-  - dynamic stock modelling
-  - wood product
-  - bioeconomy
-  - Python
-  - visualization
-license: MIT
-version: v1.1.1
-date-released: '2026-09-28'
+- family-names: Orfanidou
+  given-names: Timokleia
+  orcid: "https://orcid.org/0000-0003-3126-9603"
+- family-names: Järvikylä
+  given-names: Janne
+  orcid: "https://orcid.org/0009-0006-8390-1905"
+doi: 10.5281/zenodo.23372599
+message: If you use this software, please cite our article in the
+  Journal of Open Source Software.
+preferred-citation:
+  authors:
+  - family-names: Orfanidou
+    given-names: Timokleia
+    orcid: "https://orcid.org/0000-0003-3126-9603"
+  - family-names: Järvikylä
+    given-names: Janne
+    orcid: "https://orcid.org/0009-0006-8390-1905"
+  date-published: 2026-10-17
+  doi: 10.21105/joss.11039
+  issn: 2475-9066
+  issue: 126
+  journal: Journal of Open Source Software
+  publisher:
+    name: Open Journals
+  start: 11039
+  title: "aiphoria: A Python package for dynamic wood material flow and
+    carbon stock analysis"
+  type: article
+  url: "https://joss.theoj.org/papers/10.21105/joss.11039"
+  volume: 11
+title: "aiphoria: A Python package for dynamic wood material flow and
+  carbon stock analysis"
