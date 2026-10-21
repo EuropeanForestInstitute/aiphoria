@@ -108,7 +108,7 @@ The full documentation is in the [GitHub wiki](https://github.com/EuropeanForest
 ## Citation
 
 If you use aiphoria, please cite it using the metadata in [`CITATION.cff`](CITATION.cff) (on GitHub: *Cite this
-repository* in the right-hand panel). A paper describing aiphoria is under review at the
+repository* in the right-hand panel). aiphoria has been through open peer review at the
 [Journal of Open Source Software](https://github.com/openjournals/joss-reviews/issues/11039).
 
 ## Contributing
